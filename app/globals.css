@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* CampusHire Design Tokens */
+    /* Surfaces */
+    --surface-0: #FAF9F5;
+    --surface-1: #F1EFE7;
+    --surface-2: #FFFFFF;
+
+    /* Text */
+    --text-primary: #1C1C1A;
+    --text-secondary: #6B6A63;
+    --text-muted: #9B9A92;
+
+    /* Borders */
+    --border: #E6E4DA;
+    --border-strong: #D2D0C4;
+
+    /* Primary Accent */
+    --accent: #D85A30;
+    --accent-dark: #712B13;
+    --accent-light: #FAECE7;
+
+    /* Status Colors */
+    --teal: #0F6E56;
+    --teal-light: #E1F5EE;
+    
+    --amber: #854F0B;
+    --amber-light: #FAEEDA;
+    
+    --purple: #534AB7;
+    --purple-light: #EEEDFE;
+    
+    --red: #A32D2D;
+    --red-light: #FCEBEB;
+
+    /* Border Radius */
+    --radius: 8px;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: Inter, sans-serif;
+    font-size: 14px;
+  }
+}
