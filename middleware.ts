@@ -2,25 +2,20 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 // Define route matchers for each role group
+const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"]);
 const isStudentRoute = createRouteMatcher(["/student-dashboard(.*)"]);
 const isAdminRoute = createRouteMatcher(["/admin-dashboard(.*)"]);
 const isSuperAdminRoute = createRouteMatcher(["/super-admin-dashboard(.*)"]);
-const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
 
 interface ClerkPublicMetadata {
-  role?: string;
+  role?: "STUDENT" | "DEPT_ADMIN" | "SUPER_ADMIN";
 }
 
 export default clerkMiddleware(async (auth, req) => {
   const { userId, sessionClaims } = await auth();
-  
-  // Allow auth routes (sign-in, sign-up)
-  if (isAuthRoute(req)) {
-    return NextResponse.next();
-  }
 
-  // Allow home page for everyone (authenticated or not)
-  if (req.nextUrl.pathname === "/") {
+  // Allow public routes without authentication
+  if (isPublicRoute(req)) {
     return NextResponse.next();
   }
 
@@ -35,30 +30,40 @@ export default clerkMiddleware(async (auth, req) => {
   const metadata = sessionClaims?.publicMetadata as ClerkPublicMetadata | undefined;
   const role = metadata?.role;
 
+  // If user has no role yet, allow access (webhook might not have processed yet)
+  // Server actions will handle authorization with database lookup
+  if (!role) {
+    // For new users without role, allow them through to complete setup
+    // Server-side auth helpers will handle proper authorization
+    return NextResponse.next();
+  }
+
   // Route protection based on role
-  if (isStudentRoute(req) && role !== "STUDENT") {
-    // If no role is set, allow access (for now, during setup)
-    // In production, you'd redirect to a "setup profile" page
-    if (!role) {
-      return NextResponse.next();
+  // These are quick checks using metadata for performance
+  // Server actions MUST do database lookup for actual authorization
+
+  if (isStudentRoute(req)) {
+    if (role !== "STUDENT") {
+      // Wrong role - redirect to home
+      return NextResponse.redirect(new URL("/", req.url));
     }
-    return NextResponse.redirect(new URL("/", req.url));
   }
 
-  if (isAdminRoute(req) && role !== "DEPT_ADMIN") {
-    if (!role) {
-      return NextResponse.next();
+  if (isAdminRoute(req)) {
+    if (role !== "DEPT_ADMIN") {
+      // Wrong role - redirect to home
+      return NextResponse.redirect(new URL("/", req.url));
     }
-    return NextResponse.redirect(new URL("/", req.url));
   }
 
-  if (isSuperAdminRoute(req) && role !== "SUPER_ADMIN") {
-    if (!role) {
-      return NextResponse.next();
+  if (isSuperAdminRoute(req)) {
+    if (role !== "SUPER_ADMIN") {
+      // Wrong role - redirect to home
+      return NextResponse.redirect(new URL("/", req.url));
     }
-    return NextResponse.redirect(new URL("/", req.url));
   }
 
+  // Allow access if all checks pass
   return NextResponse.next();
 });
 
