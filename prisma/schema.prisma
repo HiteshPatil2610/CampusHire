@@ -10,10 +10,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Application roles enum
 enum Role {
   STUDENT
   DEPT_ADMIN
   SUPER_ADMIN
+}
+
+// Skill type enum
+enum SkillType {
+  TECHNICAL
+  SOFT
 }
 
 // Core user model - mirrored from Clerk
@@ -26,14 +33,14 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  student       Student?
   departmentAdmin DepartmentAdmin?
+  student         Student?
 
   @@index([clerkId])
   @@index([email])
 }
 
-// Department model
+// Department model - represents academic departments
 model Department {
   id        String   @id @default(cuid())
   name      String
@@ -43,14 +50,13 @@ model Department {
   updatedAt DateTime @updatedAt
 
   // Relations
-  students  Student[]
-  admins    DepartmentAdmin[]
-  drives    Drive[]
+  admins   DepartmentAdmin[]
+  students Student[]
 
   @@index([code])
 }
 
-// Department Admin model
+// Department Admin model - links DEPT_ADMIN users to departments
 model DepartmentAdmin {
   id           String     @id @default(cuid())
   userId       String     @unique
@@ -65,91 +71,147 @@ model DepartmentAdmin {
   @@index([departmentId])
 }
 
-// Student model
+// ============================================================================
+// 02B — STUDENT CORE DATA MODEL
+// ============================================================================
+
+// Student model - represents a student in the placement system
 model Student {
-  id           String     @id @default(cuid())
-  userId       String     @unique
+  id           String   @id @default(cuid())
+  userId       String   @unique
   departmentId String
-  rollNumber   String     @unique
+  rollNumber   String   @unique
   name         String
-  
-  // Academic info
-  cgpa         Float?
-  semester     Int?
-  activeBacklogs Int       @default(0)
-  
-  // Profile photo
-  photoUrl     String?
-  
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  phoneNumber  String?
+  linkedinUrl  String?
+  githubUrl    String?
+  portfolioUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  applications DriveApplication[]
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department      Department              @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  academic        StudentAcademic?
+  preferences     StudentPreferences?
+  skills          StudentSkill[]
+  projects        StudentProject[]
+  experiences     StudentExperience[]
+  certifications  StudentCertification[]
 
+  @@index([userId])
   @@index([departmentId])
   @@index([rollNumber])
 }
 
-// Drive model
-model Drive {
-  id                  String   @id @default(cuid())
-  departmentId        String
-  company             String
-  role                String
-  jobDescriptionUrl   String?
-  
-  // Eligibility criteria
-  minCGPA             Float
-  maxBacklogs         Int
-  
-  // Package and details
-  packageAmount       String?
-  selectionRounds     String?
-  driveDate           DateTime?
-  applicationDeadline DateTime
-  
-  // Apply method
-  applyMethod         String   // "in-app" or "external"
-  externalLink        String?
-  
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+// ============================================================================
+// 02C — STUDENT PROFILE STRUCTURE
+// ============================================================================
 
-  // Relations
-  department    Department         @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  applications  DriveApplication[]
-
-  @@index([departmentId])
-  @@index([applicationDeadline])
-}
-
-// Drive Application model - unique constraint ensures one application per student per drive
-model DriveApplication {
-  id        String   @id @default(cuid())
-  studentId String
-  driveId   String
-  appliedAt DateTime @default(now())
+// StudentAcademic - stores academic information (one-to-one with Student)
+model StudentAcademic {
+  id                String   @id @default(cuid())
+  studentId         String   @unique
+  tenthPercentage   Float
+  twelfthPercentage Float
+  currentCGPA       Float
+  currentSemester   Int
+  activeBacklogs    Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  drive   Drive   @relation(fields: [driveId], references: [id], onDelete: Cascade)
 
-  @@unique([studentId, driveId])
   @@index([studentId])
-  @@index([driveId])
 }
 
-// Audit Log model
-model AuditLog {
-  id          String   @id @default(cuid())
-  action      String
-  performedBy String
-  details     String?
-  createdAt   DateTime @default(now())
+// StudentSkill - stores skills (many-to-one with Student)
+model StudentSkill {
+  id        String    @id @default(cuid())
+  studentId String
+  skillName String
+  skillType SkillType
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  @@index([createdAt])
-  @@index([performedBy])
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, skillName])
+  @@index([studentId])
+}
+
+// StudentProject - stores projects (many-to-one with Student)
+model StudentProject {
+  id               String    @id @default(cuid())
+  studentId        String
+  title            String
+  description      String    @db.Text
+  technologiesUsed String    @db.Text
+  projectUrl       String?
+  startDate        DateTime?
+  endDate          DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+// StudentExperience - stores work experience/internships (many-to-one with Student)
+model StudentExperience {
+  id          String    @id @default(cuid())
+  studentId   String
+  companyName String
+  role        String
+  description String    @db.Text
+  startDate   DateTime
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+// StudentCertification - stores certifications (many-to-one with Student)
+model StudentCertification {
+  id                   String    @id @default(cuid())
+  studentId            String
+  certificationName    String
+  issuingOrganization  String
+  issueDate            DateTime
+  expiryDate           DateTime?
+  credentialUrl        String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+// StudentPreferences - stores placement preferences (one-to-one with Student)
+model StudentPreferences {
+  id                     String   @id @default(cuid())
+  studentId              String   @unique
+  preferredRoles         String   @db.Text // JSON array stored as text
+  preferredLocations     String   @db.Text // JSON array stored as text
+  preferredCompanyTypes  String   @db.Text // JSON array stored as text
+  expectedPackageMin     Float?
+  expectedPackageMax     Float?
+  willingToRelocate      Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
 }

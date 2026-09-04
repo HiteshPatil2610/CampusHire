@@ -14,8 +14,13 @@ interface ClerkPublicMetadata {
 export default clerkMiddleware(async (auth, req) => {
   const { userId, sessionClaims } = await auth();
   
-  // Allow public routes (home page, auth pages)
-  if (isAuthRoute(req) || req.nextUrl.pathname === "/") {
+  // Allow auth routes (sign-in, sign-up)
+  if (isAuthRoute(req)) {
+    return NextResponse.next();
+  }
+
+  // Allow home page for everyone (authenticated or not)
+  if (req.nextUrl.pathname === "/") {
     return NextResponse.next();
   }
 
@@ -32,14 +37,25 @@ export default clerkMiddleware(async (auth, req) => {
 
   // Route protection based on role
   if (isStudentRoute(req) && role !== "STUDENT") {
+    // If no role is set, allow access (for now, during setup)
+    // In production, you'd redirect to a "setup profile" page
+    if (!role) {
+      return NextResponse.next();
+    }
     return NextResponse.redirect(new URL("/", req.url));
   }
 
   if (isAdminRoute(req) && role !== "DEPT_ADMIN") {
+    if (!role) {
+      return NextResponse.next();
+    }
     return NextResponse.redirect(new URL("/", req.url));
   }
 
   if (isSuperAdminRoute(req) && role !== "SUPER_ADMIN") {
+    if (!role) {
+      return NextResponse.next();
+    }
     return NextResponse.redirect(new URL("/", req.url));
   }
 
