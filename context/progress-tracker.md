@@ -10,10 +10,11 @@ Update this file after every meaningful implementation change.
   - Unit 02B — Student Core Data Model: COMPLETE
   - Unit 02C — Student Profile Structure: COMPLETE
 - **Unit 03 — Authentication & Role Synchronization: COMPLETE**
+- **Unit 04 — Student Registration & Profile Management: COMPLETE**
 
 ## Current Goal
 
-- Unit 03 complete. Next: Implement Unit 04 (Student Profile Management).
+- Unit 04 complete. Next: Implement Unit 05 (Excel Bulk Upload) or Unit 06 (Drive Posting & Eligibility).
 
 ## Completed
 
@@ -159,27 +160,160 @@ Update this file after every meaningful implementation change.
   - **Package Added:**
     - `svix` — Clerk webhook signature verification
 
+- **Unit 04 — Student Registration & Profile Management (COMPLETE):**
+  - **Created comprehensive specification:** `context/specs/04-student-registration-profile-management.md`
+    - Documented complete registration and profile management flow
+    - Defined seven profile sections structure
+    - Specified profile completion algorithm (simple ratio, 17 required fields)
+    - Outlined profile photo handling via Vercel Blob
+    - Identified authorization patterns and ownership rules
+  
+  - **Database Schema Updates:**
+    - ✅ Added `profilePhotoUrl` field to Student model (nullable)
+    - ✅ Migration pending: requires database connection
+    - ✅ Prisma Client regenerated successfully
+    - ✅ Schema validation: `npx prisma validate` ✅
+  
+  - **Student Registration:**
+    - ✅ Registration form component: `components/students/RegistrationForm.tsx`
+    - ✅ Server action: `features/students/actions/registration.ts`
+    - ✅ Department selection from active departments
+    - ✅ Roll number uniqueness enforcement
+    - ✅ Duplicate Student record prevention
+    - ✅ Ownership validation (cannot create Student for another user)
+  
+  - **Profile Data Layer:**
+    - ✅ Query functions in `features/students/queries/`
+      - `get-profile.ts` — retrieve complete student profile
+      - `profile-completion.ts` — calculate completion percentage
+    - ✅ Profile completion algorithm: simple ratio (17 required fields)
+      - Personal: 3 fields (name, roll, department)
+      - Academic: 5 fields (10th, 12th, CGPA, semester, backlogs)
+      - Skills: 1 field (at least one skill)
+      - Projects: 1 field (at least one project)
+      - Experience: 1 field (at least one experience)
+      - Certifications: 1 field (at least one certification)
+      - Preferences: 5 fields (roles, locations, companies, relocate, package)
+  
+  - **Profile Server Actions:**
+    - ✅ `features/students/actions/profile-personal.ts` — update personal info
+    - ✅ `features/students/actions/profile-academic.ts` — upsert academic info
+    - ✅ `features/students/actions/profile-skills.ts` — add/remove skills
+    - ✅ `features/students/actions/profile-projects.ts` — add/edit/remove projects
+    - ✅ `features/students/actions/profile-experience.ts` — add/edit/remove experience
+    - ✅ `features/students/actions/profile-certifications.ts` — add/edit/remove certifications
+    - ✅ `features/students/actions/profile-preferences.ts` — upsert preferences
+    - ✅ `features/students/actions/profile-photo.ts` — update photo URL
+    - ✅ All actions use `requireStudent()` for authorization
+    - ✅ All actions verify ownership server-side
+  
+  - **Validation Schemas:**
+    - ✅ `features/students/schemas/registration.ts` — registration validation
+    - ✅ `features/students/schemas/profile.ts` — all profile section validations
+    - ✅ Zod schemas for type-safe input validation
+    - ✅ URL validation for links
+    - ✅ Date validation for experience/certifications
+    - ✅ Numeric range validation for academic fields
+  
+  - **Profile Photo Upload:**
+    - ✅ Vercel Blob integration: `lib/blob.ts`
+    - ✅ Upload API route: `app/api/students/profile-photo/route.ts`
+    - ✅ File type validation (JPEG, PNG, WebP)
+    - ✅ File size limit (5MB)
+    - ✅ Authenticated upload with ownership check
+    - ✅ Graceful handling when Blob not configured
+    - ✅ Package added: `@vercel/blob`
+  
+  - **Student Dashboard:**
+    - ✅ Updated `app/(student)/student-dashboard/page.tsx`
+    - ✅ Registration flow (shows form if no Student record)
+    - ✅ Profile completion display with percentage
+    - ✅ Section status indicators
+    - ✅ Quick actions to complete profile
+    - ✅ Profile summary (skills, projects, experience, certifications counts)
+  
+  - **Testing:**
+    - ✅ Created `features/students/__tests__/profile-completion.test.ts`
+    - ✅ 12 comprehensive tests for profile completion logic
+    - ✅ Tests verify: simple ratio calculation, required fields, defaults, section completion
+    - ✅ All tests passing (77 total: 38 schema + 27 auth + 12 profile)
+    - ✅ Mock data approach (no external dependencies)
+  
+  - **Environment Configuration:**
+    - ✅ Added `BLOB_READ_WRITE_TOKEN` to `lib/env.ts` (optional for local dev)
+    - ✅ Updated `.env.example` with Blob token documentation
+    - ✅ Graceful handling when Blob not configured
+  
+  - **Verification:**
+    - ✅ Prisma validation: `npx prisma validate` ✅
+    - ✅ Prisma Client generation: `npx prisma generate` ✅
+    - ✅ TypeScript compilation: `npx tsc --noEmit` ✅
+    - ✅ ESLint: `npm run lint` ✅ (no warnings/errors)
+    - ✅ Tests: `npm run test` ✅ (77 tests passing)
+    - ✅ Build: `npm run build` ✅ (9 routes compiled successfully)
+  
+  - **Files Created:**
+    - `context/specs/04-student-registration-profile-management.md` — specification
+    - `features/students/schemas/registration.ts` — registration validation
+    - `features/students/schemas/profile.ts` — profile validation schemas
+    - `features/students/queries/get-profile.ts` — profile retrieval
+    - `features/students/queries/profile-completion.ts` — completion calculation
+    - `features/students/actions/registration.ts` — student creation
+    - `features/students/actions/profile-personal.ts` — personal info updates
+    - `features/students/actions/profile-academic.ts` — academic info updates
+    - `features/students/actions/profile-skills.ts` — skill management
+    - `features/students/actions/profile-projects.ts` — project management
+    - `features/students/actions/profile-experience.ts` — experience management
+    - `features/students/actions/profile-certifications.ts` — certification management
+    - `features/students/actions/profile-preferences.ts` — preferences updates
+    - `features/students/actions/profile-photo.ts` — photo URL updates
+    - `features/students/__tests__/profile-completion.test.ts` — completion tests
+    - `components/students/RegistrationForm.tsx` — registration UI
+    - `lib/blob.ts` — Vercel Blob helpers
+    - `app/api/students/profile-photo/route.ts` — photo upload API
+  
+  - **Files Modified:**
+    - `prisma/schema.prisma` — added profilePhotoUrl to Student model
+    - `lib/env.ts` — added BLOB_READ_WRITE_TOKEN (optional)
+    - `.env.example` — added Blob token documentation
+    - `app/(student)/student-dashboard/page.tsx` — registration flow and dashboard
+    - `lib/__tests__/auth.test.ts` — updated mocks for profilePhotoUrl field
+  
+  - **Migration Status:**
+    - Schema updated with profilePhotoUrl field
+    - Migration creation attempted but database unreachable
+    - Migration will be created on first deployment with database access
+    - Schema is valid and Prisma Client generated successfully
+  
+  - **Open Questions:**
+    - Roll number format: no specific pattern defined yet (validates non-empty, enforces uniqueness)
+    - CGPA scale: assumed 0-10 (Indian system standard)
+    - Vercel Blob setup: token not configured in local environment (optional for dev)
+    - College email domain: Clerk handles verification, no domain restriction yet
+
 ## In Progress
 
 - None yet.
 
 ## Next Up
 
-1. **Unit 04 — Student Profile Management:**
-   - Profile CRUD operations (server actions)
-   - Profile completion calculation logic
-   - Profile UI components
-2. **Unit 05 — Excel Bulk Upload:**
+1. **Unit 05 — Excel Bulk Upload:**
    - Template generation
    - Row parsing and validation
    - Bulk import transaction logic
+2. **Unit 06 — Drive Posting & Eligibility Matching:**
+   - Drive CRUD operations
+   - Eligibility rule definition
+   - Server-side eligibility filtering
+   - Drive applications
 
 ## Open Questions
 
 - ✅ **Database connection:** RESOLVED — Neon PostgreSQL connected and migration applied successfully
-- **Profile completion required fields:** Exact required-field checklist per profile section not yet defined (deferred to profile completion calculation unit)
-- **Roll number format:** Is there a specific format/pattern for roll numbers (e.g., "CS2021001")? — to be validated in Excel upload or registration flow
-- **CGPA scale:** Assuming 0-10 scale (most common in Indian institutions) — to be validated in UI/server actions
+- **Profile completion required fields:** RESOLVED — 17 total required fields across 7 sections (spec'd in Unit 04)
+- **Roll number format:** Is there a specific format/pattern for roll numbers (e.g., "CS2021001")? — validates non-empty and enforces uniqueness, pattern validation can be added if format defined
+- **CGPA scale:** Assuming 0-10 scale (most common in Indian institutions) — implemented in Unit 04
+- **Vercel Blob setup:** Token not configured in local environment — optional for development, required for production profile photo uploads
 - Exact list of Excel template columns and their validation rules (roll number format, required vs optional fields) — needs to be finalized before building `features/excel-upload/`.
 - Whether department admins can edit eligibility criteria on a drive after students have already applied — to be decided in the drives feature spec.
 

@@ -77,17 +77,18 @@ model DepartmentAdmin {
 
 // Student model - represents a student in the placement system
 model Student {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  departmentId String
-  rollNumber   String   @unique
-  name         String
-  phoneNumber  String?
-  linkedinUrl  String?
-  githubUrl    String?
-  portfolioUrl String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  departmentId    String
+  rollNumber      String   @unique
+  name            String
+  phoneNumber     String?
+  profilePhotoUrl String?
+  linkedinUrl     String?
+  githubUrl       String?
+  portfolioUrl    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   // Relations
   user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)

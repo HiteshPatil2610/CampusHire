@@ -13,6 +13,9 @@ const envSchema = z.object({
   NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: z.string().default("/"),
   NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: z.string().default("/"),
 
+  // Vercel Blob Storage
+  BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(), // Optional for local dev without Blob
+
   // Node environment
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
