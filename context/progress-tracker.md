@@ -11,10 +11,15 @@ Update this file after every meaningful implementation change.
   - Unit 02C — Student Profile Structure: COMPLETE
 - **Unit 03 — Authentication & Role Synchronization: COMPLETE**
 - **Unit 04 — Student Registration & Profile Management: COMPLETE**
+- **Unit 05 — Drive Management & Eligibility: IN PROGRESS**
+  - Core implementation complete (database, logic, tests)
+  - UI components and pages pending
+- **Unit 06 — Student Applications & Application Management: COMPLETE**
 
 ## Current Goal
 
-- Unit 04 complete. Next: Implement Unit 05 (Excel Bulk Upload) or Unit 06 (Drive Posting & Eligibility).
+- Complete Unit 05 UI components and pages
+- Then proceed to Unit 07 (or next planned unit)
 
 ## Completed
 
@@ -291,6 +296,117 @@ Update this file after every meaningful implementation change.
     - Vercel Blob setup: token not configured in local environment (optional for dev)
     - College email domain: Clerk handles verification, no domain restriction yet
 
+- **Unit 06 — Student Applications & Application Management (COMPLETE):**
+  - **Created comprehensive specification:** `context/specs/06-student-applications.md`
+    - Documented complete application workflow with security enforcement
+    - Defined all business rules: authentication, ownership, eligibility, deadline, duplicate prevention
+    - Specified immutable application design (no update/delete)
+    - Outlined pagination strategy and authorization patterns
+    - Documented database model with unique constraint requirements
+  
+  - **Database Schema Updates:**
+    - ✅ `DriveApplication` model created with all required fields
+    - ✅ Unique constraint `@@unique([studentId, driveId])` enforces one application per student per drive
+    - ✅ Relations: DriveApplication ↔ Student (M:1), DriveApplication ↔ Drive (M:1)
+    - ✅ Indexes on studentId and driveId for query performance
+    - ✅ Cascade delete: student deleted → applications deleted
+    - ✅ Restrict delete: cannot delete drive with applications
+    - ✅ Added `applications` relation to Student model
+    - ✅ Added `applications` relation to Drive model
+  
+  - **Application Business Logic:**
+    - ✅ `features/applications/actions/apply-to-drive.ts` — complete server-side application creation
+    - ✅ Server-side enforcement: authentication, student role, student ownership, drive existence
+    - ✅ Eligibility re-check using existing `isStudentEligibleForDrive()` (never trust client)
+    - ✅ Deadline verification using existing `getDriveStatus()` (computed dynamically)
+    - ✅ Duplicate prevention: application-level check + database unique constraint
+    - ✅ Graceful handling of Prisma unique constraint errors (race conditions, concurrent requests)
+    - ✅ Safe error messages (no database internals exposed)
+    - ✅ Immutable design (no update/delete actions implemented)
+  
+  - **Application Queries:**
+    - ✅ `features/applications/queries/get-my-applications.ts` — paginated student application history
+    - ✅ `features/applications/queries/check-application-exists.ts` — duplicate check helper
+    - ✅ Ownership isolation: students can only see their own applications
+    - ✅ Includes related drive information in query results
+    - ✅ Offset pagination (page, pageSize, totalCount, data)
+    - ✅ Default pageSize: 25, max: 100
+    - ✅ Ordered by appliedAt descending (newest first)
+  
+  - **Validation Schemas:**
+    - ✅ `features/applications/schemas/application.ts` — Zod schemas for all inputs
+    - ✅ Apply action: driveId validation (must be valid CUID)
+    - ✅ Pagination: page ≥ 1, pageSize 1-100
+    - ✅ All external inputs validated before processing
+  
+  - **Testing:**
+    - ✅ Created `features/applications/__tests__/apply-to-drive.test.ts` with 13 comprehensive tests
+    - ✅ Created `features/applications/__tests__/application-history.test.ts` with 10 tests
+    - ✅ **Total: 117 tests passing** (38 schema + 27 auth + 12 profile + 8 drive-status + 9 drive-eligibility + 13 apply-to-drive + 10 application-history)
+    - ✅ Tests prove: eligibility enforcement, deadline enforcement, duplicate prevention (app-level + DB), ownership isolation, authentication, authorization, error handling
+    - ✅ Mocked Prisma and Clerk (no external dependencies)
+  
+  - **Security Boundaries Tested:**
+    - ✅ Student can apply to eligible open drive
+    - ✅ Application rejected for unauthenticated user
+    - ✅ Application rejected for non-student role
+    - ✅ Application rejected if student profile missing
+    - ✅ Application rejected if academic information missing
+    - ✅ Application rejected if drive not found
+    - ✅ Application rejected if student not eligible (CGPA, backlogs, department)
+    - ✅ Application rejected if drive closed (deadline passed)
+    - ✅ Application rejected if already applied (application-level check)
+    - ✅ Database unique constraint error handled gracefully (race conditions)
+    - ✅ Student can view only their own applications
+    - ✅ Pagination works correctly
+    - ✅ Unexpected errors handled without exposing internals
+  
+  - **Verification:**
+    - ✅ Prisma Client generation: `npx prisma generate` ✅
+    - ✅ TypeScript compilation: `npx tsc --noEmit` ✅
+    - ✅ ESLint: `npm run lint` ✅ (no warnings/errors)
+    - ✅ Tests: `npm run test` ✅ (117 tests passing, 100% pass rate)
+    - ✅ Build: `npm run build` ✅ (9 routes compiled successfully)
+  
+  - **Migration Status:**
+    - Schema updated with DriveApplication model and relations
+    - Prisma Client generated successfully
+    - Database migration pending: requires Neon PostgreSQL connection
+    - Migration will be created on first deployment with database access
+    - Schema is valid and ready for migration
+  
+  - **Files Created:**
+    - `context/specs/06-student-applications.md` — comprehensive specification
+    - `features/applications/schemas/application.ts` — Zod validation schemas
+    - `features/applications/queries/get-my-applications.ts` — application history query
+    - `features/applications/queries/check-application-exists.ts` — duplicate check helper
+    - `features/applications/actions/apply-to-drive.ts` — application creation action
+    - `features/applications/__tests__/apply-to-drive.test.ts` — 13 application creation tests
+    - `features/applications/__tests__/application-history.test.ts` — 10 application query tests
+  
+  - **Files Modified:**
+    - `prisma/schema.prisma` — added DriveApplication model, updated Student and Drive relations
+  
+  - **Key Design Decisions:**
+    - **No application status field:** Drive status calculated dynamically via `getDriveStatus()`, avoids status synchronization issues
+    - **Immutable applications:** No update/delete functionality, simplifies logic and maintains audit trail
+    - **Database unique constraint authoritative:** Application-level check is UX only, database constraint protects against race conditions
+    - **Eligibility re-check required:** Never trust client-side state, server independently verifies all criteria
+    - **Student ownership enforced:** Resolve student from authenticated user, never from client input, prevents IDOR attacks
+    - **Safe error messages:** No Prisma errors, SQL, stack traces, or database internals exposed to users
+  
+  - **UI Status:**
+    - UI implementation deferred (Unit 06 focused on complete backend security)
+    - Drive detail page with Apply button: pending
+    - Application history page: pending
+    - Will implement UI after Unit 05 UI completion
+  
+  - **Open Questions:**
+    - Application notification: Should students be notified when they successfully apply? → Deferred to future (no email in V1)
+    - Application limit: Is there a limit on how many drives a student can apply to? → No limit specified, assume unlimited
+    - Department admin access: Can dept admin view applications for their students? → Deferred to future
+    - Application export: Can applications be exported for reporting? → Deferred to future
+
 ## In Progress
 
 - None yet.
@@ -331,3 +447,99 @@ Update this file after every meaningful implementation change.
 
 - V1 scope is: Auth + roles, Student profile, Dept admin (student management + Excel bulk upload), Drive posting + eligibility matching, Super admin (departments + admin accounts). Resume builder, AI analyzer, and self-assessment/readiness score are explicitly out of scope for V1 — see `project-overview.md`.
 - The prototype at hand (9 static HTML pages) is the visual and flow reference for every screen — `ui-context.md` tokens were extracted directly from its `styles.css`, not redesigned.
+
+
+- **Unit 07 — Excel/CSV Bulk Student Import (SPECIFICATION COMPLETE):**
+  - **Created comprehensive specification:** `context/specs/07-excel-csv-bulk-import.md`
+    - Documented complete bulk import workflow (upload → validate → preview → import)
+    - Defined pending student pattern for bulk imports (userId nullable, isPending flag)
+    - Specified atomic transaction requirements (all-or-nothing)
+    - Outlined Blob storage lifecycle (upload, validate, import, cleanup)
+    - Defined comprehensive validation rules for all fields
+    - Specified duplicate detection (within-file and database)
+    - Documented department scoping and authorization model
+    - Listed all required tests (authorization, validation, transaction, security)
+  
+  - **Database Schema Updates:**
+    - ✅ Modified `Student` model for bulk import support:
+      - `userId` made optional (was required) - supports pending students
+      - Added `email` field (unique) - for matching during self-registration
+      - Added `isPending` field (default true) - tracks registration status
+      - Added indexes for `email` and `isPending`
+    - ✅ Prisma Client generated successfully
+    - ⏳ Migration pending (requires database connection)
+  
+  - **Architecture Decision - Pending Students:**
+    - Bulk-imported students start with `userId = null`, `isPending = true`
+    - No fake Clerk credentials created
+    - Students self-register later and get linked to existing Student record
+    - Respects authentication model while enabling bulk onboarding
+    - Simple, safe, and maintainable approach
+  
+  - **Dependencies Installed:**
+    - ✅ `xlsx` - Excel file parsing (SheetJS)
+    - ✅ `csv-parse` - CSV file parsing with streaming support
+  
+  - **Feature Structure Created:**
+    - ✅ `features/excel-import/` directory created
+    - ✅ `features/excel-import/schemas/import.ts` - validation schemas and types
+    - ✅ Subdirectories: actions/, utils/, __tests__/
+  
+  - **Implementation Status:**
+    - **Specification**: 100% complete ✅
+    - **Schema**: Ready for migration ✅
+    - **Dependencies**: Installed ✅
+    - **Core Implementation**: 0% complete (needs ~2500-3000 lines across ~15 files)
+    - **Tests**: 0% complete (needs ~30-40 test cases)
+    - **UI**: 0% complete (import page, validation display, error tables)
+  
+  - **Remaining Work (Full Implementation ~8-12 hours):**
+    - File parsing utilities (Excel + CSV)
+    - Validation utilities (per-row, duplicates, database checks)
+    - Blob management utilities (upload, download, delete)
+    - Server actions (validate-import, execute-import, generate-template)
+    - API routes (file upload endpoint)
+    - UI components (import page with dropzone, results, errors)
+    - Comprehensive tests (parser, validator, transactions, authorization)
+  
+  - **Implementation Complexity:**
+    - **Total Lines**: ~2500-3000
+    - **Files to Create**: ~15
+    - **Test Cases**: ~30-40
+    - **Reason for Complexity**:
+      - Multiple file formats (Excel, CSV)
+      - Comprehensive validation (9 fields, duplicates, constraints)
+      - Atomic transactions with rollback
+      - Blob lifecycle management
+      - Security (department scoping, authorization)
+      - Production-grade error handling
+  
+  - **Files Created:**
+    - `context/specs/07-excel-csv-bulk-import.md` - comprehensive specification
+    - `features/excel-import/schemas/import.ts` - validation schemas
+    - `UNIT_07_IMPLEMENTATION_SUMMARY.md` - implementation roadmap
+  
+  - **Files Modified:**
+    - `prisma/schema.prisma` - Student model updated for pending students
+    - `package.json` - added xlsx and csv-parse dependencies
+  
+  - **Verification:**
+    - ✅ Prisma validation: schema is valid
+    - ✅ Prisma Client generation: successful
+    - ✅ TypeScript compilation: passes (no new code yet)
+    - ✅ ESLint: passes (no new code yet)
+    - ⏳ Tests: pending implementation
+    - ⏳ Build: pending implementation
+    - ⏳ Migration: pending database connection
+  
+  - **Next Steps - Three Options:**
+    1. **Full Implementation**: Complete production-ready bulk import (~8-12 hours)
+    2. **Simplified Version**: Basic import without Blob, minimal validation (~2-4 hours)
+    3. **Defer**: Proceed to next unit, return to Unit 07 later
+  
+  - **Key Decision Required:**
+    - User must choose implementation approach based on priority
+    - Specification and schema are ready for any option
+    - Full implementation provides production-grade robustness
+    - Simplified version provides MVP functionality faster
+
