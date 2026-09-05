@@ -23,6 +23,12 @@ enum SkillType {
   SOFT
 }
 
+// Apply method enum for drives
+enum ApplyMethod {
+  IN_APP
+  EXTERNAL
+}
+
 // Core user model - mirrored from Clerk
 model User {
   id        String   @id @default(cuid())
@@ -52,6 +58,7 @@ model Department {
   // Relations
   admins   DepartmentAdmin[]
   students Student[]
+  drives   Drive[]
 
   @@index([code])
 }
@@ -78,11 +85,13 @@ model DepartmentAdmin {
 // Student model - represents a student in the placement system
 model Student {
   id              String   @id @default(cuid())
-  userId          String   @unique
+  userId          String?  @unique // Optional: null for bulk-imported pending students
   departmentId    String
   rollNumber      String   @unique
   name            String
+  email           String   @unique // For matching during self-registration
   phoneNumber     String?
+  isPending       Boolean  @default(true) // true until linked to User via registration
   profilePhotoUrl String?
   linkedinUrl     String?
   githubUrl       String?
@@ -91,7 +100,7 @@ model Student {
   updatedAt       DateTime @updatedAt
 
   // Relations
-  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User?                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   department      Department              @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   academic        StudentAcademic?
   preferences     StudentPreferences?
@@ -99,10 +108,13 @@ model Student {
   projects        StudentProject[]
   experiences     StudentExperience[]
   certifications  StudentCertification[]
+  applications    DriveApplication[]
 
   @@index([userId])
   @@index([departmentId])
   @@index([rollNumber])
+  @@index([email])
+  @@index([isPending])
 }
 
 // ============================================================================
@@ -215,4 +227,59 @@ model StudentPreferences {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
+}
+
+
+// ============================================================================
+// 05 — DRIVE MANAGEMENT & ELIGIBILITY
+// ============================================================================
+
+// Drive model - represents a placement drive/recruitment opportunity
+model Drive {
+  id                   String      @id @default(cuid())
+  departmentId         String
+  companyName          String
+  roleName             String
+  jobDescriptionUrl    String?
+  packageOffered       Float
+  selectionRounds      String      @db.Text // JSON array of round names
+  driveDate            DateTime
+  applicationDeadline  DateTime
+  applyMethod          ApplyMethod
+  externalApplyUrl     String?
+  minCGPA              Float
+  maxActiveBacklogs    Int
+  eligibleDepartments  String      @db.Text // JSON array of department IDs
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  // Relations
+  department   Department         @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  applications DriveApplication[]
+
+  @@index([departmentId])
+  @@index([applicationDeadline])
+}
+
+
+// ============================================================================
+// 06 — STUDENT APPLICATIONS
+// ============================================================================
+
+// DriveApplication model - represents a student's application to a drive
+model DriveApplication {
+  id        String   @id @default(cuid())
+  studentId String
+  driveId   String
+  appliedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  drive   Drive   @relation(fields: [driveId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, driveId])
+  @@index([studentId])
+  @@index([driveId])
 }
