@@ -56,6 +56,8 @@ export async function createStudent(
         rollNumber: validated.rollNumber,
         departmentId: validated.departmentId,
         phoneNumber: validated.phoneNumber || null,
+        email: user.email, // Use email from authenticated User
+        isPending: false, // Not pending since registered via self-registration
       },
     });
 
