@@ -42,6 +42,7 @@ model User {
   departmentAdmin DepartmentAdmin?
   student         Student?
   auditLogs       AuditLog[]
+  notifications   Notification[]
 
   @@index([clerkId])
   @@index([email])
@@ -308,5 +309,30 @@ model AuditLog {
   @@index([userId])
   @@index([action])
   @@index([entityType])
+  @@index([createdAt])
+}
+
+
+// ============================================================================
+// 10 — IN-APP NOTIFICATIONS
+// ============================================================================
+
+// Notification model - in-app notifications for users
+model Notification {
+  id           String   @id @default(cuid())
+  userId       String   // Recipient (resolved server-side, never from client)
+  type         String   // Notification category (APPLICATION, DRIVE, PROFILE, ADMIN, SYSTEM)
+  title        String   // Short notification title
+  message      String   @db.Text // Full notification message
+  resourceType String?  // Optional: type of related resource (Drive, Application, etc.)
+  resourceId   String?  // Optional: ID of related resource
+  isRead       Boolean  @default(false) // Read/unread state
+  createdAt    DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
   @@index([createdAt])
 }

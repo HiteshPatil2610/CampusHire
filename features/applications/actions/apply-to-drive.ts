@@ -10,6 +10,7 @@ import type { DriveApplication } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
+import { createApplicationSubmittedNotification } from "@/lib/notifications";
 
 /**
  * Result type for apply to drive action
@@ -150,6 +151,14 @@ export async function applyToDrive(
         roleName: drive.roleName,
       },
     });
+
+    // 10. Create notification (best-effort, doesn't fail operation)
+    await createApplicationSubmittedNotification(
+      auth.user.id,
+      drive.companyName,
+      drive.roleName,
+      drive.id
+    );
 
     return {
       success: true,
