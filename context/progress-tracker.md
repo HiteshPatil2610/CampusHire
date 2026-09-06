@@ -706,3 +706,160 @@ Update this file after every meaningful implementation change.
     3. **Unit 09** — Audit logging system (depends on admin accounts being established)
     4. **Unit 07 Implementation** — Excel/CSV bulk import production code (optional, spec complete)
     5. **Unit 04 UI** — Student registration and profile management UI
+
+
+- **Unit 09 — Audit Logging & System Activity (COMPLETE - Backend):**
+  - **Created comprehensive specification:** `context/specs/09-audit-logging.md`
+    - Documented audit logging architecture and system design
+    - Defined AuditLog database model with all required fields
+    - Specified action vocabulary (CREATE, UPDATE, DELETE, ACTIVATE, DEACTIVATE, ASSIGN, UNASSIGN, APPLY, IMPORT, ROLE_CHANGE)
+    - Specified entity types (Department, DepartmentAdmin, User, Drive, DriveApplication, Student, BulkImport)
+    - Outlined immutability guarantees (no update/delete operations)
+    - Documented authorization model (Super Admin only)
+    - Specified privacy and security requirements (no sensitive data logging)
+    - Defined pagination and filtering capabilities
+    - Identified all audited operations across Units 06-08
+  
+  - **Database Schema:**
+    - ✅ Created AuditLog model in Prisma schema
+    - ✅ Fields: userId, action, entityType, entityId, metadata, ipAddress, userAgent, createdAt
+    - ✅ Relation to User (onDelete: Restrict - preserves audit history)
+    - ✅ Indexes on userId, action, entityType, createdAt (for query performance)
+    - ✅ Metadata stored as JSON text (flexible context storage)
+    - ✅ Added auditLogs relation to User model
+    - ⏳ Migration pending (database has duplicate Student.email values that need cleanup)
+  
+  - **Centralized Audit Helper:**
+    - ✅ Created `lib/audit.ts` with reusable audit logging functions
+    - ✅ `createAuditLog()` - Standard audit creation (auto-resolves actor)
+    - ✅ `createAuditLogInTransaction()` - Audit within database transaction
+    - ✅ `sanitizeMetadata()` - Removes sensitive data before logging
+    - ✅ `getChangeMetadata()` - Helper for field change tracking
+    - ✅ Standardized constants: `AuditAction` and `AuditEntityType`
+    - ✅ Server-side actor resolution (never trusts client input)
+    - ✅ Graceful error handling (logs error, doesn't break operations)
+  
+  - **Audit Query Implementation:**
+    - ✅ Created `features/audit/queries/get-audit-logs.ts`
+    - ✅ Paginated query with filters (action, entityType, userId, date range)
+    - ✅ Default page size: 25, max: 100
+    - ✅ Ordered by createdAt DESC (newest first)
+    - ✅ Includes user details (email, role)
+    - ✅ Parses metadata from JSON
+    - ✅ Server-side authorization (Super Admin only - enforced by caller)
+  
+  - **Validation Schemas:**
+    - ✅ Created `features/audit/schemas/audit.ts`
+    - ✅ `getAuditLogsSchema` - Validates pagination and filter inputs
+    - ✅ Page validation (min: 1)
+    - ✅ Page size validation (min: 1, max: 100, default: 25)
+    - ✅ CUID validation for userId filter
+    - ✅ Optional date range validation
+  
+  - **Integration with Existing Operations:**
+    - ✅ **Department Management (Unit 08):**
+      - `create-department.ts` - Logs CREATE action with name/code metadata
+      - `update-department.ts` - Logs UPDATE action with changedFields metadata
+      - `toggle-department-status.ts` - Logs ACTIVATE/DEACTIVATE action
+    - ✅ **Admin Account Management (Unit 08):**
+      - `assign-department-admin.ts` - Logs ROLE_CHANGE + ASSIGN actions (atomic transaction)
+      - `remove-department-admin.ts` - Logs UNASSIGN + ROLE_CHANGE actions (atomic transaction)
+    - ✅ **Student Applications (Unit 06):**
+      - `apply-to-drive.ts` - Logs APPLY action with drive/student/company metadata
+    - ⏳ **Drive Management (Unit 05 UI):** Not yet implemented (no UI/actions yet)
+    - ⏳ **Bulk Import (Unit 07):** Deferred (spec ready for future integration)
+  
+  - **Transaction-Based Auditing:**
+    - ✅ Admin assignment uses `createAuditLogInTransaction()` for atomic operation
+    - ✅ Admin removal uses `createAuditLogInTransaction()` for atomic operation
+    - ✅ Role changes and admin assignments/removals audited together
+    - ✅ If business operation fails, audit record not created (no false success logs)
+    - ✅ If audit fails within transaction, entire operation rolls back
+  
+  - **Security & Privacy:**
+    - ✅ Actor resolved server-side from authenticated session
+    - ✅ Client cannot fabricate actor, timestamp, or department scope
+    - ✅ Metadata sanitization removes sensitive fields (passwords, tokens, secrets)
+    - ✅ No Clerk IDs, OTPs, or credentials logged
+    - ✅ Immutable records (no update/delete operations)
+    - ✅ User deletion restricted if audit logs exist (onDelete: Restrict)
+    - ✅ Super Admin-only access to audit logs (authorization required)
+  
+  - **Feature Structure Created:**
+    - `lib/audit.ts` - Centralized audit helper (1 file)
+    - `features/audit/` - Audit feature module
+      - `schemas/audit.ts` - Zod validation schemas
+      - `queries/get-audit-logs.ts` - Audit query with pagination/filters
+      - `__tests__/` - Test directory (tests pending)
+  
+  - **Files Modified (7 files):**
+    - `prisma/schema.prisma` - Added AuditLog model and User.auditLogs relation
+    - `features/departments/actions/create-department.ts` - Added audit logging
+    - `features/departments/actions/update-department.ts` - Added audit logging with change tracking
+    - `features/departments/actions/toggle-department-status.ts` - Added audit logging (ACTIVATE/DEACTIVATE)
+    - `features/admin-accounts/actions/assign-department-admin.ts` - Added transactional audit logging
+    - `features/admin-accounts/actions/remove-department-admin.ts` - Added transactional audit logging
+    - `features/applications/actions/apply-to-drive.ts` - Added audit logging for student applications
+  
+  - **Verification:**
+    - ✅ Prisma validation: schema valid
+    - ✅ Prisma Client generation: successful
+    - ✅ TypeScript compilation: 0 errors
+    - ✅ ESLint: No warnings or errors
+    - ✅ Build: Successful (9 routes)
+    - ⏳ Tests: Not created yet (test structure in place)
+    - ⏳ Migration: Pending (blocked by duplicate Student.email values in database)
+    - ⏳ UI: Not implemented (Super Admin audit log page pending)
+  
+  - **Key Design Decisions:**
+    - **Centralized helper:** Single `createAuditLog()` function used across all features
+    - **Server-side actor:** Actor always resolved from authenticated session, never from client
+    - **Metadata sanitization:** Sensitive fields automatically removed before storage
+    - **Immutable records:** No update/delete operations, audit logs are permanent
+    - **Transaction-based:** Critical operations create audit logs within same transaction
+    - **Graceful errors:** Audit failure logs error but doesn't break user-facing operations
+    - **JSON metadata:** Flexible metadata storage as JSON text (not normalized tables)
+    - **Super Admin only:** Audit visibility restricted to Super Admin role in V1
+    - **No before/after:** Changed field names logged, not full snapshots (minimizes data storage)
+  
+  - **Metadata Examples:**
+    - Department CREATE: `{ name: "CS", code: "CS", isActive: true }`
+    - Department UPDATE: `{ changedFields: ["name"], changeCount: 1, name: "Computer Science", code: "CS" }`
+    - Role Change: `{ oldRole: "STUDENT", newRole: "DEPT_ADMIN", email: "user@college.edu" }`
+    - Admin Assignment: `{ userId: "...", departmentId: "...", email: "...", departmentName: "CS" }`
+    - Student Application: `{ driveId: "...", studentId: "...", companyName: "Google", roleName: "SDE" }`
+  
+  - **Compatibility:**
+    - ✅ Unit 07 schema preserved (Student pending pattern intact)
+    - ✅ Existing Units 01-08 remain functional
+    - ✅ No breaking changes to any feature
+    - ✅ Audit logging integrated seamlessly without disrupting existing operations
+    - ✅ User.auditLogs relation added without affecting existing User queries
+  
+  - **Open Questions & Future Work:**
+    - **Department Admin audit access:** Should dept admins see their department's logs? → Deferred to V2
+    - **Retention policy:** How long should audit logs be kept? → Indefinitely for V1, no automatic cleanup
+    - **Export functionality:** Should audit logs be exportable? → Deferred to V2
+    - **Email notifications:** Should admins be notified of critical events? → No, not in V1
+    - **Real-time updates:** Should audit UI update automatically? → No, manual refresh only
+    - **Advanced search:** Full-text search on metadata? → No, simple filters only in V1
+    - **IP geolocation:** Resolve IPs to locations? → No, raw IP only
+    - **UI Implementation:** Super Admin audit log page needs to be built
+    - **Tests:** 31 planned tests need to be implemented
+    - **Migration:** Database needs cleanup of duplicate Student.email values before migration can proceed
+  
+  - **Next Recommended Modules:**
+    1. **Unit 09 UI** — Super Admin audit log page with filters and pagination
+    2. **Unit 08 UI** — Super Admin dashboard (departments, admins, audit logs)
+    3. **Unit 05 UI** — Department Admin dashboard and drive management
+    4. **Unit 04 UI** — Student registration and profile management
+    5. **Unit 07 Implementation** — Excel/CSV bulk import (then add audit integration)
+    6. **Database Cleanup** — Resolve duplicate Student.email values and run migration
+
+  - **Implementation Notes:**
+    - Audit logging is **backend-complete** and fully integrated into existing operations
+    - All department management, admin assignment, and student application actions now create audit logs
+    - Audit queries and schemas are ready for UI implementation
+    - Migration blocked by pre-existing data issue (duplicate emails), not code issues
+    - Once migration runs, audit logging will be fully operational
+    - UI can be built independently while migration issue is resolved

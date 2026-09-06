@@ -8,6 +8,7 @@ import {
   removeDepartmentAdminSchema,
   type RemoveDepartmentAdminInput,
 } from "../schemas/admin";
+import { createAuditLogInTransaction, AuditAction, AuditEntityType } from "@/lib/audit";
 
 /**
  * Remove department admin assignment
@@ -18,7 +19,8 @@ import {
  * 1. Verify DepartmentAdmin record exists
  * 2. Delete DepartmentAdmin record
  * 3. Update user role to STUDENT (safe default)
- * 4. Sync role to Clerk metadata
+ * 4. Create audit logs
+ * 5. Sync role to Clerk metadata
  * 
  * Does NOT delete:
  * - Clerk identity
@@ -31,7 +33,7 @@ import {
 export async function removeDepartmentAdmin(input: RemoveDepartmentAdminInput) {
   try {
     // Verify Super Admin authorization
-    await requireSuperAdmin();
+    const currentUser = await requireSuperAdmin();
 
     // Validate input
     const validated = removeDepartmentAdminSchema.parse(input);
@@ -41,6 +43,7 @@ export async function removeDepartmentAdmin(input: RemoveDepartmentAdminInput) {
       where: { userId: validated.userId },
       include: {
         user: true,
+        department: true,
       },
     });
 
@@ -59,7 +62,7 @@ export async function removeDepartmentAdmin(input: RemoveDepartmentAdminInput) {
       };
     }
 
-    // Perform atomic removal
+    // Perform atomic removal with audit logs
     const result = await prisma.$transaction(async (tx) => {
       // Delete DepartmentAdmin record
       await tx.departmentAdmin.delete({
@@ -71,6 +74,30 @@ export async function removeDepartmentAdmin(input: RemoveDepartmentAdminInput) {
         where: { id: validated.userId },
         data: { role: "STUDENT" },
       });
+
+      // Create audit logs (unassignment + role change)
+      await createAuditLogInTransaction(tx, {
+        action: AuditAction.UNASSIGN,
+        entityType: AuditEntityType.DEPARTMENT_ADMIN,
+        entityId: admin.id,
+        metadata: {
+          userId: validated.userId,
+          departmentId: admin.departmentId,
+          email: admin.user.email,
+          departmentName: admin.department.name,
+        },
+      }, currentUser.id);
+
+      await createAuditLogInTransaction(tx, {
+        action: AuditAction.ROLE_CHANGE,
+        entityType: AuditEntityType.USER,
+        entityId: updatedUser.id,
+        metadata: {
+          oldRole: "DEPT_ADMIN",
+          newRole: "STUDENT",
+          email: admin.user.email,
+        },
+      }, currentUser.id);
 
       return updatedUser;
     });

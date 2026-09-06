@@ -8,6 +8,7 @@ import {
   type CreateDepartmentInput,
 } from "../schemas/department";
 import { Prisma } from "@prisma/client";
+import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
 
 /**
  * Create a new department
@@ -20,7 +21,7 @@ import { Prisma } from "@prisma/client";
 export async function createDepartment(input: CreateDepartmentInput) {
   try {
     // Verify Super Admin authorization
-    await requireSuperAdmin();
+    const user = await requireSuperAdmin();
 
     // Validate input
     const validated = createDepartmentSchema.parse(input);
@@ -31,6 +32,18 @@ export async function createDepartment(input: CreateDepartmentInput) {
         name: validated.name,
         code: validated.code,
         isActive: validated.isActive,
+      },
+    });
+
+    // Create audit log
+    await createAuditLog({
+      action: AuditAction.CREATE,
+      entityType: AuditEntityType.DEPARTMENT,
+      entityId: department.id,
+      metadata: {
+        name: department.name,
+        code: department.code,
+        isActive: department.isActive,
       },
     });
 

@@ -9,6 +9,8 @@ import { checkApplicationExists } from "../queries/check-application-exists";
 import type { DriveApplication } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 
+import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
+
 /**
  * Result type for apply to drive action
  */
@@ -133,6 +135,19 @@ export async function applyToDrive(
       data: {
         studentId: studentWithAcademic.id,
         driveId: drive.id,
+      },
+    });
+
+    // 9. Create audit log
+    await createAuditLog({
+      action: AuditAction.APPLY,
+      entityType: AuditEntityType.DRIVE_APPLICATION,
+      entityId: application.id,
+      metadata: {
+        driveId: drive.id,
+        studentId: studentWithAcademic.id,
+        companyName: drive.companyName,
+        roleName: drive.roleName,
       },
     });
 

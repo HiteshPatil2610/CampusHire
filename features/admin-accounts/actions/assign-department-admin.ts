@@ -9,6 +9,7 @@ import {
   type AssignDepartmentAdminInput,
 } from "../schemas/admin";
 import { Prisma } from "@prisma/client";
+import { createAuditLogInTransaction, AuditAction, AuditEntityType } from "@/lib/audit";
 
 /**
  * Assign a user as department admin
@@ -21,7 +22,8 @@ import { Prisma } from "@prisma/client";
  * 3. Check user is not already assigned
  * 4. Update user role to DEPT_ADMIN
  * 5. Create DepartmentAdmin record
- * 6. Sync role to Clerk metadata
+ * 6. Create audit log
+ * 7. Sync role to Clerk metadata
  * 
  * @param input - User ID and department ID
  * @returns Created admin assignment or error
@@ -29,7 +31,7 @@ import { Prisma } from "@prisma/client";
 export async function assignDepartmentAdmin(input: AssignDepartmentAdminInput) {
   try {
     // Verify Super Admin authorization
-    await requireSuperAdmin();
+    const currentUser = await requireSuperAdmin();
 
     // Validate input
     const validated = assignDepartmentAdminSchema.parse(input);
@@ -85,7 +87,7 @@ export async function assignDepartmentAdmin(input: AssignDepartmentAdminInput) {
       };
     }
 
-    // Perform atomic assignment
+    // Perform atomic assignment with audit log
     const result = await prisma.$transaction(async (tx) => {
       // Update user role
       const updatedUser = await tx.user.update({
@@ -117,6 +119,30 @@ export async function assignDepartmentAdmin(input: AssignDepartmentAdminInput) {
           },
         },
       });
+
+      // Create audit logs (role change + assignment)
+      await createAuditLogInTransaction(tx, {
+        action: AuditAction.ROLE_CHANGE,
+        entityType: AuditEntityType.USER,
+        entityId: updatedUser.id,
+        metadata: {
+          oldRole: user.role,
+          newRole: "DEPT_ADMIN",
+          email: user.email,
+        },
+      }, currentUser.id);
+
+      await createAuditLogInTransaction(tx, {
+        action: AuditAction.ASSIGN,
+        entityType: AuditEntityType.DEPARTMENT_ADMIN,
+        entityId: admin.id,
+        metadata: {
+          userId: validated.userId,
+          departmentId: validated.departmentId,
+          email: user.email,
+          departmentName: department.name,
+        },
+      }, currentUser.id);
 
       return { updatedUser, admin };
     });

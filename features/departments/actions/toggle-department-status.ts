@@ -7,6 +7,7 @@ import {
   toggleDepartmentStatusSchema,
   type ToggleDepartmentStatusInput,
 } from "../schemas/department";
+import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
 
 /**
  * Toggle department active/inactive status
@@ -21,7 +22,7 @@ import {
 export async function toggleDepartmentStatus(input: ToggleDepartmentStatusInput) {
   try {
     // Verify Super Admin authorization
-    await requireSuperAdmin();
+    const user = await requireSuperAdmin();
 
     // Validate input
     const validated = toggleDepartmentStatusSchema.parse(input);
@@ -42,6 +43,18 @@ export async function toggleDepartmentStatus(input: ToggleDepartmentStatusInput)
     const department = await prisma.department.update({
       where: { id: validated.id },
       data: { isActive: validated.isActive },
+    });
+
+    // Create audit log
+    await createAuditLog({
+      action: validated.isActive ? AuditAction.ACTIVATE : AuditAction.DEACTIVATE,
+      entityType: AuditEntityType.DEPARTMENT,
+      entityId: department.id,
+      metadata: {
+        name: department.name,
+        code: department.code,
+        isActive: department.isActive,
+      },
     });
 
     // Revalidate departments pages

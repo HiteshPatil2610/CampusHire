@@ -41,6 +41,7 @@ model User {
   // Relations
   departmentAdmin DepartmentAdmin?
   student         Student?
+  auditLogs       AuditLog[]
 
   @@index([clerkId])
   @@index([email])
@@ -282,4 +283,30 @@ model DriveApplication {
   @@unique([studentId, driveId])
   @@index([studentId])
   @@index([driveId])
+}
+
+
+// ============================================================================
+// 09 — AUDIT LOGGING
+// ============================================================================
+
+// AuditLog model - immutable historical record of administrative actions
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String   // Actor who performed the action (resolved server-side)
+  action     String   // Action type (CREATE, UPDATE, DELETE, ACTIVATE, DEACTIVATE, ASSIGN, UNASSIGN, APPLY, IMPORT, ROLE_CHANGE)
+  entityType String   // Resource type (Department, DepartmentAdmin, Drive, DriveApplication, Student, BulkImport, User)
+  entityId   String?  // Resource identifier (null for bulk operations)
+  metadata   String?  @db.Text // Additional context as JSON
+  ipAddress  String?  // Client IP address (optional)
+  userAgent  String?  // Client user agent (optional)
+  createdAt  DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
+  @@index([createdAt])
 }

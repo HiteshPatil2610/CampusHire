@@ -8,6 +8,7 @@ import {
   type UpdateDepartmentInput,
 } from "../schemas/department";
 import { Prisma } from "@prisma/client";
+import { createAuditLog, AuditAction, AuditEntityType, getChangeMetadata } from "@/lib/audit";
 
 /**
  * Update an existing department
@@ -20,7 +21,7 @@ import { Prisma } from "@prisma/client";
 export async function updateDepartment(input: UpdateDepartmentInput) {
   try {
     // Verify Super Admin authorization
-    await requireSuperAdmin();
+    const user = await requireSuperAdmin();
 
     // Validate input
     const validated = updateDepartmentSchema.parse(input);
@@ -39,14 +40,37 @@ export async function updateDepartment(input: UpdateDepartmentInput) {
 
     // Build update data (only include provided fields)
     const updateData: Prisma.DepartmentUpdateInput = {};
-    if (validated.name !== undefined) updateData.name = validated.name;
-    if (validated.code !== undefined) updateData.code = validated.code;
-    if (validated.isActive !== undefined) updateData.isActive = validated.isActive;
+    const changedFields: string[] = [];
+    
+    if (validated.name !== undefined) {
+      updateData.name = validated.name;
+      changedFields.push("name");
+    }
+    if (validated.code !== undefined) {
+      updateData.code = validated.code;
+      changedFields.push("code");
+    }
+    if (validated.isActive !== undefined) {
+      updateData.isActive = validated.isActive;
+      changedFields.push("isActive");
+    }
 
     // Update department
     const department = await prisma.department.update({
       where: { id: validated.id },
       data: updateData,
+    });
+
+    // Create audit log
+    await createAuditLog({
+      action: AuditAction.UPDATE,
+      entityType: AuditEntityType.DEPARTMENT,
+      entityId: department.id,
+      metadata: {
+        ...getChangeMetadata(changedFields),
+        name: department.name,
+        code: department.code,
+      },
     });
 
     // Revalidate departments pages
