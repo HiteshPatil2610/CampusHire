@@ -1,221 +1,189 @@
-# Database Setup Guide for CampusHire
+# Database Setup Guide
 
-## Current Status
+## Prerequisites
 
-✅ **Schema Defined**: Complete database schema (Unit 02A, 02B, 02C) in `prisma/schema.prisma`
+- Neon PostgreSQL database (or any PostgreSQL instance)
+- DATABASE_URL configured in `.env.local`
 
-✅ **Schema Validated**: Prisma validation passed successfully
+## Current Database URL
 
-✅ **Client Generated**: Prisma Client types generated successfully with all models
-
-✅ **Migration Applied**: Database migration `student_profile_foundation` successfully applied to Neon PostgreSQL
-
-✅ **Database Ready**: All tables, indexes, constraints, and enums created in production database
-
-## Migration Applied Successfully
-
-**Migration Name**: `20260904192335_student_profile_foundation`
-
-**Applied On**: Neon PostgreSQL database
-
-**Database**: neondb at ep-bold-pine-ae4zx21e-pooler.c-2.us-east-2.aws.neon.tech
-
-**What Was Created**:
-- ✅ 2 Enums: `Role`, `SkillType`
-- ✅ 9 Tables: `User`, `Department`, `DepartmentAdmin`, `Student`, `StudentAcademic`, `StudentPreferences`, `StudentSkill`, `StudentProject`, `StudentExperience`, `StudentCertification`
-- ✅ 17 Unique constraints
-- ✅ 13 Indexes for query performance
-- ✅ 10 Foreign key constraints with cascade/restrict rules
-
-**Status**: Database schema is up to date ✅
-
----
-
-## Next Steps to Connect Database
-
-### Option 1: Neon (Recommended - Architecture Requirement)
-
-Neon is the specified PostgreSQL provider for CampusHire per `architecture.md`.
-
-1. **Create Neon Account**:
-   - Go to https://neon.tech
-   - Sign up (free tier available)
-   - Create a new project named "campushire"
-
-2. **Get Connection String**:
-   - In Neon dashboard, go to your project
-   - Click "Connection Details"
-   - Copy the connection string (format: `postgresql://user:password@host/database`)
-
-3. **Update Environment**:
-   - Open `.env.local`
-   - Replace the DATABASE_URL:
-     ```
-     DATABASE_URL="postgresql://your-actual-neon-connection-string"
-     ```
-
-4. **Run Migration**:
-   ```bash
-   npx prisma migrate dev --name student_profile_foundation
-   ```
-
-### Option 2: Local PostgreSQL (Development Only)
-
-If you prefer local development:
-
-1. **Install PostgreSQL**:
-   - Windows: Download from https://www.postgresql.org/download/windows/
-   - Or use Docker: `docker run --name campushire-postgres -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres`
-
-2. **Create Database**:
-   ```sql
-   CREATE DATABASE campushire;
-   ```
-
-3. **Update Environment**:
-   - In `.env.local`:
-     ```
-     DATABASE_URL="postgresql://postgres:password@localhost:5432/campushire"
-     ```
-
-4. **Run Migration**:
-   ```bash
-   npx prisma migrate dev --name student_profile_foundation
-   ```
-
-## What Happens During Migration
-
-When you run the migration, Prisma will:
-
-1. Create the `prisma/migrations/` directory
-2. Generate SQL migration file for:
-   - `Role` enum (STUDENT, DEPT_ADMIN, SUPER_ADMIN)
-   - `SkillType` enum (TECHNICAL, SOFT)
-   - `User` table with Clerk integration
-   - `Department` table
-   - `DepartmentAdmin` table with foreign keys
-   - `Student` table with foreign keys to User and Department
-   - `StudentAcademic` table (one-to-one with Student)
-   - `StudentPreferences` table (one-to-one with Student)
-   - `StudentSkill` table (many-to-one with Student)
-   - `StudentProject` table (many-to-one with Student)
-   - `StudentExperience` table (many-to-one with Student)
-   - `StudentCertification` table (many-to-one with Student)
-3. Execute the SQL against your database
-4. Create all tables, indexes, and constraints
-
-## Current Schema
-
-```prisma
-// Enums
-enum Role {
-  STUDENT
-  DEPT_ADMIN
-  SUPER_ADMIN
-}
-
-enum SkillType {
-  TECHNICAL
-  SOFT
-}
-
-// Core Models (Unit 02A)
-model User {
-  id                  String              @id @default(cuid())
-  clerkId             String              @unique
-  email               String              @unique
-  role                Role
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  departmentAdmin     DepartmentAdmin?
-  student             Student?
-}
-
-model Department {
-  id        String              @id @default(cuid())
-  name      String
-  code      String              @unique
-  isActive  Boolean             @default(true)
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
-  admins    DepartmentAdmin[]
-  students  Student[]
-}
-
-model DepartmentAdmin {
-  id           String     @id @default(cuid())
-  userId       String     @unique
-  departmentId String
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  user         User       @relation(...)
-  department   Department @relation(...)
-}
-
-// Student Models (Unit 02B, 02C)
-model Student {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  departmentId String
-  rollNumber   String   @unique
-  name         String
-  phoneNumber  String?
-  linkedinUrl  String?
-  githubUrl    String?
-  portfolioUrl String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  // Relations to profile data...
-}
-
-model StudentAcademic { ... }
-model StudentPreferences { ... }
-model StudentSkill { ... }
-model StudentProject { ... }
-model StudentExperience { ... }
-model StudentCertification { ... }
+```
+postgresql://neondb_owner:npg_KFUBsPhrw6C0@ep-bold-pine-ae4zx21e-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 ```
 
-## Verification After Migration
+⚠️ **Note:** This URL is exposed in this file for development purposes. In production, always use environment variables.
 
-Once you have a database connected and migrated, verify with:
+## Database Schema
+
+The schema is defined in `prisma/schema.prisma` and includes:
+- User (with Clerk integration)
+- Department
+- DepartmentAdmin
+- Student (with profile sections)
+- Drive
+- DriveApplication
+- AuditLog
+- Notification
+
+## Running Migrations
+
+### Option 1: Using Prisma CLI (requires DATABASE_URL in .env.local)
 
 ```bash
-# Check migration status
-npx prisma migrate status
+npx prisma migrate dev --name migration_name
+```
 
-# View database in Prisma Studio
+### Option 2: Manual SQL Execution (if DATABASE_URL not in .env.local)
+
+```bash
+# Set environment variable temporarily
+$env:DATABASE_URL="postgresql://neondb_owner:..."
+
+# Execute migration
+Get-Content migration.sql | npx prisma db execute --stdin --schema prisma/schema.prisma
+```
+
+## Seeding the Database
+
+The seed script (`prisma/seed.ts`) creates initial data for development and testing.
+
+### What Gets Seeded
+
+**Departments:**
+- Computer Engineering (COMP)
+- Information Technology (IT)
+- Electronics and Telecommunication (EXTC)
+- Mechanical Engineering (MECH)
+- Chemical Engineering (CHEM)
+- Instrumentation Engineering (INST)
+
+### Running the Seed Script
+
+#### If DATABASE_URL is in .env.local:
+
+```bash
+npm run db:seed
+```
+
+#### If DATABASE_URL is NOT in .env.local:
+
+```bash
+# Windows PowerShell
+$env:DATABASE_URL="postgresql://neondb_owner:npg_KFUBsPhrw6C0@ep-bold-pine-ae4zx21e-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"; npm run db:seed
+```
+
+### Seed Script Behavior
+
+- **Idempotent:** Running the seed multiple times is safe
+- **Skip existing:** If a department already exists (by code), it will be skipped
+- **Output:** Shows which departments were created or skipped
+
+### Example Output
+
+```
+🌱 Starting database seed...
+📚 Creating departments...
+  ✅ Created department: Computer Engineering (COMP)
+  ✅ Created department: Information Technology (IT)
+  ✅ Created department: Electronics and Telecommunication (EXTC)
+  ✅ Created department: Mechanical Engineering (MECH)
+  ✅ Created department: Chemical Engineering (CHEM)
+  ✅ Created department: Instrumentation Engineering (INST)
+
+✨ Seed completed successfully!
+```
+
+## Verifying the Data
+
+### Using Prisma Studio
+
+```bash
 npx prisma studio
 ```
 
-## Troubleshooting
+This opens a web interface at http://localhost:5555 where you can browse all data.
 
-### "Can't reach database server"
-- Make sure PostgreSQL is running (if local)
-- Check connection string is correct
-- Check firewall/network settings
+### Using SQL Client
 
-### "Environment variable not found: DATABASE_URL"
-- Make sure `.env.local` exists in project root
-- Verify DATABASE_URL is set correctly
-- Restart your terminal/IDE
+Connect to your Neon database using any PostgreSQL client and run:
 
-### Migration conflicts
-- If you get conflicts, you can reset with:
-  ```bash
-  npx prisma migrate reset
-  ```
-  ⚠️ This will delete all data!
+```sql
+SELECT * FROM "Department";
+```
 
-## For Production
+## Common Issues
 
-When deploying to Vercel:
-1. Create production Neon database
-2. Add DATABASE_URL to Vercel environment variables
-3. Prisma will automatically run migrations on deployment
+### 1. Environment variable not found: DATABASE_URL
 
----
+**Solution:** Set the DATABASE_URL environment variable before running commands:
 
-**Current Unit**: Unit 02 (Database & Student Foundation) - Complete schema defined, waiting for database connection to apply migrations.
+```bash
+# Windows PowerShell
+$env:DATABASE_URL="your-database-url"
 
-**Next Unit**: Unit 03 (Authentication & Role Synchronization) - Will implement Clerk integration and student registration flow.
+# Then run your command
+npm run db:seed
+```
+
+### 2. Migration failed: table already exists
+
+**Solution:** This usually means the migration was already applied. Check migration status:
+
+```bash
+npx prisma migrate status
+```
+
+### 3. Seed script fails with unique constraint error
+
+**Solution:** The seed script is idempotent and should skip existing records. If you still get errors, check that the `code` field is being used correctly in the `findFirst` query.
+
+## Resetting the Database (Danger Zone)
+
+⚠️ **WARNING:** This will delete ALL data!
+
+```bash
+# Reset database (deletes all data and re-runs migrations)
+npx prisma migrate reset
+
+# This will also run the seed script automatically
+```
+
+## Production Considerations
+
+1. **Never commit .env files** with production credentials
+2. **Use environment variables** in production (Vercel, Netlify, etc.)
+3. **Run migrations** through CI/CD pipeline
+4. **Backup data** before running migrations in production
+5. **Test migrations** in staging environment first
+
+## Adding More Seed Data
+
+To add more initial data (e.g., test users, sample drives), edit `prisma/seed.ts`:
+
+```typescript
+// Example: Add a test drive
+const drive = await prisma.drive.create({
+  data: {
+    companyName: "Google",
+    roleName: "Software Engineer",
+    // ... other fields
+  },
+});
+```
+
+Then run `npm run db:seed` again.
+
+## Migration History
+
+See `prisma/migrations/` folder for all applied migrations with timestamps.
+
+Current migrations:
+1. `20260904192335_student_profile_foundation` - Initial schema with User, Department, Student models
+2. Manual migration - Added AuditLog table
+3. Manual migration - Added Notification table
+
+## Need Help?
+
+- Prisma Docs: https://www.prisma.io/docs
+- Neon Docs: https://neon.tech/docs
+- Check `context/progress-tracker.md` for implementation status
