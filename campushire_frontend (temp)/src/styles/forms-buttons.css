@@ -1,0 +1,381 @@
+/* ============================================================
+   Buttons, badges, pills, form fields — ui-context.md §5.1–5.3
+   ============================================================ */
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  white-space: nowrap;
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+}
+.btn-outline {
+  background: transparent;
+  color: var(--text-primary);
+  border: 0.5px solid var(--border-strong);
+}
+.btn-outline:hover:not(:disabled) {
+  background: var(--surface-1);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-1);
+}
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #831f1f;
+}
+.btn-sm {
+  padding: 7px 12px;
+  font-size: 12px;
+}
+
+/* Status badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+}
+.badge-green {
+  background: var(--teal-light);
+  color: var(--teal);
+}
+.badge-amber {
+  background: var(--amber-light);
+  color: var(--amber);
+}
+.badge-red {
+  background: var(--red-light);
+  color: var(--red);
+}
+.badge-purple {
+  background: var(--purple-light);
+  color: var(--purple);
+}
+.badge-accent {
+  background: var(--accent-light);
+  color: var(--accent-dark);
+}
+
+.drive-status-badge {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Filter pills */
+.filter-pill {
+  padding: 6px 14px;
+  border-radius: 16px;
+  font-size: 12px;
+  border: 0.5px solid var(--border-strong);
+  background: var(--surface-2);
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.filter-pill.active {
+  background: var(--text-primary);
+  color: #fff;
+  border-color: var(--text-primary);
+}
+
+/* Form fields */
+.field {
+  margin-bottom: 16px;
+}
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-size: 13px;
+  background: var(--surface-2);
+  font-family: inherit;
+  color: var(--text-primary);
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.field-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Tag input */
+.tag-input-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-1);
+  padding: 3px 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+.tag button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+}
+.tag-input {
+  border: none;
+  outline: none;
+  flex: 1;
+  min-width: 120px;
+  font-size: 13px;
+  padding: 4px;
+  background: transparent;
+}
+
+/* Gender toggle */
+.gender-toggle {
+  display: flex;
+  gap: 0;
+}
+.gender-btn {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 0.5px solid var(--border-strong);
+  background: var(--surface-2);
+  cursor: pointer;
+  color: var(--text-primary);
+  border-left: none;
+}
+.gender-btn:first-child {
+  border-radius: 8px 0 0 8px;
+  border-left: 0.5px solid var(--border-strong);
+}
+.gender-btn:last-child {
+  border-radius: 0 8px 8px 0;
+}
+.gender-btn.active {
+  background: var(--accent-light);
+  color: var(--accent-dark);
+  border-color: var(--accent-light);
+  font-weight: 600;
+}
+
+/* URL input box */
+.url-field-wrap {
+  display: flex;
+  align-items: center;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.url-field-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+.url-prefix {
+  background: var(--surface-1);
+  border-right: 0.5px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  white-space: nowrap;
+  user-select: none;
+}
+.url-field-wrap input {
+  border: none;
+  background: transparent;
+  flex: 1;
+  padding: 0 10px;
+  font-size: 13px;
+  height: 40px;
+  outline: none;
+  color: var(--text-primary);
+}
+.url-open-btn {
+  border: none;
+  border-left: 0.5px solid var(--border);
+  background: transparent;
+  height: 40px;
+  width: 40px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+.url-open-btn:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--surface-1);
+}
+.url-open-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Small size variant for compact forms and modals */
+.url-field-wrap.url-field-sm {
+  border-radius: var(--radius-sm);
+}
+.url-field-wrap.url-field-sm .url-prefix {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+.url-field-wrap.url-field-sm input {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.url-field-wrap.url-field-sm .url-open-btn {
+  height: 32px;
+  width: 32px;
+  font-size: 12px;
+}
+
+
+/* Toggle switch */
+.pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 0.5px solid var(--border);
+}
+.toggle-switch {
+  width: 38px;
+  height: 22px;
+  border-radius: 12px;
+  background: var(--border-strong);
+  position: relative;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s ease;
+}
+.toggle-switch.on {
+  background: var(--accent);
+}
+.toggle-switch .knob {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: left 0.15s ease;
+}
+.toggle-switch.on .knob {
+  left: 18px;
+}
+
+/* File attach row */
+.attach-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--surface-1);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  margin-top: 8px;
+}
+.attach-row .ar-label {
+  flex: 1;
+  color: var(--text-secondary);
+}
+.attach-row .ar-filename {
+  font-size: 11px;
+  color: var(--teal);
+}
+.attach-required {
+  font-size: 10px;
+  color: var(--red);
+}
+
+/* Dropzone */
+.dropzone {
+  background: var(--surface-0);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.dropzone:hover,
+.dropzone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+
+/* Danger zone */
+.danger-zone {
+  background: var(--red-light);
+  border: 0.5px solid var(--red);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}

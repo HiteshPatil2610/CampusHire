@@ -1,0 +1,8 @@
+{
+  "name": "CampusHire",
+  "description": "Campus recruitment and placement management platform connecting students, department admins, and placement coordinators with central drive coordination, administrative logistics, and dynamic student application field requirements.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

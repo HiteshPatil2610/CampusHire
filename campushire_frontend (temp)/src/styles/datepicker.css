@@ -1,0 +1,189 @@
+/* ============================================================
+   Custom Date Picker — ui-context.md §5.4
+   ============================================================ */
+
+.dp-wrap {
+  position: relative;
+}
+.dp-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.dp-trigger:focus,
+.dp-trigger.open {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+.dp-trigger.placeholder {
+  color: var(--text-muted);
+}
+.dp-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  background: var(--surface-2);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 400;
+  padding: 12px;
+  animation: dpIn 0.18s var(--ease-student);
+}
+@keyframes dpIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.dp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.dp-nav-btn {
+  background: var(--surface-1);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-secondary);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.dp-nav-btn:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+.dp-my-selectors {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+}
+.dp-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: var(--surface-1);
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 5px 22px 5px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.dp-select:hover {
+  border-color: var(--accent);
+  background-color: var(--surface-2);
+}
+.dp-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+.dp-select-month {
+  flex: 1.2;
+  min-width: 96px;
+}
+.dp-select-year {
+  flex: 0.9;
+  min-width: 72px;
+}
+.dp-dow-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 4px;
+}
+.dp-dow {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: center;
+}
+.dp-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.dp-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+}
+.dp-day:hover {
+  background: var(--surface-1);
+}
+.dp-day-other {
+  color: var(--text-muted);
+}
+.dp-day-today {
+  border: 1px solid var(--accent);
+}
+.dp-day-selected {
+  background: var(--accent);
+  color: #fff;
+}
+.dp-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--border);
+}
+.dp-clear,
+.dp-today-btn {
+  border: none;
+  background: none;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+.dp-clear {
+  color: var(--red);
+}
+.dp-clear:hover {
+  background: var(--red-light);
+}
+.dp-today-btn {
+  color: var(--accent-dark);
+  background: var(--accent-light);
+}

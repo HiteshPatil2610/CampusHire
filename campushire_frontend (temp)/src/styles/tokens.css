@@ -1,0 +1,51 @@
+/* ============================================================
+   CampusHire — Design Tokens
+   Source of truth: ui-context.md §1.2–1.4
+   Do not hardcode hex values in components — always use these.
+   ============================================================ */
+
+:root {
+  /* Surface & text hierarchy */
+  --surface-0: #FAF9F5; /* page background */
+  --surface-1: #F1EFE7; /* sunken / recessed areas */
+  --surface-2: #FFFFFF; /* elevated surfaces: cards, modals, sidebar, topbar */
+  --text-primary: #1C1C1A;
+  --text-secondary: #6B6A63;
+  --text-muted: #9B9A92;
+  --border: #E6E4DA;
+  --border-strong: #D2D0C4;
+
+  /* Brand terracotta accent */
+  --accent: #D85A30;
+  --accent-dark: #712B13;
+  --accent-light: #FAECE7;
+
+  /* Semantic status clusters */
+  --teal: #0F6E56;
+  --teal-light: #E1F5EE;
+  --amber: #854F0B;
+  --amber-light: #FAEEDA;
+  --red: #A32D2D;
+  --red-light: #FCEBEB;
+  --purple: #534AB7;
+  --purple-light: #EEEDFE;
+
+  /* Radii */
+  --radius: 8px;
+  --radius-sm: 4px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
+  --radius-pill: 999px;
+
+  /* Type */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Motion easing (see ui-context.md §6.1) */
+  --ease-admin: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-student: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Layout */
+  --sidebar-width: 220px;
+}
