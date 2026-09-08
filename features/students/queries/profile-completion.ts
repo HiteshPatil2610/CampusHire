@@ -1,4 +1,4 @@
-import type { Student, StudentAcademic, StudentSkill, StudentProject, StudentExperience, StudentCertification, StudentPreferences, Department } from "@prisma/client";
+import type { Student, StudentAcademic, StudentSkill, StudentProject, StudentExperience, StudentCertification, StudentPreferences, Department, SemesterMark } from "@prisma/client";
 
 /**
  * Complete profile data structure
@@ -8,6 +8,7 @@ export interface CompleteProfile {
     department: Pick<Department, 'id' | 'name' | 'code'>;
   };
   academic: StudentAcademic | null;
+  semesterMarks: SemesterMark[];
   skills: StudentSkill[];
   projects: StudentProject[];
   experiences: StudentExperience[];

@@ -13,6 +13,16 @@ export const personalInfoSchema = z.object({
       (val) => !val || /^[+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/.test(val),
       "Invalid phone number format"
     ),
+  gender: z
+    .enum(["Male", "Female", "Other", "Prefer not to say"])
+    .optional(),
+  dateOfBirth: z.string().optional(),
+  address: z.string().trim().optional(),
+  personalEmail: z
+    .string()
+    .trim()
+    .optional()
+    .refine((val) => !val || z.string().email().safeParse(val).success, "Invalid email"),
   linkedinUrl: z
     .string()
     .trim()
@@ -160,3 +170,17 @@ export const profilePhotoSchema = z.object({
 });
 
 export type ProfilePhotoInput = z.infer<typeof profilePhotoSchema>;
+
+/**
+ * Semester Marks Schema
+ */
+export const semesterMarksSchema = z.object({
+  marks: z.array(
+    z.object({
+      semester: z.number().int().min(1).max(8),
+      sgpa: z.number().min(0).max(10),
+    })
+  ),
+});
+
+export type SemesterMarksInput = z.infer<typeof semesterMarksSchema>;

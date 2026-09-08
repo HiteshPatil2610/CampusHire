@@ -26,6 +26,12 @@ export async function updatePersonalInfo(input: PersonalInfoInput): Promise<Acti
       data: {
         name: validated.name,
         phoneNumber: validated.phoneNumber || null,
+        gender: validated.gender || null,
+        dateOfBirth: validated.dateOfBirth
+          ? new Date(validated.dateOfBirth)
+          : null,
+        address: validated.address || null,
+        personalEmail: validated.personalEmail || null,
         linkedinUrl: validated.linkedinUrl || null,
         githubUrl: validated.githubUrl || null,
         portfolioUrl: validated.portfolioUrl || null,

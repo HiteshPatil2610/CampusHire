@@ -98,6 +98,14 @@ model Student {
   linkedinUrl     String?
   githubUrl       String?
   portfolioUrl    String?
+  gender          String?
+  dateOfBirth     DateTime?
+  address         String?  @db.Text
+  personalEmail   String?
+  batchYear       Int?
+  placementStatus String   @default("unplaced")
+  placedCompany   String?
+  placedPackage   String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -111,12 +119,28 @@ model Student {
   experiences     StudentExperience[]
   certifications  StudentCertification[]
   applications    DriveApplication[]
+  semesterMarks   SemesterMark[]
 
   @@index([userId])
   @@index([departmentId])
   @@index([rollNumber])
   @@index([email])
   @@index([isPending])
+}
+
+// SemesterMark - per-semester SGPA records for a student
+model SemesterMark {
+  id        String   @id @default(cuid())
+  studentId String
+  semester  Int
+  sgpa      Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, semester])
+  @@index([studentId])
 }
 
 // ============================================================================

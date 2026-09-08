@@ -23,6 +23,9 @@ export async function getStudentProfile(studentId: string): Promise<CompleteProf
         orderBy: { issueDate: "desc" },
       },
       preferences: true,
+      semesterMarks: {
+        orderBy: { semester: "asc" },
+      },
       department: {
         select: {
           id: true,
@@ -40,6 +43,7 @@ export async function getStudentProfile(studentId: string): Promise<CompleteProf
   return {
     student,
     academic: student.academic,
+    semesterMarks: student.semesterMarks,
     skills: student.skills,
     projects: student.projects,
     experiences: student.experiences,
@@ -70,6 +74,9 @@ export async function getStudentProfileByUserId(userId: string): Promise<Complet
         orderBy: { issueDate: "desc" },
       },
       preferences: true,
+      semesterMarks: {
+        orderBy: { semester: "asc" },
+      },
       department: {
         select: {
           id: true,
@@ -87,6 +94,7 @@ export async function getStudentProfileByUserId(userId: string): Promise<Complet
   return {
     student,
     academic: student.academic,
+    semesterMarks: student.semesterMarks,
     skills: student.skills,
     projects: student.projects,
     experiences: student.experiences,

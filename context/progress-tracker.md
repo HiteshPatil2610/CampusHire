@@ -31,15 +31,45 @@ Update this file after every meaningful implementation change.
   - ✅ Migration complete and operational
   - ✅ 22 tests added (13 passed in notification-query tests)
 
+### Frontend Integration
+
+- **FE-01 — Design System & App Shell: COMPLETE**
+- **FE-02 — Student Dashboard & Profile: COMPLETE**
+- **FE-03 — Student Drives & Applications: NEXT**
+
 ## Current Goal
 
-- Implement Super Admin UI (Unit 08 UI - departments/admins management)
+- Begin **FE-03 — Student Drives & Applications** (next frontend integration unit)
+- Or implement Super Admin UI (Unit 08 UI - departments/admins management)
 - Or implement Department Admin UI (Unit 05 UI - drives management)
-- Or implement Student UI (Unit 04 UI - registration/profile)
 - Or complete Excel/CSV implementation (Unit 07 - spec ready)
-- Or begin Unit 11 - Drive UI Components
 
 ## Completed
+
+- **FE-02 — Student Dashboard & Profile (COMPLETE):**
+  - Schema extended: `Student` fields (`gender`, `dateOfBirth`, `address`, `personalEmail`, `batchYear`, `placementStatus`, `placedCompany`, `placedPackage`)
+  - `SemesterMark` model added with `@@unique([studentId, semester])`
+  - `get-profile.ts` updated to include `semesterMarks`
+  - `profile-personal.ts` extended for new personal fields
+  - `profile-semester-marks.ts` created for SGPA upserts
+  - Student dashboard wired to real data (`getStudentProfileByUserId`, `calculateProfileCompletion`, `getNotifications`)
+  - Profile page at `/student-dashboard/profile` with all 7 tabs
+  - Settings page at `/student-dashboard/settings` with Clerk password management
+  - Registration form flow preserved for new students
+  - Build passing (`npm run build` ✅, `npm run lint` ✅)
+  - Note: DB migration `frontend-student-fields` pending — run `npx prisma migrate dev --name frontend-student-fields` when `DATABASE_URL` is configured
+
+- **FE-01 — Design System & App Shell (COMPLETE):**
+  - CSS merged from temp frontend into `app/globals.css` (`base.css`, `layout.css`, `forms-buttons.css`, `components.css`, `datepicker.css`)
+  - UI primitives ported: `DatePicker`, `UrlField`, `TagInput`, `ProgressBar`, `KpiCard`, `Pagination`, `StatusBadge`
+  - shadcn `Dialog` and `Toast`/`Toaster` added manually (CLI config incompatible)
+  - AppShell, Sidebar, Topbar ported and wired to Clerk + `getUnreadCountAction()`
+  - All three role layouts replaced with real `AppShell` wrappers
+  - Auth page visual wrappers added (sign-in, sign-up)
+  - Landing page ported from temp frontend (`components/landing/landing-page.tsx`)
+  - 404 page ported (`components/shared/not-found-content.tsx`)
+  - `<Toaster />` confirmed in root layout
+  - Build passing (`npm run build` ✅, `npm run lint` ✅)
 
 - Clickable HTML/CSS prototype (9 screens: landing, login, register, student dashboard, student profile, admin dashboard, excel upload, post-drive, super-admin dashboard) — used as the source of truth for `ui-context.md` and the core user flows.
 - Planning conversation completed: stack, scope, and access model decided (see Architecture Decisions below).

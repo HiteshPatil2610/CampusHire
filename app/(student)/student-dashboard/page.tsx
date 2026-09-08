@@ -1,178 +1,194 @@
-import { redirect } from "next/navigation";
-import Link from "next/link";
-import { getOrCreateUser } from "@/lib/auth";
-import { getStudentProfileByUserId } from "@/features/students/queries/get-profile";
-import { calculateProfileCompletion } from "@/features/students/queries/profile-completion";
-import { RegistrationForm } from "@/components/students/RegistrationForm";
+import { redirect } from 'next/navigation';
+import Link from 'next/link';
+import {
+  Briefcase,
+  ClipboardList,
+  FileCheck,
+  User,
+} from 'lucide-react';
+import { getOrCreateUser } from '@/lib/auth';
+import { getStudentProfileByUserId } from '@/features/students/queries/get-profile';
+import { calculateProfileCompletion } from '@/features/students/queries/profile-completion';
+import { getNotifications } from '@/features/notifications/queries/get-notifications';
+import { RegistrationForm } from '@/components/students/RegistrationForm';
+import KpiCard from '@/components/shared/kpi-card';
+import { formatRelativeTime } from '@/lib/format-relative-time';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
 
 export default async function StudentDashboardPage() {
-  // Get authenticated user
   const user = await getOrCreateUser();
-  
-  if (!user) {
-    redirect("/sign-in");
-  }
+  if (!user) redirect('/sign-in');
 
-  // Check if student profile exists
   const profile = await getStudentProfileByUserId(user.id);
-
-  // If no student profile, show registration form
   if (!profile) {
     return <RegistrationForm />;
   }
 
-  // Calculate profile completion
   const completion = calculateProfileCompletion(profile);
+  const notifications = await getNotifications(user.id, {
+    page: 1,
+    pageSize: 5,
+  });
+
+  const firstName = profile.student.name.split(' ')[0];
 
   return (
-    <div className="p-8 max-w-6xl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)] mb-2">
-          Welcome back, {profile.student.name}!
-        </h1>
-        <p className="text-[var(--text-secondary)]">
-          {profile.student.department.name} • Roll No. {profile.student.rollNumber}
-        </p>
-      </div>
-
-      {/* Profile Completion Card */}
-      <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border)] p-6 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
-              Profile Completion
-            </h2>
-            <p className="text-sm text-[var(--text-secondary)]">
-              Complete your profile to become eligible for placement drives
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold text-[var(--accent)] mb-1">
-              {completion.percentage}%
+    <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          marginBottom: 24,
+        }}
+      >
+        <Link href="/student-dashboard/profile">
+          {profile.student.profilePhotoUrl ? (
+            <img
+              src={profile.student.profilePhotoUrl}
+              alt={profile.student.name}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                objectFit: 'cover',
+              }}
+            />
+          ) : (
+            <div
+              className="sid-avatar"
+              style={{ width: 44, height: 44, fontSize: 15 }}
+            >
+              {getInitials(profile.student.name)}
             </div>
-            <div className="text-xs text-[var(--text-muted)]">
-              {completion.requiredFieldsFilled} of {completion.totalRequiredFields} fields
-            </div>
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="w-full bg-[var(--surface-1)] rounded-full h-2 mb-4">
-          <div
-            className="bg-[var(--accent)] h-2 rounded-full transition-all duration-300"
-            style={{ width: `${completion.percentage}%` }}
-          />
-        </div>
-
-        {/* Section Status */}
-        {completion.percentage < 100 && (
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-[var(--text-primary)] mb-2">
-              Incomplete Sections:
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {!completion.sectionsStatus.academic && (
-                <div className="text-sm text-[var(--text-secondary)]">• Academic Information</div>
-              )}
-              {!completion.sectionsStatus.skills && (
-                <div className="text-sm text-[var(--text-secondary)]">• Skills</div>
-              )}
-              {!completion.sectionsStatus.projects && (
-                <div className="text-sm text-[var(--text-secondary)]">• Projects</div>
-              )}
-              {!completion.sectionsStatus.experience && (
-                <div className="text-sm text-[var(--text-secondary)]">• Experience</div>
-              )}
-              {!completion.sectionsStatus.certifications && (
-                <div className="text-sm text-[var(--text-secondary)]">• Certifications</div>
-              )}
-              {!completion.sectionsStatus.preferences && (
-                <div className="text-sm text-[var(--text-secondary)]">• Preferences</div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {completion.percentage === 100 && (
-          <div className="flex items-center gap-2 text-[var(--teal)] text-sm">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span className="font-medium">Your profile is complete!</span>
-          </div>
-        )}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <Link
-          href="/student-dashboard/profile"
-          className="bg-[var(--surface-2)] rounded-xl border border-[var(--border)] p-6 hover:border-[var(--accent)] transition-colors"
-        >
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="font-semibold text-[var(--text-primary)] mb-1">
-                Complete Profile
-              </h3>
-              <p className="text-sm text-[var(--text-secondary)]">
-                Add your skills, projects, and experience
-              </p>
-            </div>
-            <svg className="w-5 h-5 text-[var(--accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
+          )}
         </Link>
-
-        <div className="bg-[var(--surface-1)] rounded-xl border border-[var(--border)] p-6 opacity-60">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="font-semibold text-[var(--text-primary)] mb-1">
-                View Drives
-              </h3>
-              <p className="text-sm text-[var(--text-secondary)]">
-                Browse and apply to placement drives
-              </p>
-              <p className="text-xs text-[var(--text-muted)] mt-2">
-                Coming in next unit
-              </p>
-            </div>
-          </div>
-        </div>
+        <h1 className="page-title">Welcome back, {firstName}</h1>
       </div>
 
-      {/* Profile Summary */}
-      <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border)] p-6">
-        <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
-          Profile Summary
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <div className="text-2xl font-bold text-[var(--accent)]">
-              {profile.skills.length}
-            </div>
-            <div className="text-sm text-[var(--text-secondary)]">Skills</div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 16,
+          marginBottom: 28,
+        }}
+      >
+        <Link href="/student-dashboard/profile" style={{ display: 'block' }}>
+          <KpiCard
+            value={`${completion.percentage}%`}
+            label="Profile Completion"
+          />
+        </Link>
+        <KpiCard
+          value="0"
+          label="Eligible Drives"
+          trend="Available soon"
+          trendPositive
+        />
+        <KpiCard value="0" label="Applications Submitted" />
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 16,
+          marginBottom: 28,
+        }}
+      >
+        <Link href="/student-dashboard/profile" className="card">
+          <div className="icon-tile accent" style={{ marginBottom: 10 }}>
+            <User size={16} />
           </div>
-          <div>
-            <div className="text-2xl font-bold text-[var(--accent)]">
-              {profile.projects.length}
-            </div>
-            <div className="text-sm text-[var(--text-secondary)]">Projects</div>
+          <strong>Complete Profile</strong>
+        </Link>
+        <Link href="/student-dashboard/drives" className="card">
+          <div className="icon-tile teal" style={{ marginBottom: 10 }}>
+            <Briefcase size={16} />
           </div>
-          <div>
-            <div className="text-2xl font-bold text-[var(--accent)]">
-              {profile.experiences.length}
-            </div>
-            <div className="text-sm text-[var(--text-secondary)]">Experience</div>
+          <strong>Browse Drives</strong>
+        </Link>
+        <Link href="/student-dashboard/applications" className="card">
+          <div className="icon-tile amber" style={{ marginBottom: 10 }}>
+            <FileCheck size={16} />
           </div>
-          <div>
-            <div className="text-2xl font-bold text-[var(--accent)]">
-              {profile.certifications.length}
+          <strong>My Applications</strong>
+        </Link>
+      </div>
+
+      <div className="card">
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 10,
+          }}
+        >
+          <h3 className="section-title">Recent Notifications</h3>
+          <Link
+            href="/notifications"
+            className="btn btn-ghost btn-sm"
+            style={{ fontSize: 12 }}
+          >
+            View all →
+          </Link>
+        </div>
+
+        {notifications.data.length === 0 ? (
+          <p className="text-secondary" style={{ fontSize: 13 }}>
+            No notifications yet. You&apos;ll see drive alerts and updates here.
+          </p>
+        ) : (
+          notifications.data.map((notification) => (
+            <div className="activity-item" key={notification.id}>
+              <div className="activity-dot" />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 500 }}>{notification.title}</div>
+                <div
+                  className="text-secondary"
+                  style={{
+                    fontSize: 12,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    maxWidth: 520,
+                  }}
+                >
+                  {notification.message}
+                </div>
+                <div className="activity-time">
+                  {formatRelativeTime(new Date(notification.createdAt))}
+                </div>
+              </div>
             </div>
-            <div className="text-sm text-[var(--text-secondary)]">Certifications</div>
-          </div>
+          ))
+        )}
+      </div>
+
+      <div
+        className="card"
+        style={{
+          marginTop: 16,
+          background: 'var(--surface-1)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ClipboardList size={16} color="var(--text-secondary)" />
+          <span className="text-secondary" style={{ fontSize: 13 }}>
+            Upcoming drive deadlines will appear here in FE-03.
+          </span>
         </div>
       </div>
     </div>
