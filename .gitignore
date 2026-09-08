@@ -38,3 +38,4 @@ next-env.d.ts
 
 # sensitive documentation
 DATABASE_SETUP.md
+DB_CONNECTION_STATUS.md

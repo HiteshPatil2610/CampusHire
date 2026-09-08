@@ -2,7 +2,13 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 // Define route matchers for each role group
-const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"]);
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/api/test-db",
+  "/api/webhooks/clerk",
+]);
 const isStudentRoute = createRouteMatcher(["/student-dashboard(.*)"]);
 const isAdminRoute = createRouteMatcher(["/admin-dashboard(.*)"]);
 const isSuperAdminRoute = createRouteMatcher(["/super-admin-dashboard(.*)"]);
