@@ -30,7 +30,8 @@
     "svix": "^2.3.0",
     "tailwind-merge": "^2.6.0",
     "xlsx": "^0.18.5",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@types/node": "^22.10.7",

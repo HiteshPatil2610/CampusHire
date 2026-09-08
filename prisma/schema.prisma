@@ -67,11 +67,11 @@ model Department {
 
 // Department Admin model - links DEPT_ADMIN users to departments
 model DepartmentAdmin {
-  id           String     @id @default(cuid())
-  userId       String     @unique
+  id           String   @id @default(cuid())
+  userId       String   @unique
   departmentId String
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -86,31 +86,45 @@ model DepartmentAdmin {
 
 // Student model - represents a student in the placement system
 model Student {
-  id              String   @id @default(cuid())
-  userId          String?  @unique // Optional: null for bulk-imported pending students
+  id              String  @id @default(cuid())
+  userId          String? @unique // Optional: null for bulk-imported pending students
   departmentId    String
-  rollNumber      String   @unique
+  rollNumber      String  @unique
   name            String
-  email           String   @unique // For matching during self-registration
+  email           String  @unique // For matching during self-registration
   phoneNumber     String?
-  isPending       Boolean  @default(true) // true until linked to User via registration
+  isPending       Boolean @default(true) // true until linked to User via registration
   profilePhotoUrl String?
   linkedinUrl     String?
   githubUrl       String?
   portfolioUrl    String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+
+  // NEW: Personal information fields
+  dateOfBirth DateTime?
+  gender      String?
+  address     String?   @db.Text
+
+  // NEW: Profile metrics
+  resumeScore       Int @default(0) // 0-100
+  readinessScore    Int @default(0) // 0-100
+  profileCompletion Int @default(0) // 0-100
+
+  // NEW: Academic info
+  semester String? // e.g., "7th semester"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  user            User?                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  department      Department              @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  academic        StudentAcademic?
-  preferences     StudentPreferences?
-  skills          StudentSkill[]
-  projects        StudentProject[]
-  experiences     StudentExperience[]
-  certifications  StudentCertification[]
-  applications    DriveApplication[]
+  user           User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department     Department             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  academic       StudentAcademic?
+  preferences    StudentPreferences?
+  skills         StudentSkill[]
+  projects       StudentProject[]
+  experiences    StudentExperience[]
+  certifications StudentCertification[]
+  applications   DriveApplication[]
 
   @@index([userId])
   @@index([departmentId])
@@ -125,15 +139,23 @@ model Student {
 
 // StudentAcademic - stores academic information (one-to-one with Student)
 model StudentAcademic {
-  id                String   @id @default(cuid())
-  studentId         String   @unique
+  id                String @id @default(cuid())
+  studentId         String @unique
   tenthPercentage   Float
   twelfthPercentage Float
   currentCGPA       Float
   currentSemester   Int
-  activeBacklogs    Int      @default(0)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  activeBacklogs    Int    @default(0)
+
+  // NEW: Detailed academic info
+  tenthBoard    String?
+  tenthYear     Int?
+  twelfthBoard  String?
+  twelfthYear   Int?
+  semesterMarks String? @db.Text // JSON array of semester objects
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -196,15 +218,15 @@ model StudentExperience {
 
 // StudentCertification - stores certifications (many-to-one with Student)
 model StudentCertification {
-  id                   String    @id @default(cuid())
-  studentId            String
-  certificationName    String
-  issuingOrganization  String
-  issueDate            DateTime
-  expiryDate           DateTime?
-  credentialUrl        String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  studentId           String
+  certificationName   String
+  issuingOrganization String
+  issueDate           DateTime
+  expiryDate          DateTime?
+  credentialUrl       String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -214,16 +236,20 @@ model StudentCertification {
 
 // StudentPreferences - stores placement preferences (one-to-one with Student)
 model StudentPreferences {
-  id                     String   @id @default(cuid())
-  studentId              String   @unique
-  preferredRoles         String   @db.Text // JSON array stored as text
-  preferredLocations     String   @db.Text // JSON array stored as text
-  preferredCompanyTypes  String   @db.Text // JSON array stored as text
-  expectedPackageMin     Float?
-  expectedPackageMax     Float?
-  willingToRelocate      Boolean  @default(false)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id                    String  @id @default(cuid())
+  studentId             String  @unique
+  preferredRoles        String  @db.Text // JSON array stored as text
+  preferredLocations    String  @db.Text // JSON array stored as text
+  preferredCompanyTypes String  @db.Text // JSON array stored as text
+  expectedPackageMin    Float?
+  expectedPackageMax    Float?
+  willingToRelocate     Boolean @default(false)
+
+  // NEW: Work preferences
+  workMode String @default("[]") @db.Text // JSON array: ["On-site", "Remote", "Hybrid"]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -231,29 +257,28 @@ model StudentPreferences {
   @@index([studentId])
 }
 
-
 // ============================================================================
 // 05 — DRIVE MANAGEMENT & ELIGIBILITY
 // ============================================================================
 
 // Drive model - represents a placement drive/recruitment opportunity
 model Drive {
-  id                   String      @id @default(cuid())
-  departmentId         String
-  companyName          String
-  roleName             String
-  jobDescriptionUrl    String?
-  packageOffered       Float
-  selectionRounds      String      @db.Text // JSON array of round names
-  driveDate            DateTime
-  applicationDeadline  DateTime
-  applyMethod          ApplyMethod
-  externalApplyUrl     String?
-  minCGPA              Float
-  maxActiveBacklogs    Int
-  eligibleDepartments  String      @db.Text // JSON array of department IDs
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
+  id                  String      @id @default(cuid())
+  departmentId        String
+  companyName         String
+  roleName            String
+  jobDescriptionUrl   String?
+  packageOffered      Float
+  selectionRounds     String      @db.Text // JSON array of round names
+  driveDate           DateTime
+  applicationDeadline DateTime
+  applyMethod         ApplyMethod
+  externalApplyUrl    String?
+  minCGPA             Float
+  maxActiveBacklogs   Int
+  eligibleDepartments String      @db.Text // JSON array of department IDs
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
   // Relations
   department   Department         @relation(fields: [departmentId], references: [id], onDelete: Restrict)
@@ -262,7 +287,6 @@ model Drive {
   @@index([departmentId])
   @@index([applicationDeadline])
 }
-
 
 // ============================================================================
 // 06 — STUDENT APPLICATIONS
@@ -286,7 +310,6 @@ model DriveApplication {
   @@index([driveId])
 }
 
-
 // ============================================================================
 // 09 — AUDIT LOGGING
 // ============================================================================
@@ -294,13 +317,13 @@ model DriveApplication {
 // AuditLog model - immutable historical record of administrative actions
 model AuditLog {
   id         String   @id @default(cuid())
-  userId     String   // Actor who performed the action (resolved server-side)
-  action     String   // Action type (CREATE, UPDATE, DELETE, ACTIVATE, DEACTIVATE, ASSIGN, UNASSIGN, APPLY, IMPORT, ROLE_CHANGE)
-  entityType String   // Resource type (Department, DepartmentAdmin, Drive, DriveApplication, Student, BulkImport, User)
-  entityId   String?  // Resource identifier (null for bulk operations)
+  userId     String // Actor who performed the action (resolved server-side)
+  action     String // Action type (CREATE, UPDATE, DELETE, ACTIVATE, DEACTIVATE, ASSIGN, UNASSIGN, APPLY, IMPORT, ROLE_CHANGE)
+  entityType String // Resource type (Department, DepartmentAdmin, Drive, DriveApplication, Student, BulkImport, User)
+  entityId   String? // Resource identifier (null for bulk operations)
   metadata   String?  @db.Text // Additional context as JSON
-  ipAddress  String?  // Client IP address (optional)
-  userAgent  String?  // Client user agent (optional)
+  ipAddress  String? // Client IP address (optional)
+  userAgent  String? // Client user agent (optional)
   createdAt  DateTime @default(now())
 
   // Relations
@@ -312,7 +335,6 @@ model AuditLog {
   @@index([createdAt])
 }
 
-
 // ============================================================================
 // 10 — IN-APP NOTIFICATIONS
 // ============================================================================
@@ -320,12 +342,12 @@ model AuditLog {
 // Notification model - in-app notifications for users
 model Notification {
   id           String   @id @default(cuid())
-  userId       String   // Recipient (resolved server-side, never from client)
-  type         String   // Notification category (APPLICATION, DRIVE, PROFILE, ADMIN, SYSTEM)
-  title        String   // Short notification title
+  userId       String // Recipient (resolved server-side, never from client)
+  type         String // Notification category (APPLICATION, DRIVE, PROFILE, ADMIN, SYSTEM)
+  title        String // Short notification title
   message      String   @db.Text // Full notification message
-  resourceType String?  // Optional: type of related resource (Drive, Application, etc.)
-  resourceId   String?  // Optional: ID of related resource
+  resourceType String? // Optional: type of related resource (Drive, Application, etc.)
+  resourceId   String? // Optional: ID of related resource
   isRead       Boolean  @default(false) // Read/unread state
   createdAt    DateTime @default(now())
 
