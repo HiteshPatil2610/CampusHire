@@ -1,5 +1,34 @@
 import { describe, it, expect } from "vitest";
-import { getDriveStatus, isDriveOpen, getDaysUntilDeadline } from "../utils/drive-status";
+import {
+  getDriveStatus,
+  isDriveOpen,
+  getDaysUntilDeadline,
+  getDriveDisplayStatus,
+} from "../utils/drive-status";
+
+describe("getDriveDisplayStatus", () => {
+  function daysFromNow(days: number): Date {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    return date;
+  }
+
+  it("returns 'open' while the application deadline is still ahead", () => {
+    expect(getDriveDisplayStatus(daysFromNow(3), daysFromNow(10))).toBe("open");
+  });
+
+  it("returns 'upcoming' when applications closed but the drive is still ahead", () => {
+    expect(getDriveDisplayStatus(daysFromNow(-2), daysFromNow(5))).toBe("upcoming");
+  });
+
+  it("returns 'closed' once both the deadline and the drive date have passed", () => {
+    expect(getDriveDisplayStatus(daysFromNow(-10), daysFromNow(-3))).toBe("closed");
+  });
+
+  it("prefers 'open' even when the drive date has somehow passed", () => {
+    expect(getDriveDisplayStatus(daysFromNow(2), daysFromNow(-1))).toBe("open");
+  });
+});
 
 describe("Drive Status Calculation", () => {
   it("should return 'open' for future deadline", () => {

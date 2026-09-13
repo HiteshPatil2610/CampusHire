@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { Drive } from '@prisma/client';
 import { DriveCard } from './drive-card';
@@ -13,6 +14,10 @@ interface DrivesGridProps {
   pageSize: number;
   totalCount: number;
   applicantCounts?: Record<string, number>; // driveId -> count
+  /** False when the student hasn't completed their Academic Info section yet —
+   * eligibility can't be evaluated without CGPA/backlogs, so the list is
+   * always empty until then. */
+  hasAcademicProfile?: boolean;
 }
 
 /**
@@ -27,6 +32,7 @@ export function DrivesGrid({
   pageSize,
   totalCount,
   applicantCounts = {},
+  hasAcademicProfile = true,
 }: DrivesGridProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -51,7 +57,32 @@ export function DrivesGrid({
   if (drives.length === 0) {
     const filter = searchParams.get('filter') || 'all';
     const search = searchParams.get('q');
-    
+
+    if (!hasAcademicProfile) {
+      return (
+        <div
+          className="drives-empty"
+          style={{
+            padding: '60px 20px',
+            textAlign: 'center',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🎓</div>
+          <p style={{ fontSize: 15, margin: '0 0 12px' }}>
+            Complete your Academic Info to see eligible drives.
+          </p>
+          <p style={{ fontSize: 13, margin: '0 0 16px' }}>
+            Drives are matched using your CGPA and active backlogs — add
+            those in your profile and drives you qualify for will appear here.
+          </p>
+          <Link href="/student-dashboard/profile" className="btn btn-primary btn-sm">
+            Complete Academic Info →
+          </Link>
+        </div>
+      );
+    }
+
     let emptyMessage = 'No eligible drives found.';
     if (search) {
       emptyMessage = `No drives match "${search}".`;
@@ -86,7 +117,7 @@ export function DrivesGrid({
         className="drives-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
           gap: 16,
           marginBottom: 24,
         }}

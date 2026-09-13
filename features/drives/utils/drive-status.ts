@@ -20,12 +20,39 @@ export function getDriveStatus(applicationDeadline: Date): DriveStatus {
 
 /**
  * Check if a drive is currently open for applications
- * 
+ *
  * @param applicationDeadline - The deadline for applications
  * @returns true if drive is open, false if closed
  */
 export function isDriveOpen(applicationDeadline: Date): boolean {
   return getDriveStatus(applicationDeadline) === "open";
+}
+
+/**
+ * Display status shown on drive cards, which distinguishes a drive whose
+ * application window has closed but which has not been held yet ("upcoming")
+ * from one that is fully over ("closed").
+ *
+ * Like getDriveStatus, this is always computed and never stored.
+ */
+export type DriveDisplayStatus = "open" | "upcoming" | "closed";
+
+export function getDriveDisplayStatus(
+  applicationDeadline: Date,
+  driveDate: Date
+): DriveDisplayStatus {
+  const now = new Date();
+
+  if (now < applicationDeadline) {
+    return "open";
+  }
+
+  // Applications have closed, but the drive itself is still ahead
+  if (now < driveDate) {
+    return "upcoming";
+  }
+
+  return "closed";
 }
 
 /**

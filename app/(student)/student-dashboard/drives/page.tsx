@@ -2,7 +2,7 @@ import { requireStudent } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getEligibleDrives } from '@/features/drives/queries/get-eligible-drives';
 import { checkApplicationExists } from '@/features/applications/queries/check-application-exists';
-import { getDriveStatus } from '@/features/drives/utils/drive-status';
+import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
 import { calculateProfileCompletion } from '@/features/students/queries/profile-completion';
 import { DrivesFilterBar } from '@/components/drives/drives-filter-bar';
 import { DrivesGrid } from '@/components/drives/drives-grid';
@@ -94,17 +94,16 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
     filteredDrives = drivesResult.data.filter((d) => appliedDriveIds.has(d.id));
     filteredTotalCount = filteredDrives.length;
   } else if (filter === 'upcoming') {
-    const now = new Date();
-    filteredDrives = drivesResult.data.filter((d) => {
-      const driveStatus = getDriveStatus(d.applicationDeadline);
-      return driveStatus === 'open' && d.driveDate > now;
-    });
+    // Applications closed, but the drive itself hasn't been held yet —
+    // same rule the card badge uses, so pill and badge agree.
+    filteredDrives = drivesResult.data.filter(
+      (d) => getDriveDisplayStatus(d.applicationDeadline, d.driveDate) === 'upcoming'
+    );
     filteredTotalCount = filteredDrives.length;
   } else if (filter === 'closed') {
-    filteredDrives = drivesResult.data.filter((d) => {
-      const driveStatus = getDriveStatus(d.applicationDeadline);
-      return driveStatus === 'closed';
-    });
+    filteredDrives = drivesResult.data.filter(
+      (d) => getDriveDisplayStatus(d.applicationDeadline, d.driveDate) === 'closed'
+    );
     filteredTotalCount = filteredDrives.length;
   }
 
@@ -123,6 +122,13 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
     });
     applicantCounts[drive.id] = count;
   }
+
+  // Year of study derived from the real current semester (2 semesters per year)
+  const YEAR_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
+  const currentSemester = studentWithProfile.academic?.currentSemester;
+  const studyYear = currentSemester
+    ? YEAR_LABELS[Math.ceil(currentSemester / 2) - 1] ?? null
+    : null;
 
   // Generate initials
   const nameParts = studentWithProfile.name.trim().split(/\s+/);
@@ -144,8 +150,12 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
           marginBottom: 24,
           borderRadius: 12,
           border: '1px solid var(--border)',
-          background: 'var(--surface-0)',
+          background: 'var(--surface-2)',
           alignItems: 'center',
+          borderTop: '3px solid transparent',
+          borderImage:
+            'linear-gradient(90deg, var(--accent) 0%, var(--amber) 45%, var(--teal) 100%) 1',
+          borderImageWidth: '3px 0 0 0',
         }}
       >
         <Link
@@ -153,13 +163,13 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
           style={{
             width: 64,
             height: 64,
-            borderRadius: 12,
-            background: 'var(--accent-surface)',
+            borderRadius: '50%',
+            background: 'var(--accent-light)',
             color: 'var(--accent)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: 24,
+            fontSize: 22,
             fontWeight: 700,
             flexShrink: 0,
             cursor: 'pointer',
@@ -191,7 +201,8 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
               flexWrap: 'wrap',
             }}
           >
-            <span>{studentWithProfile.department.name}</span>
+            <span>{studentWithProfile.department.code}</span>
+            {studyYear && <span>{studyYear} year</span>}
             <span>Roll {studentWithProfile.rollNumber}</span>
             {studentWithProfile.academic && (
               <span>CGPA {studentWithProfile.academic.currentCGPA}</span>
@@ -301,6 +312,7 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
         pageSize={pageSize}
         totalCount={filteredTotalCount}
         applicantCounts={applicantCounts}
+        hasAcademicProfile={Boolean(studentWithProfile.academic)}
       />
     </div>
   );

@@ -1,0 +1,224 @@
+# CampusHire — Unit 11: Super Admin Central Drives
+
+You are working on the **CampusHire** project. Before making any changes, thoroughly read and follow these context files:
+
+* `context/project-overview.md`
+* `context/architecture.md`
+* `context/ui-context.md`
+* `context/code-standards.md`
+* `context/progress-tracker.md`
+* `context/08-DEPARTMENT_ADMIN_ACCOUNT_MANAGEMENT.md`
+* `context/05-Drive_Management___Eligibility.md`
+* `context/FE-06-admin-drive-management.md` (mirror its patterns closely — this unit is its super-admin equivalent)
+* `context/FE-08-super-admin-ui.md` (note: this file explicitly says central drives were **out of scope for V1** — that scope restriction is now lifted by this unit)
+
+Also inspect the current repo before writing anything: `prisma/schema.prisma`, `features/drives/`, `app/(super-admin)/`, `lib/auth.ts`.
+
+---
+
+## 1. OBJECTIVE
+
+Super Admin currently cannot post a drive. Implement a **Central Drive** feature so the Super Admin can post institution-wide drives (spanning multiple departments), visible in a new "Campus Drives" master-detail page, matching the attached reference screenshots:
+
+- **Screen A** — Master-detail layout: left column is a scrollable list of drive cards (company, status badge, role, date, min CGPA); right panel shows the full detail of the selected drive (key placement dates, portals/links, venue & logistics, application fields required with toggle switches).
+- **Screen B** — The bottom of the detail panel: a list of application fields, each with a toggle switch (on/off), ending in a "Save Configuration" button.
+- **Screen C** — Clicking "+ Post Central Drive" opens a modal with: Company Name, Role/Designation, Package/CTC, Min CGPA Cutoff, Drive Date, Application Deadline, Company Portal/Registration URL (optional), Pre-Placement Talk Link (optional), Job Description & Instructions (textarea), Cancel / Create Central Drive buttons.
+
+Do not build a separate design system — reuse the existing components below.
+
+---
+
+## 2. SCOPE OF THIS UNIT
+
+In scope:
+1. Schema change enabling a drive to exist without belonging to a single department ("central drive")
+2. Super-admin-only server actions: create, update, list, get-by-id for central drives
+3. Super-admin-only re-scoping of the application-fields config (reuse existing field catalog/schema, not the full `AdminApplicationFieldsPanel` UI — see §7)
+4. New page: `app/(super-admin)/super-admin-dashboard/drives/page.tsx` (replace the current read-only "Campus Drives" page) — master-detail layout
+5. "Post Central Drive" modal
+6. Eligibility: central drives must still be filtered into students' `getEligibleDrives()` results exactly like department drives (same eligibility engine, no special-casing on the student side)
+7. Audit log entries for central drive create/update (reuse `createAuditLog` helper from Unit 09)
+
+Out of scope (do not build):
+- Editing which departments an *existing* department-posted drive belongs to
+- Deleting drives (still not implemented per project standards)
+- Any change to the student-facing drive list/detail pages beyond what's needed for eligibility to keep working
+- Application-stage tracking, resume scoring, readiness metrics — still explicitly out of scope project-wide
+
+---
+
+## 3. SCHEMA CHANGES
+
+Read `prisma/schema.prisma` first. Only add what's missing.
+
+```prisma
+model Drive {
+  // ... all existing fields unchanged ...
+
+  // Make department ownership optional — a null departmentId means
+  // this drive was posted centrally by a Super Admin, not by a
+  // department admin.
+  departmentId String?   // CHANGE: was required, now optional
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  // Track who actually created the drive (dept admin OR super admin),
+  // for audit/display purposes. Distinct from departmentId ownership.
+  createdByUserId String?
+  createdByUser   User?   @relation("DriveCreatedBy", fields: [createdByUserId], references: [id])
+
+  // Explicit flag rather than relying on departmentId === null everywhere —
+  // makes queries and UI branching clearer and safer.
+  isCentralDrive Boolean @default(false)
+}
+```
+
+> Check existing relations on `User` and `Department` before adding the new relation name — avoid duplicate relation names or ambiguous relation errors. Run `npx prisma format` after editing.
+
+Run one migration for this unit: `npx prisma migrate dev --name central-drives`.
+
+**Backward compatibility check (mandatory):** every existing query that does `where: { departmentId: department.id }` (e.g. `getAdminDrives`, drive ownership checks in `updateDrive`) must continue to work unchanged for department-owned drives — `departmentId` being nullable does not change behavior for rows where it's set. Re-run `npx tsc --noEmit` after the schema change to catch every place TypeScript now flags `departmentId` as possibly null and fix each one deliberately (don't blanket-cast with `!`).
+
+---
+
+## 4. AUTHORIZATION
+
+- Add `requireSuperAdmin()` usage (already exists per `lib/auth.ts`, used in FE-08) to every new action/query in this unit.
+- A central drive's `departmentId` is always `null` and `isCentralDrive` is always `true` — enforce this server-side in `createCentralDrive`, never trust a client-provided value for either field.
+- Reuse the existing `driveSchema` (Zod) from `features/drives/schemas/drive.ts` for shared fields (company, role, package, CGPA, dates, etc.) rather than duplicating validation. Add a thin `createCentralDriveSchema` that omits `departmentId` (since a dept admin's own-department pre-check doesn't apply here) and requires `eligibleDepartments` to contain **at least one** department (super admin picks explicitly, or "all departments" as a convenience option — see §6.3).
+
+---
+
+## 5. BACKEND — FILES TO CREATE
+
+Follow the feature-folder convention: new files live in `features/drives/`, not `features/admin-accounts/`.
+
+### `features/drives/actions/create-central-drive.ts`
+- `requireSuperAdmin()`
+- Validate input against `createCentralDriveSchema`
+- Create the `Drive` row with `departmentId: null`, `isCentralDrive: true`, `createdByUserId: superAdmin.id`
+- Write an audit log entry: `action: CREATE`, `entityType: DRIVE`, metadata including companyName, roleName, eligible department codes
+- Return `{ success: true, driveId }` or `{ success: false, error }` — same result shape as `createDrive` in FE-06 for consistency
+
+### `features/drives/actions/update-central-drive.ts`
+- `requireSuperAdmin()`
+- Verify `drive.isCentralDrive === true` before allowing update (a super admin should not be able to edit a department-posted drive through this action — that stays the dept admin's job)
+- Same audit logging pattern (`action: UPDATE`)
+
+### `features/drives/actions/update-central-drive-application-fields.ts`
+- Small, focused action just for the "Save Configuration" toggle panel (Screen B) — takes `driveId` + the array of `{ fieldKey, isEnabled }` and persists to `applicationFields` (JSON string), preserving `isRequired` values already stored. Keep this separate from the general update action so the toggle panel can save independently without resubmitting the whole form.
+
+### `features/drives/queries/get-central-drives.ts`
+- `requireSuperAdmin()`
+- Returns all drives where `isCentralDrive: true`, ordered by `driveDate` ascending or by status (open first) — pick whichever matches Screen A's ordering (open/upcoming drives near the top)
+- Include `_count.applications` like `getAdminDrives` does
+
+### `features/drives/queries/get-central-drive-by-id.ts`
+- `requireSuperAdmin()`
+- Fetch one central drive by id, 404/error if `isCentralDrive` is false
+
+---
+
+## 6. FRONTEND — SUPER ADMIN CAMPUS DRIVES PAGE
+
+### 6.1 Target file
+`app/(super-admin)/super-admin-dashboard/drives/page.tsx` — **REPLACE** the existing read-only version referenced in `context/FE-08-super-admin-ui.md`.
+
+### 6.2 Architecture
+```
+CampusDrivesPage (Server Component)
+  ├── calls requireSuperAdmin()
+  ├── calls getCentralDrives() → CentralDriveListItem[]
+  ├── calls getActiveDepartments() → { id, name, code }[]  (for the eligibility picker in the modal)
+  └── renders:
+      └── CentralDrivesView (client — "use client")
+            ├── left: scrollable list of DriveListCard (click = select)
+            ├── right: DriveDetailPanel for the selected drive
+            └── "+ Post Central Drive" button → opens PostCentralDriveModal
+```
+
+Match Screen A's visual structure:
+- Page header "Central Drives" + subtitle "Configure institutional campus placement drives across all engineering departments."
+- Button top-right: "+ Post Central Drive"
+- Left column: cards showing company name, status badge (Open/Upcoming/Closed — compute with the existing `getDriveStatus()` util, never store status), role, drive date, min CGPA
+- Selecting a card highlights it (left-border accent, matches existing `.dept-scope-banner`-style accent color already in the design tokens) and loads that drive's full detail on the right
+- Right panel sections, in order: header (company — role, status badge), "Key Placement Dates" (Drive Date, Application Deadline — read-only display, use existing date formatting util), "Portals & Online Links" (Company Career/Registration Portal, Pre-Placement Talk link — render as clickable links if present), "Venue & Logistics" (Venue, Reporting Time, Contact Person, Contact Phone — same fields/labels as `AdminDriveLogisticsPanel`, reuse that component in read-mode if it supports it, otherwise a simple display grid), "Application Fields Required" (see §7)
+
+### 6.3 Post Central Drive modal
+New component: `features/drives/components/post-central-drive-modal.tsx`, rendered via shadcn `Dialog`.
+
+Fields, matching Screen C exactly:
+
+| Field | Input | Validation |
+|---|---|---|
+| Company Name * | text | required |
+| Role / Designation * | text | required |
+| Package / CTC * | text | required (free text like admin drive form's `packageDisplay`, e.g. "14 – 22 LPA") |
+| Min CGPA Cutoff * | number, 0–10, step 0.01 | required |
+| Drive Date * | `DatePicker` | required |
+| Application Deadline * | `DatePicker` | required, before Drive Date |
+| Company Portal / Registration URL (Optional) | `UrlField` | valid URL if present |
+| Pre-Placement Talk (PPT) Link (Optional) | `UrlField` | valid URL if present |
+| Job Description & Instructions | textarea | optional |
+
+Below the fields, not shown in the modal itself per the screenshot, but required by the schema: eligible departments. Since the modal in Screen C doesn't show a department picker, default `eligibleDepartments` to **all active departments** on creation (this is a *central* drive — institution-wide by definition), and let the Super Admin narrow it afterward from the detail panel if you add that as a stretch goal. State this default behavior explicitly in your implementation summary so it's a visible decision, not a silent guess.
+
+Buttons: Cancel (closes modal, no changes) / "Create Central Drive" (primary, submits via `createCentralDrive`, closes modal on success, `router.refresh()`, toast confirmation, newly created drive becomes the selected one in the list).
+
+---
+
+## 7. APPLICATION FIELDS REQUIRED PANEL (Screen B)
+
+Do not reuse the full `AdminApplicationFieldsPanel` UI as-is — that component (from FE-06) includes a catalog dropdown, category filters, and preset buttons meant for *initial configuration during drive creation*. Screen B is a simpler **post-creation toggle view**: a flat list of field names, each with a single on/off switch, plus one "Save Configuration" button at the bottom.
+
+Build a new, smaller component: `features/drives/components/central-drive-fields-toggle.tsx`
+- Reuse the same 21-field catalog data source (`application-fields-catalog.ts`) so field names/keys stay consistent everywhere in the app
+- Render each field as a row: label + toggle (use the same toggle/switch primitive used elsewhere, e.g. shadcn `Switch` if already installed, otherwise match the visual style of existing toggles in the codebase)
+- Local state for toggles, "Save Configuration" button calls `updateCentralDriveApplicationFields(driveId, fields)`, disabled while pending (`useTransition`), toast on success/failure
+- Do not include the "required" (red asterisk) styling logic beyond what's already stored per field — just reflect existing `isRequired` flags visually (as shown in the screenshot, several fields are marked with a red label, e.g. Full Name, Roll Number, Current CGPA, Resume, Active Backlogs, Phone Number) and let toggles control `isEnabled`, not `isRequired`, in this panel. Changing which fields are *required* vs merely *enabled* is out of scope for this toggle panel.
+
+---
+
+## 8. ELIGIBILITY — DO NOT BREAK THE STUDENT SIDE
+
+`getEligibleDrives()` (student-facing, from FE-03) filters purely on `eligibleDepartments` JSON and the eligibility rules (CGPA, backlogs) — it has no dependency on `departmentId`. Central drives with `departmentId: null` must flow through this exact same function unmodified. After implementing, manually verify: log in as a student in an eligible department with a CGPA above the central drive's cutoff, confirm the central drive appears in their eligible drives list identically to a department-posted drive.
+
+---
+
+## 9. VERIFICATION
+
+Run in order:
+
+```bash
+npx prisma format
+npx prisma validate
+npx prisma migrate dev --name central-drives
+npx prisma generate
+npx tsc --noEmit
+npm run lint
+npm run test
+npm run build
+```
+
+Manually verify (`npm run dev`):
+
+- [ ] `/super-admin-dashboard/drives` loads with the master-detail layout
+- [ ] "+ Post Central Drive" opens the modal with all fields from Screen C
+- [ ] Creating a central drive succeeds, closes the modal, appears in the left list, and is auto-selected
+- [ ] Detail panel shows all sections from Screen A with correct data
+- [ ] Application Fields Required panel matches Screen B, toggles persist after "Save Configuration" and a page refresh
+- [ ] A department admin's own drives list (`/admin-dashboard/drives`) is unaffected — still shows only their department's drives, central drives do not leak in
+- [ ] A student in an eligible department sees the new central drive in their eligible drives list, and applying to it works exactly like a department drive
+- [ ] A department admin cannot call `updateCentralDrive` or `createCentralDrive` (server-side rejection, not just hidden UI)
+- [ ] Audit log shows a CREATE entry for the central drive with the super admin as actor
+
+---
+
+## 10. FINAL REPORT
+
+When finished, summarize:
+- Exact schema diff (fields added/changed on `Drive`)
+- Migration name and status
+- Every new file created, grouped by backend/frontend
+- The default-eligible-departments decision from §6.3 and how you implemented it
+- `tsc`, `lint`, `test`, `build` results
+- Confirmation: **no changes made to student-facing drive pages' logic, only verified compatibility; no changes to department admin's own drive CRUD; no drive deletion added.**

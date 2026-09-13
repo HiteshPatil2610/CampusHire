@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
+import { parseJsonArray } from "@/lib/parse-json-array";
 import type {
   DriveApplication,
   Student,
@@ -31,24 +32,37 @@ export interface DriveApplicationsResult {
 
 /**
  * Get paginated list of applications for a specific drive.
- * Authorization: dept admin only, drive must belong to their department.
+ *
+ * Authorization: dept admin only. A department-posted drive must belong to
+ * their department. A central drive (posted by the Super Admin) is viewable
+ * if their department is in its eligible-departments list, but the
+ * department-scoping invariant still applies: only applicants from their own
+ * department are returned, never the whole central drive's applicant pool.
  */
 export async function getDriveApplications(
   params: GetDriveApplicationsParams
 ): Promise<DriveApplicationsResult> {
   const { department } = await requireDepartmentAdmin();
 
-  // Verify the drive belongs to this admin's department
   const drive = await prisma.drive.findUnique({
     where: { id: params.driveId },
-    select: { departmentId: true },
+    select: {
+      departmentId: true,
+      isCentralDrive: true,
+      eligibleDepartments: true,
+    },
   });
 
   if (!drive) {
     throw new Error("Drive not found");
   }
 
-  if (drive.departmentId !== department.id) {
+  const ownsDrive = drive.departmentId === department.id;
+  const isEligibleCentralDrive =
+    drive.isCentralDrive &&
+    parseJsonArray(drive.eligibleDepartments).includes(department.id);
+
+  if (!ownsDrive && !isEligibleCentralDrive) {
     throw new AuthorizationError(
       "You do not have permission to view applications for this drive"
     );
@@ -58,12 +72,16 @@ export async function getDriveApplications(
   const pageSize = Math.min(params.pageSize ?? 25, 100);
   const skip = (page - 1) * pageSize;
 
-  const totalCount = await prisma.driveApplication.count({
-    where: { driveId: params.driveId },
-  });
+  // Own drive: every applicant is already in-department. Central drive:
+  // scope explicitly to this department's students only.
+  const where = ownsDrive
+    ? { driveId: params.driveId }
+    : { driveId: params.driveId, student: { departmentId: department.id } };
+
+  const totalCount = await prisma.driveApplication.count({ where });
 
   const data = await prisma.driveApplication.findMany({
-    where: { driveId: params.driveId },
+    where,
     skip,
     take: pageSize,
     orderBy: { appliedAt: "desc" },

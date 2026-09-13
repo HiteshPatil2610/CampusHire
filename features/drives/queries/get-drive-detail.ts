@@ -6,8 +6,9 @@ import { isStudentEligibleForDrive } from "./drive-eligibility";
 import { checkApplicationExists } from "@/features/applications/queries/check-application-exists";
 import type { Drive, Department } from "@prisma/client";
 
+// department is null for central drives, which have no single owning department
 export type DriveWithDepartment = Drive & {
-  department: Pick<Department, "id" | "name" | "code">;
+  department: Pick<Department, "id" | "name" | "code"> | null;
 };
 
 /**

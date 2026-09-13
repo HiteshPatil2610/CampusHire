@@ -6,6 +6,7 @@ import TagInput from '@/components/ui/tag-input';
 import { useToast } from '@/hooks/use-toast';
 import { updatePreferences } from '@/features/students/actions/profile-preferences';
 import { parseJsonArray } from '@/lib/parse-json-array';
+import { useRegisterProfileSave } from './profile-save-context';
 import type { CompleteProfile } from '@/features/students/queries/profile-completion';
 
 export interface TabPreferencesProps {
@@ -13,44 +14,45 @@ export interface TabPreferencesProps {
 }
 
 const COMPANY_TYPES = ['Product', 'Service', 'Startup', 'PSU', 'Consulting'];
+const WORK_MODES = ['On-site', 'Remote', 'Hybrid'] as const;
+
+type WorkMode = (typeof WORK_MODES)[number];
 
 export default function TabPreferences({ profile }: TabPreferencesProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => ({
     preferredRoles: parseJsonArray(profile.preferences?.preferredRoles),
     preferredLocations: parseJsonArray(profile.preferences?.preferredLocations),
-    preferredCompanyTypes: parseJsonArray(
-      profile.preferences?.preferredCompanyTypes
-    ),
-    expectedPackageMin: profile.preferences?.expectedPackageMin ?? ('' as number | ''),
-    expectedPackageMax: profile.preferences?.expectedPackageMax ?? ('' as number | ''),
+    // Stored as an array for compatibility, but the form offers a single type.
+    companyType:
+      parseJsonArray(profile.preferences?.preferredCompanyTypes)[0] ??
+      COMPANY_TYPES[0],
     willingToRelocate: profile.preferences?.willingToRelocate ?? false,
-  });
+    workModes: parseJsonArray(profile.preferences?.workModes).filter(
+      (mode): mode is WorkMode => WORK_MODES.includes(mode as WorkMode)
+    ),
+  }));
 
-  function toggleCompanyType(type: string) {
-    setForm((prev) => {
-      const exists = prev.preferredCompanyTypes.includes(type);
-      return {
-        ...prev,
-        preferredCompanyTypes: exists
-          ? prev.preferredCompanyTypes.filter((item) => item !== type)
-          : [...prev.preferredCompanyTypes, type],
-      };
-    });
+  function toggleWorkMode(mode: WorkMode) {
+    setForm((previous) => ({
+      ...previous,
+      workModes: previous.workModes.includes(mode)
+        ? previous.workModes.filter((value) => value !== mode)
+        : [...previous.workModes, mode],
+    }));
   }
 
   function handleSave() {
     if (
       form.preferredRoles.length === 0 ||
-      form.preferredLocations.length === 0 ||
-      form.preferredCompanyTypes.length === 0
+      form.preferredLocations.length === 0
     ) {
       toast({
         title: 'Validation error',
-        description: 'Please add roles, locations, and company types.',
+        description: 'Add at least one target role and one preferred location.',
         variant: 'destructive',
       });
       return;
@@ -60,16 +62,9 @@ export default function TabPreferences({ profile }: TabPreferencesProps) {
       const result = await updatePreferences({
         preferredRoles: form.preferredRoles,
         preferredLocations: form.preferredLocations,
-        preferredCompanyTypes: form.preferredCompanyTypes,
+        preferredCompanyTypes: [form.companyType],
+        workModes: form.workModes,
         willingToRelocate: form.willingToRelocate,
-        expectedPackageMin:
-          form.expectedPackageMin === ''
-            ? undefined
-            : Number(form.expectedPackageMin),
-        expectedPackageMax:
-          form.expectedPackageMax === ''
-            ? undefined
-            : Number(form.expectedPackageMax),
       });
 
       if (result.success) {
@@ -85,105 +80,98 @@ export default function TabPreferences({ profile }: TabPreferencesProps) {
     });
   }
 
+  useRegisterProfileSave(handleSave, isPending);
+
   return (
     <div>
-      <h3 className="section-title" style={{ marginBottom: 16 }}>
-        Job Preferences
+      <h3 className="section-title" style={{ marginBottom: 18 }}>
+        Job Preferences &amp; Career Aspirations
       </h3>
 
       <div className="field">
-        <label>Preferred Roles *</label>
+        <div className="field-label-row">
+          <label>Target Job Roles &amp; Designations</label>
+          <span className="field-hint-inline">
+            Press Enter or comma (,) to add tags
+          </span>
+        </div>
         <TagInput
           value={form.preferredRoles}
-          onChange={(preferredRoles) =>
-            setForm({ ...form, preferredRoles })
-          }
-          placeholder="Software Engineer, Data Analyst…"
+          onChange={(preferredRoles) => setForm({ ...form, preferredRoles })}
+          placeholder="e.g. DevOps Engineer, ML Engineer…"
         />
       </div>
 
       <div className="field">
-        <label>Preferred Locations *</label>
+        <div className="field-label-row">
+          <label>Preferred Job Locations &amp; Cities</label>
+          <span className="field-hint-inline">
+            Press Enter or comma (,) to add tags
+          </span>
+        </div>
         <TagInput
           value={form.preferredLocations}
           onChange={(preferredLocations) =>
             setForm({ ...form, preferredLocations })
           }
-          placeholder="Bangalore, Remote…"
+          placeholder="e.g. Mumbai, Delhi NCR, Chennai…"
         />
       </div>
 
-      <div className="field">
-        <label>Preferred Company Types *</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {COMPANY_TYPES.map((type) => (
-            <button
-              key={type}
-              type="button"
-              className={`filter-pill ${form.preferredCompanyTypes.includes(type) ? 'active' : ''}`}
-              onClick={() => toggleCompanyType(type)}
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <div className="field-row" style={{ marginBottom: 0 }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Preferred Company Type</label>
+            <select
+              value={form.companyType}
+              onChange={(e) =>
+                setForm({ ...form, companyType: e.target.value })
+              }
             >
-              {type}
-            </button>
+              {COMPANY_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Willing to Relocate</label>
+            <select
+              value={form.willingToRelocate ? 'yes' : 'no'}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  willingToRelocate: e.target.value === 'yes',
+                })
+              }
+            >
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <div className="panel-head">
+          <strong className="panel-title">Work Mode Preferences</strong>
+        </div>
+        <div className="checkbox-row">
+          {WORK_MODES.map((mode) => (
+            <label key={mode} className="checkbox-option">
+              <input
+                type="checkbox"
+                checked={form.workModes.includes(mode)}
+                onChange={() => toggleWorkMode(mode)}
+              />
+              <span>{mode}</span>
+            </label>
           ))}
         </div>
       </div>
 
-      <div className="pref-row">
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 500 }}>Willing to Relocate</div>
-        </div>
-        <button
-          type="button"
-          className={`toggle-switch ${form.willingToRelocate ? 'on' : ''}`}
-          onClick={() =>
-            setForm({
-              ...form,
-              willingToRelocate: !form.willingToRelocate,
-            })
-          }
-          aria-label="Toggle relocation preference"
-        >
-          <span className="knob" />
-        </button>
-      </div>
-
-      <div className="field-row" style={{ marginTop: 16 }}>
-        <div className="field">
-          <label>Expected Package Min (LPA)</label>
-          <input
-            type="number"
-            min={0}
-            step="0.1"
-            value={form.expectedPackageMin}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                expectedPackageMin:
-                  e.target.value === '' ? '' : Number(e.target.value),
-              })
-            }
-          />
-        </div>
-        <div className="field">
-          <label>Expected Package Max (LPA)</label>
-          <input
-            type="number"
-            min={0}
-            step="0.1"
-            value={form.expectedPackageMax}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                expectedPackageMax:
-                  e.target.value === '' ? '' : Number(e.target.value),
-              })
-            }
-          />
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+      <div className="tab-footer">
         <button
           type="button"
           className="btn btn-primary"

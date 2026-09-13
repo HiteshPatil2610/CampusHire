@@ -25,6 +25,7 @@ export async function updatePreferences(input: PreferencesInput): Promise<Action
     const preferredRoles = JSON.stringify(validated.preferredRoles);
     const preferredLocations = JSON.stringify(validated.preferredLocations);
     const preferredCompanyTypes = JSON.stringify(validated.preferredCompanyTypes);
+    const workModes = JSON.stringify(validated.workModes);
 
     // Upsert preferences record
     await prisma.studentPreferences.upsert({
@@ -34,6 +35,7 @@ export async function updatePreferences(input: PreferencesInput): Promise<Action
         preferredRoles,
         preferredLocations,
         preferredCompanyTypes,
+        workModes,
         expectedPackageMin: validated.expectedPackageMin ?? null,
         expectedPackageMax: validated.expectedPackageMax ?? null,
         willingToRelocate: validated.willingToRelocate,
@@ -42,6 +44,7 @@ export async function updatePreferences(input: PreferencesInput): Promise<Action
         preferredRoles,
         preferredLocations,
         preferredCompanyTypes,
+        workModes,
         expectedPackageMin: validated.expectedPackageMin ?? null,
         expectedPackageMax: validated.expectedPackageMax ?? null,
         willingToRelocate: validated.willingToRelocate,

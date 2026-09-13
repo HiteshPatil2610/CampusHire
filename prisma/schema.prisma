@@ -29,6 +29,23 @@ enum ApplyMethod {
   EXTERNAL
 }
 
+// Selection stage an application has reached.
+// Advanced by department admins as the drive progresses.
+enum ApplicationStage {
+  APPLIED
+  APTITUDE
+  INTERVIEW
+  OFFER
+}
+
+// Outcome of an application, independent of the stage it reached.
+enum ApplicationStatus {
+  IN_PROGRESS
+  SELECTED
+  REJECTED
+  WITHDRAWN
+}
+
 // Core user model - mirrored from Clerk
 model User {
   id        String   @id @default(cuid())
@@ -43,6 +60,7 @@ model User {
   student         Student?
   auditLogs       AuditLog[]
   notifications   Notification[]
+  createdDrives   Drive[]          @relation("DriveCreatedBy")
 
   @@index([clerkId])
   @@index([email])
@@ -67,11 +85,11 @@ model Department {
 
 // Department Admin model - links DEPT_ADMIN users to departments
 model DepartmentAdmin {
-  id           String     @id @default(cuid())
-  userId       String     @unique
+  id           String   @id @default(cuid())
+  userId       String   @unique
   departmentId String
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -86,40 +104,40 @@ model DepartmentAdmin {
 
 // Student model - represents a student in the placement system
 model Student {
-  id              String   @id @default(cuid())
-  userId          String?  @unique // Optional: null for bulk-imported pending students
+  id              String    @id @default(cuid())
+  userId          String?   @unique // Optional: null for bulk-imported pending students
   departmentId    String
-  rollNumber      String   @unique
+  rollNumber      String    @unique
   name            String
-  email           String   @unique // For matching during self-registration
+  email           String    @unique // For matching during self-registration
   phoneNumber     String?
-  isPending       Boolean  @default(true) // true until linked to User via registration
+  isPending       Boolean   @default(true) // true until linked to User via registration
   profilePhotoUrl String?
   linkedinUrl     String?
   githubUrl       String?
   portfolioUrl    String?
   gender          String?
   dateOfBirth     DateTime?
-  address         String?  @db.Text
+  address         String?   @db.Text
   personalEmail   String?
   batchYear       Int?
-  placementStatus String   @default("unplaced")
+  placementStatus String    @default("unplaced")
   placedCompany   String?
   placedPackage   String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // Relations
-  user            User?                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  department      Department              @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  academic        StudentAcademic?
-  preferences     StudentPreferences?
-  skills          StudentSkill[]
-  projects        StudentProject[]
-  experiences     StudentExperience[]
-  certifications  StudentCertification[]
-  applications    DriveApplication[]
-  semesterMarks   SemesterMark[]
+  user           User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department     Department             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  academic       StudentAcademic?
+  preferences    StudentPreferences?
+  skills         StudentSkill[]
+  projects       StudentProject[]
+  experiences    StudentExperience[]
+  certifications StudentCertification[]
+  applications   DriveApplication[]
+  semesterMarks  SemesterMark[]
 
   @@index([userId])
   @@index([departmentId])
@@ -130,12 +148,16 @@ model Student {
 
 // SemesterMark - per-semester SGPA records for a student
 model SemesterMark {
-  id        String   @id @default(cuid())
-  studentId String
-  semester  Int
-  sgpa      Float
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  studentId    String
+  semester     Int
+  sgpa         Float
+  // Uploaded grade card backing this SGPA
+  gradeCardUrl String?
+  // Set by a department admin after checking the grade card
+  isVerified   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
@@ -149,15 +171,23 @@ model SemesterMark {
 
 // StudentAcademic - stores academic information (one-to-one with Student)
 model StudentAcademic {
-  id                String   @id @default(cuid())
-  studentId         String   @unique
-  tenthPercentage   Float
-  twelfthPercentage Float
-  currentCGPA       Float
-  currentSemester   Int
-  activeBacklogs    Int      @default(0)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  studentId           String   @unique
+  tenthPercentage     Float
+  tenthBoard          String?
+  tenthYear           Int?
+  tenthMarksheetUrl   String?
+  twelfthPercentage   Float
+  twelfthBoard        String?
+  twelfthYear         Int?
+  twelfthMarksheetUrl String?
+  currentCGPA         Float
+  currentSemester     Int
+  activeBacklogs      Int      @default(0)
+  // Backlogs cleared in the past, kept separately from active ones
+  pastBacklogCount    Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -202,15 +232,17 @@ model StudentProject {
 
 // StudentExperience - stores work experience/internships (many-to-one with Student)
 model StudentExperience {
-  id          String    @id @default(cuid())
-  studentId   String
-  companyName String
-  role        String
-  description String    @db.Text
-  startDate   DateTime
-  endDate     DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  studentId      String
+  companyName    String
+  role           String
+  description    String    @db.Text
+  startDate      DateTime
+  endDate        DateTime?
+  // Offer letter or completion certificate
+  certificateUrl String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -220,15 +252,15 @@ model StudentExperience {
 
 // StudentCertification - stores certifications (many-to-one with Student)
 model StudentCertification {
-  id                   String    @id @default(cuid())
-  studentId            String
-  certificationName    String
-  issuingOrganization  String
-  issueDate            DateTime
-  expiryDate           DateTime?
-  credentialUrl        String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  studentId           String
+  certificationName   String
+  issuingOrganization String
+  issueDate           DateTime
+  expiryDate          DateTime?
+  credentialUrl       String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -238,16 +270,18 @@ model StudentCertification {
 
 // StudentPreferences - stores placement preferences (one-to-one with Student)
 model StudentPreferences {
-  id                     String   @id @default(cuid())
-  studentId              String   @unique
-  preferredRoles         String   @db.Text // JSON array stored as text
-  preferredLocations     String   @db.Text // JSON array stored as text
-  preferredCompanyTypes  String   @db.Text // JSON array stored as text
-  expectedPackageMin     Float?
-  expectedPackageMax     Float?
-  willingToRelocate      Boolean  @default(false)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  studentId             String   @unique
+  preferredRoles        String   @db.Text // JSON array stored as text
+  preferredLocations    String   @db.Text // JSON array stored as text
+  preferredCompanyTypes String   @db.Text // JSON array stored as text
+  // JSON array: On-site | Remote | Hybrid. Maps to the pre-existing "workMode" column.
+  workModes             String   @default("[]") @map("workMode") @db.Text
+  expectedPackageMin    Float?
+  expectedPackageMax    Float?
+  willingToRelocate     Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -255,46 +289,52 @@ model StudentPreferences {
   @@index([studentId])
 }
 
-
 // ============================================================================
 // 05 — DRIVE MANAGEMENT & ELIGIBILITY
 // ============================================================================
 
 // Drive model - represents a placement drive/recruitment opportunity
 model Drive {
-  id                   String      @id @default(cuid())
-  departmentId         String
-  companyName          String
-  roleName             String
-  jobDescriptionUrl    String?
-  packageOffered       Float
-  selectionRounds      String      @db.Text // JSON array of round names
-  driveDate            DateTime
-  applicationDeadline  DateTime
-  applyMethod          ApplyMethod
-  externalApplyUrl     String?
-  minCGPA              Float
-  maxActiveBacklogs    Int
-  eligibleDepartments  String      @db.Text // JSON array of department IDs
-  companyLogoUrl       String?
-  packageDisplay       String?
-  venue                String?
-  reportingTime        String?
-  contactPerson        String?
-  contactPhone         String?
-  pptLink              String?
-  applicationFields    String?     @db.Text
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
+  id                  String      @id @default(cuid())
+  // Null means the drive was posted centrally by a Super Admin rather than
+  // owned by a single department.
+  departmentId        String?
+  createdByUserId     String?
+  isCentralDrive      Boolean     @default(false)
+  companyName         String
+  roleName            String
+  jobDescriptionUrl   String?
+  jobDescriptionText  String?     @db.Text
+  packageOffered      Float
+  selectionRounds     String      @db.Text // JSON array of round names
+  driveDate           DateTime
+  applicationDeadline DateTime
+  applyMethod         ApplyMethod
+  externalApplyUrl    String?
+  minCGPA             Float
+  maxActiveBacklogs   Int
+  eligibleDepartments String      @db.Text // JSON array of department IDs
+  companyLogoUrl      String?
+  packageDisplay      String?
+  venue               String?
+  reportingTime       String?
+  contactPerson       String?
+  contactPhone        String?
+  pptLink             String?
+  applicationFields   String?     @db.Text
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
   // Relations
-  department   Department         @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  applications DriveApplication[]
+  department    Department?        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  createdByUser User?              @relation("DriveCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  applications  DriveApplication[]
 
   @@index([departmentId])
   @@index([applicationDeadline])
+  @@index([isCentralDrive])
+  @@index([createdByUserId])
 }
-
 
 // ============================================================================
 // 06 — STUDENT APPLICATIONS
@@ -302,14 +342,16 @@ model Drive {
 
 // DriveApplication model - represents a student's application to a drive
 model DriveApplication {
-  id        String   @id @default(cuid())
-  studentId String
-  driveId   String
-  appliedAt        DateTime @default(now())
+  id               String            @id @default(cuid())
+  studentId        String
+  driveId          String
+  appliedAt        DateTime          @default(now())
+  stage            ApplicationStage  @default(APPLIED)
+  status           ApplicationStatus @default(IN_PROGRESS)
   snapshotCgpa     Float?
   snapshotBacklogs Int?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -318,8 +360,8 @@ model DriveApplication {
   @@unique([studentId, driveId])
   @@index([studentId])
   @@index([driveId])
+  @@index([stage])
 }
-
 
 // ============================================================================
 // 09 — AUDIT LOGGING
@@ -328,13 +370,13 @@ model DriveApplication {
 // AuditLog model - immutable historical record of administrative actions
 model AuditLog {
   id         String   @id @default(cuid())
-  userId     String   // Actor who performed the action (resolved server-side)
-  action     String   // Action type (CREATE, UPDATE, DELETE, ACTIVATE, DEACTIVATE, ASSIGN, UNASSIGN, APPLY, IMPORT, ROLE_CHANGE)
-  entityType String   // Resource type (Department, DepartmentAdmin, Drive, DriveApplication, Student, BulkImport, User)
-  entityId   String?  // Resource identifier (null for bulk operations)
+  userId     String // Actor who performed the action (resolved server-side)
+  action     String // Action type (CREATE, UPDATE, DELETE, ACTIVATE, DEACTIVATE, ASSIGN, UNASSIGN, APPLY, IMPORT, ROLE_CHANGE)
+  entityType String // Resource type (Department, DepartmentAdmin, Drive, DriveApplication, Student, BulkImport, User)
+  entityId   String? // Resource identifier (null for bulk operations)
   metadata   String?  @db.Text // Additional context as JSON
-  ipAddress  String?  // Client IP address (optional)
-  userAgent  String?  // Client user agent (optional)
+  ipAddress  String? // Client IP address (optional)
+  userAgent  String? // Client user agent (optional)
   createdAt  DateTime @default(now())
 
   // Relations
@@ -346,7 +388,6 @@ model AuditLog {
   @@index([createdAt])
 }
 
-
 // ============================================================================
 // 10 — IN-APP NOTIFICATIONS
 // ============================================================================
@@ -354,12 +395,12 @@ model AuditLog {
 // Notification model - in-app notifications for users
 model Notification {
   id           String   @id @default(cuid())
-  userId       String   // Recipient (resolved server-side, never from client)
-  type         String   // Notification category (APPLICATION, DRIVE, PROFILE, ADMIN, SYSTEM)
-  title        String   // Short notification title
+  userId       String // Recipient (resolved server-side, never from client)
+  type         String // Notification category (APPLICATION, DRIVE, PROFILE, ADMIN, SYSTEM)
+  title        String // Short notification title
   message      String   @db.Text // Full notification message
-  resourceType String?  // Optional: type of related resource (Drive, Application, etc.)
-  resourceId   String?  // Optional: ID of related resource
+  resourceType String? // Optional: type of related resource (Drive, Application, etc.)
+  resourceId   String? // Optional: ID of related resource
   isRead       Boolean  @default(false) // Read/unread state
   createdAt    DateTime @default(now())
 

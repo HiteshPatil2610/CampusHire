@@ -22,8 +22,18 @@ export async function updateSemesterMarks(
     const { student } = await requireStudent();
     const validated = semesterMarksSchema.parse(input);
 
-    await prisma.$transaction(
-      validated.marks.map((mark) =>
+    const submittedSemesters = validated.marks.map((mark) => mark.semester);
+
+    await prisma.$transaction([
+      // Rows the student removed from the form are dropped, so the saved set
+      // always matches what they see.
+      prisma.semesterMark.deleteMany({
+        where: {
+          studentId: student.id,
+          semester: { notIn: submittedSemesters },
+        },
+      }),
+      ...validated.marks.map((mark) =>
         prisma.semesterMark.upsert({
           where: {
             studentId_semester: {
@@ -35,13 +45,17 @@ export async function updateSemesterMarks(
             studentId: student.id,
             semester: mark.semester,
             sgpa: mark.sgpa,
+            gradeCardUrl: mark.gradeCardUrl ?? null,
           },
+          // isVerified is deliberately not written here - only a department
+          // admin may set it.
           update: {
             sgpa: mark.sgpa,
+            gradeCardUrl: mark.gradeCardUrl ?? null,
           },
         })
-      )
-    );
+      ),
+    ]);
 
     return { success: true };
   } catch (error) {

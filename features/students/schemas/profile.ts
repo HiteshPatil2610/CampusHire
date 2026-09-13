@@ -45,15 +45,35 @@ export type PersonalInfoInput = z.infer<typeof personalInfoSchema>;
 /**
  * Academic Information Schema
  */
+const boardYear = z
+  .number()
+  .int("Year must be a whole number")
+  .min(1950, "Year looks too far in the past")
+  .max(2100, "Year looks too far in the future")
+  .optional();
+
+const documentUrl = z
+  .string()
+  .trim()
+  .url("Invalid file URL")
+  .optional()
+  .nullable();
+
 export const academicInfoSchema = z.object({
   tenthPercentage: z
     .number()
     .min(0, "10th percentage must be at least 0")
     .max(100, "10th percentage cannot exceed 100"),
+  tenthBoard: z.string().trim().max(120).optional(),
+  tenthYear: boardYear,
+  tenthMarksheetUrl: documentUrl,
   twelfthPercentage: z
     .number()
     .min(0, "12th percentage must be at least 0")
     .max(100, "12th percentage cannot exceed 100"),
+  twelfthBoard: z.string().trim().max(120).optional(),
+  twelfthYear: boardYear,
+  twelfthMarksheetUrl: documentUrl,
   currentCGPA: z
     .number()
     .min(0, "CGPA must be at least 0")
@@ -67,6 +87,11 @@ export const academicInfoSchema = z.object({
     .number()
     .int("Backlogs must be a whole number")
     .min(0, "Backlogs cannot be negative"),
+  pastBacklogCount: z
+    .number()
+    .int("Past backlog count must be a whole number")
+    .min(0, "Past backlog count cannot be negative")
+    .default(0),
 });
 
 export type AcademicInfoInput = z.infer<typeof academicInfoSchema>;
@@ -110,6 +135,7 @@ export const experienceSchema = z.object({
   description: z.string().min(1, "Description is required").trim(),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().optional(),
+  certificateUrl: documentUrl,
 });
 
 export type ExperienceInput = z.infer<typeof experienceSchema>;
@@ -144,6 +170,7 @@ export const preferencesSchema = z.object({
   preferredCompanyTypes: z
     .array(z.string().min(1))
     .min(1, "At least one preferred company type is required"),
+  workModes: z.array(z.enum(["On-site", "Remote", "Hybrid"])).default([]),
   expectedPackageMin: z.number().positive("Minimum package must be positive").optional(),
   expectedPackageMax: z.number().positive("Maximum package must be positive").optional(),
   willingToRelocate: z.boolean(),
@@ -179,6 +206,7 @@ export const semesterMarksSchema = z.object({
     z.object({
       semester: z.number().int().min(1).max(8),
       sgpa: z.number().min(0).max(10),
+      gradeCardUrl: documentUrl,
     })
   ),
 });

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import ProfileHeaderStrip from './profile-header-strip';
+import { ProfileSaveProvider } from './profile-save-context';
 import TabPersonalInfo from './tab-personal-info';
 import TabAcademicInfo from './tab-academic-info';
 import TabSkillsLinks from './tab-skills-links';
@@ -59,29 +60,31 @@ export default function StudentProfileClient({
   }
 
   return (
-    <div style={{ maxWidth: 1080, margin: '0 auto' }}>
-      <h1 className="page-title" style={{ marginBottom: 16 }}>
-        Student Profile
-      </h1>
+    <ProfileSaveProvider>
+      <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+        <h1 className="page-title" style={{ marginBottom: 16 }}>
+          Student Profile
+        </h1>
 
-      <ProfileHeaderStrip profile={profile} completion={completion} />
+        <ProfileHeaderStrip profile={profile} completion={completion} />
 
-      <div className="profile-layout">
-        <nav className="profile-tabs">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={`profile-tab ${activeTab === tab ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab}
-            </button>
-          ))}
-        </nav>
+        <div className="profile-layout">
+          <nav className="profile-tabs">
+            {TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={`profile-tab ${activeTab === tab ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab}
+              </button>
+            ))}
+          </nav>
 
-        <div className="card">{renderTab()}</div>
+          <div className="card">{renderTab()}</div>
+        </div>
       </div>
-    </div>
+    </ProfileSaveProvider>
   );
 }

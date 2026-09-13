@@ -9,6 +9,7 @@ import type { Drive } from "@prisma/client";
 type DriveWithStatus = Drive & {
   _count: { applications: number };
   status: "open" | "closed";
+  isCentralDrive: boolean;
 };
 
 interface DrivesListClientProps {
@@ -143,8 +144,15 @@ export function DrivesListClient({
                   return (
                     <tr key={drive.id}>
                       <td>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary)" }}>
-                          {drive.companyName}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary)" }}>
+                            {drive.companyName}
+                          </span>
+                          {drive.isCentralDrive && (
+                            <span className="badge badge-purple" style={{ fontSize: 10 }}>
+                              Central
+                            </span>
+                          )}
                         </div>
                         <div className="text-muted" style={{ fontSize: 11 }}>
                           {drive.roleName}
@@ -203,13 +211,22 @@ export function DrivesListClient({
                           >
                             View Applicants →
                           </Link>
-                          <Link
-                            href={`/admin-dashboard/drives/${drive.id}/edit`}
-                            className="btn btn-outline btn-sm"
-                            style={{ fontSize: 11 }}
-                          >
-                            Edit →
-                          </Link>
+                          {drive.isCentralDrive ? (
+                            <span
+                              className="text-muted"
+                              style={{ fontSize: 11, alignSelf: "center" }}
+                            >
+                              Posted by Super Admin
+                            </span>
+                          ) : (
+                            <Link
+                              href={`/admin-dashboard/drives/${drive.id}/edit`}
+                              className="btn btn-outline btn-sm"
+                              style={{ fontSize: 11 }}
+                            >
+                              Edit →
+                            </Link>
+                          )}
                         </div>
                       </td>
                     </tr>

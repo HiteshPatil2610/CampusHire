@@ -25,6 +25,7 @@ export const AuditAction = {
   ASSIGN: "ASSIGN",
   UNASSIGN: "UNASSIGN",
   APPLY: "APPLY",
+  WITHDRAW: "WITHDRAW",
   IMPORT: "IMPORT",
   ROLE_CHANGE: "ROLE_CHANGE",
 } as const;

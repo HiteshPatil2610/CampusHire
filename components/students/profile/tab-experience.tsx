@@ -3,89 +3,98 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import DatePicker from '@/components/ui/date-picker';
+import FileAttachField from '@/components/ui/file-attach-field';
 import { useToast } from '@/hooks/use-toast';
-import {
-  addExperience,
-  updateExperience,
-  removeExperience,
-} from '@/features/students/actions/profile-experience';
+import { syncExperiences } from '@/features/students/actions/profile-sync-collections';
+import { useRegisterProfileSave } from './profile-save-context';
 import type { CompleteProfile } from '@/features/students/queries/profile-completion';
-import type { StudentExperience } from '@prisma/client';
 
 export interface TabExperienceProps {
   profile: CompleteProfile;
 }
 
-interface ExperienceForm {
+interface ExperienceRow {
+  /** Null for a row the student just added and has not saved yet. */
+  id: string | null;
   companyName: string;
   role: string;
-  description: string;
   startDate: Date | null;
   endDate: Date | null;
+  description: string;
+  certificateUrl: string | null;
 }
 
-const EMPTY_FORM: ExperienceForm = {
+const EMPTY_ROW: ExperienceRow = {
+  id: null,
   companyName: '',
   role: '',
-  description: '',
   startDate: null,
   endDate: null,
+  description: '',
+  certificateUrl: null,
 };
+
+function toIsoDate(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
 
 export default function TabExperience({ profile }: TabExperienceProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<ExperienceForm>(EMPTY_FORM);
 
-  function startEdit(experience: StudentExperience) {
-    setEditingId(experience.id);
-    setForm({
+  const [rows, setRows] = useState<ExperienceRow[]>(() =>
+    profile.experiences.map((experience) => ({
+      id: experience.id,
       companyName: experience.companyName,
       role: experience.role,
-      description: experience.description,
       startDate: new Date(experience.startDate),
       endDate: experience.endDate ? new Date(experience.endDate) : null,
-    });
-  }
+      description: experience.description,
+      certificateUrl: experience.certificateUrl,
+    }))
+  );
 
-  function resetForm() {
-    setEditingId(null);
-    setForm(EMPTY_FORM);
+  function updateRow(index: number, patch: Partial<ExperienceRow>) {
+    setRows((current) =>
+      current.map((row, i) => (i === index ? { ...row, ...patch } : row))
+    );
   }
 
   function handleSave() {
-    if (!form.companyName || !form.role || !form.description || !form.startDate) {
+    const incomplete = rows.find(
+      (row) =>
+        !row.companyName.trim() ||
+        !row.role.trim() ||
+        !row.description.trim() ||
+        !row.startDate
+    );
+
+    if (incomplete) {
       toast({
         title: 'Validation error',
-        description: 'Company, role, description, and start date are required.',
+        description:
+          'Every experience needs a company, role, start date, and summary.',
         variant: 'destructive',
       });
       return;
     }
 
     startTransition(async () => {
-      const payload = {
-        companyName: form.companyName,
-        role: form.role,
-        description: form.description,
-        startDate: form.startDate!.toISOString().split('T')[0],
-        endDate: form.endDate
-          ? form.endDate.toISOString().split('T')[0]
-          : undefined,
-      };
-
-      const result = editingId
-        ? await updateExperience(editingId, payload)
-        : await addExperience(payload);
+      const result = await syncExperiences({
+        experiences: rows.map((row) => ({
+          id: row.id,
+          companyName: row.companyName.trim(),
+          role: row.role.trim(),
+          description: row.description.trim(),
+          startDate: row.startDate ? toIsoDate(row.startDate) : '',
+          endDate: row.endDate ? toIsoDate(row.endDate) : undefined,
+          certificateUrl: row.certificateUrl,
+        })),
+      });
 
       if (result.success) {
-        toast({
-          title: 'Saved',
-          description: editingId ? 'Experience updated.' : 'Experience added.',
-        });
-        resetForm();
+        toast({ title: 'Saved', description: 'Experience updated.' });
         router.refresh();
       } else {
         toast({
@@ -97,145 +106,132 @@ export default function TabExperience({ profile }: TabExperienceProps) {
     });
   }
 
-  function handleDelete(experienceId: string) {
-    startTransition(async () => {
-      const result = await removeExperience(experienceId);
-      if (result.success) {
-        toast({ title: 'Deleted', description: 'Experience removed.' });
-        if (editingId === experienceId) resetForm();
-        router.refresh();
-      } else {
-        toast({
-          title: 'Error',
-          description: result.error ?? 'Failed to delete experience.',
-          variant: 'destructive',
-        });
-      }
-    });
-  }
+  useRegisterProfileSave(handleSave, isPending);
 
   return (
     <div>
-      <h3 className="section-title" style={{ marginBottom: 16 }}>
-        Internships & Experience
-      </h3>
+      <div className="tab-head">
+        <div>
+          <h3 className="section-title" style={{ margin: 0 }}>
+            Internships &amp; Professional Experience
+          </h3>
+          <p className="tab-subtitle">
+            Record prior full-time, part-time, or research internships relevant
+            to campus placements.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() => setRows([...rows, { ...EMPTY_ROW }])}
+        >
+          + Add experience
+        </button>
+      </div>
 
-      {profile.experiences.map((experience) => (
-        <div key={experience.id} className="card" style={{ marginBottom: 12 }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <div>
-              <strong>{experience.role}</strong>
-              <div className="text-secondary" style={{ fontSize: 13 }}>
-                {experience.companyName}
+      {rows.length === 0 && (
+        <p className="tab-empty">
+          No experience added yet. Use “Add experience” to create your first
+          entry.
+        </p>
+      )}
+
+      {rows.map((row, index) => (
+        <div key={row.id ?? `new-${index}`} className="entry-card">
+          <div className="entry-head">
+            <span className="entry-index">Experience #{index + 1}</span>
+            <strong className="entry-title">
+              {row.role.trim() && row.companyName.trim()
+                ? `${row.role.trim()} at ${row.companyName.trim()}`
+                : row.role.trim() || row.companyName.trim() || 'New experience'}
+            </strong>
+            <button
+              type="button"
+              className="entry-remove"
+              onClick={() => setRows(rows.filter((_, i) => i !== index))}
+              aria-label={`Remove experience ${index + 1}`}
+              title="Remove this experience"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="entry-body">
+            <div className="field-row">
+              <div className="field">
+                <label>Company / Organization *</label>
+                <input
+                  value={row.companyName}
+                  onChange={(e) =>
+                    updateRow(index, { companyName: e.target.value })
+                  }
+                />
               </div>
-              <p className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>
-                {experience.description}
-              </p>
-              <div className="text-muted" style={{ fontSize: 12 }}>
-                {new Date(experience.startDate).toLocaleDateString()} —{' '}
-                {experience.endDate
-                  ? new Date(experience.endDate).toLocaleDateString()
-                  : 'Present'}
+              <div className="field">
+                <label>Role / Title *</label>
+                <input
+                  value={row.role}
+                  onChange={(e) => updateRow(index, { role: e.target.value })}
+                />
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => startEdit(experience)}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => handleDelete(experience.id)}
-                disabled={isPending}
-              >
-                Delete
-              </button>
+
+            <div className="field-row">
+              <div className="field">
+                <label>Start Date</label>
+                <DatePicker
+                  value={row.startDate}
+                  onChange={(startDate) => updateRow(index, { startDate })}
+                />
+              </div>
+              <div className="field">
+                <label>End Date</label>
+                <DatePicker
+                  value={row.endDate}
+                  onChange={(endDate) => updateRow(index, { endDate })}
+                />
+              </div>
             </div>
+
+            <div className="field">
+              <label>Summary of Responsibilities &amp; Impact</label>
+              <textarea
+                rows={2}
+                value={row.description}
+                onChange={(e) =>
+                  updateRow(index, { description: e.target.value })
+                }
+              />
+            </div>
+
+            <FileAttachField
+              kind="experience-certificate"
+              value={row.certificateUrl}
+              onChange={(certificateUrl) =>
+                updateRow(index, { certificateUrl })
+              }
+              placeholder="Attach offer letter or certificate"
+            />
           </div>
         </div>
       ))}
 
-      <div className="card" style={{ background: 'var(--surface-1)' }}>
-        <h4 style={{ margin: '0 0 12px', fontSize: 14 }}>
-          {editingId ? 'Edit Experience' : 'Add Experience'}
-        </h4>
-        <div className="field-row">
-          <div className="field">
-            <label>Company *</label>
-            <input
-              value={form.companyName}
-              onChange={(e) =>
-                setForm({ ...form, companyName: e.target.value })
-              }
-            />
-          </div>
-          <div className="field">
-            <label>Role *</label>
-            <input
-              value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value })}
-            />
-          </div>
-        </div>
-        <div className="field">
-          <label>Description *</label>
-          <textarea
-            rows={3}
-            value={form.description}
-            onChange={(e) =>
-              setForm({ ...form, description: e.target.value })
-            }
-          />
-        </div>
-        <div className="field-row">
-          <div className="field">
-            <label>Start Date *</label>
-            <DatePicker
-              value={form.startDate}
-              onChange={(startDate) => setForm({ ...form, startDate })}
-            />
-          </div>
-          <div className="field">
-            <label>End Date</label>
-            <DatePicker
-              value={form.endDate}
-              onChange={(endDate) => setForm({ ...form, endDate })}
-            />
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          {editingId && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={resetForm}
-            >
-              Cancel
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={handleSave}
-            disabled={isPending}
-          >
-            {isPending
-              ? 'Saving…'
-              : editingId
-                ? 'Update experience'
-                : 'Add experience'}
-          </button>
-        </div>
+      <div className="tab-footer tab-footer-split">
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() => setRows([...rows, { ...EMPTY_ROW }])}
+        >
+          + Add another experience
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={handleSave}
+          disabled={isPending}
+        >
+          {isPending ? 'Saving…' : 'Save changes'}
+        </button>
       </div>
     </div>
   );

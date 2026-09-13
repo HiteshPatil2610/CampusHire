@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import type { Drive } from '@prisma/client';
-import { getDriveStatus, getDaysUntilDeadline } from '@/features/drives/utils/drive-status';
+import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
 import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
+import { parseJsonArray } from '@/lib/parse-json-array';
 import StatusBadge from '@/components/ui/status-badge';
 
 interface DriveCardProps {
@@ -16,12 +17,13 @@ interface DriveCardProps {
 
 /**
  * DriveCard component - displays a single drive with V1 constraints
- * 
+ *
  * V1 Changes from temp frontend:
  * - NO stage stepper (V1 has no application stage tracking)
  * - NO withdraw button (applications are immutable)
  * - NO edit button (applications are immutable)
- * - Status is COMPUTED from deadline, never stored
+ * - NO readiness/resume scores (deferred out of V1)
+ * - Status is COMPUTED from deadline + drive date, never stored
  * - Only shows eligible drives (server filters)
  */
 export function DriveCard({
@@ -33,51 +35,22 @@ export function DriveCard({
 }: DriveCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  // Compute drive status from deadline (NEVER stored)
-  const status = getDriveStatus(drive.applicationDeadline);
-  const daysLeft = getDaysUntilDeadline(drive.applicationDeadline);
-  const isOpen = status === 'open';
+  const status = getDriveDisplayStatus(drive.applicationDeadline, drive.driveDate);
+  const canApply = status === 'open';
 
-  // Format dates
-  const formattedDriveDate = formatDriveDate(drive.driveDate);
-  const formattedDeadline = formatDeadline(drive.applicationDeadline);
+  const departmentCodes = parseJsonArray(drive.eligibleDepartments)
+    .map((id) => departmentMap[id])
+    .filter((code): code is string => Boolean(code));
 
-  // Parse eligible departments
-  let departmentCodes: string[] = [];
-  try {
-    const deptIds: string[] = JSON.parse(drive.eligibleDepartments);
-    departmentCodes = deptIds
-      .map((id) => departmentMap[id])
-      .filter((code): code is string => Boolean(code));
-  } catch {
-    // Invalid JSON - show nothing
-  }
-
-  // Company logo text (first 4 chars)
   const logoText = drive.companyName.slice(0, 4).toUpperCase();
-
-  // Package display
   const packageText = drive.packageDisplay || `${drive.packageOffered} LPA`;
 
-  // Status badge
-  let statusBadge = null;
-  if (status === 'closed') {
-    statusBadge = <StatusBadge variant="red">Closed</StatusBadge>;
-  } else if (daysLeft <= 3) {
-    statusBadge = (
-      <StatusBadge variant="amber">
-        ⏰ {Math.ceil(daysLeft)}d left
-      </StatusBadge>
-    );
-  } else {
-    statusBadge = <StatusBadge variant="green">Open</StatusBadge>;
-  }
-
-  // Logistics info
   const hasLogistics = Boolean(
     drive.venue || drive.reportingTime || drive.pptLink || drive.externalApplyUrl
   );
   const venueShort = drive.venue ? drive.venue.split(',')[0] : 'Logistics set';
+
+  const selectionRounds = parseJsonArray(drive.selectionRounds);
 
   return (
     <div
@@ -86,10 +59,10 @@ export function DriveCard({
         padding: 16,
         borderRadius: 12,
         border: '1px solid var(--border)',
-        background: 'var(--surface-0)',
+        background: 'var(--surface-2)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: 10,
       }}
     >
       {/* Header */}
@@ -97,75 +70,115 @@ export function DriveCard({
         <div
           className="company-avatar"
           style={{
-            width: 48,
-            height: 48,
+            width: 44,
+            height: 44,
             borderRadius: 10,
-            background: 'var(--accent-surface)',
-            color: 'var(--accent)',
+            background: 'var(--surface-1)',
+            color: 'var(--text-primary)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontWeight: 700,
-            fontSize: 14,
+            fontSize: 12,
+            letterSpacing: '0.02em',
             flexShrink: 0,
           }}
         >
           {logoText}
         </div>
-        
+
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
-            className="drive-role"
             style={{
-              fontWeight: 600,
-              fontSize: 15,
-              color: 'var(--text-primary)',
-              textOverflow: 'ellipsis',
-              overflow: 'hidden',
-              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8,
+              justifyContent: 'space-between',
             }}
           >
-            {drive.roleName}
+            <div
+              className="drive-role"
+              style={{
+                fontWeight: 600,
+                fontSize: 14,
+                color: 'var(--text-primary)',
+                textOverflow: 'ellipsis',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+              }}
+              title={drive.roleName}
+            >
+              {drive.roleName}
+            </div>
+            {status === 'open' && <StatusBadge variant="green">Open</StatusBadge>}
+            {status === 'upcoming' && (
+              <StatusBadge variant="purple">Upcoming</StatusBadge>
+            )}
+            {status === 'closed' && <StatusBadge variant="red">Closed</StatusBadge>}
           </div>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-            <strong>{drive.companyName}</strong> · {packageText}
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>
+            <strong style={{ color: 'var(--text-primary)' }}>{drive.companyName}</strong>
+            {' · '}
+            {packageText}
           </div>
-        </div>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-          {statusBadge}
-          <StatusBadge variant="green">✓ Eligible</StatusBadge>
         </div>
       </div>
 
-      {/* Drive details */}
+      {/* Eligibility meta */}
       <div
         style={{
           display: 'flex',
-          gap: 12,
+          gap: 10,
           flexWrap: 'wrap',
-          fontSize: 12,
+          fontSize: 11,
           color: 'var(--text-secondary)',
         }}
       >
-        <span>📅 {formattedDriveDate}</span>
+        <span>📅 {formatDriveDate(drive.driveDate)}</span>
         <span>🎓 Min CGPA: {drive.minCGPA}</span>
-        <span>🚫 Max backlogs: {drive.maxActiveBacklogs}</span>
         {departmentCodes.length > 0 && <span>🏢 {departmentCodes.join(', ')}</span>}
       </div>
 
-      {/* Deadline and logistics */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-          📅 Deadline: {formattedDeadline}
-        </div>
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+        🚫 Backlogs ≤ {drive.maxActiveBacklogs}
+      </div>
+
+      {/* Deadline + logistics */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 8,
+          flexWrap: 'wrap',
+        }}
+      >
+        {canApply ? (
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+            📅 Deadline: {formatDeadline(drive.applicationDeadline)}
+          </span>
+        ) : (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              padding: '3px 8px',
+              borderRadius: 'var(--radius-pill)',
+              background: 'var(--red-light)',
+              color: 'var(--red)',
+            }}
+          >
+            Deadline passed
+          </span>
+        )}
+
         {hasLogistics && (
           <span
             style={{
               fontSize: 10,
               padding: '3px 8px',
               borderRadius: 'var(--radius-pill)',
-              background: 'var(--surface-hover)',
+              background: 'var(--surface-1)',
               color: 'var(--text-secondary)',
               border: '0.5px solid var(--border)',
             }}
@@ -179,7 +192,6 @@ export function DriveCard({
       {expanded && (
         <div
           style={{
-            marginTop: 4,
             padding: '12px 14px',
             borderRadius: 8,
             background: 'var(--surface-1)',
@@ -190,52 +202,43 @@ export function DriveCard({
             gap: 10,
           }}
         >
-          {/* Job description */}
-          {drive.jobDescriptionUrl && (
+          {drive.jobDescriptionText && (
             <div>
               <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
                 Job Description
               </div>
-              <a
-                href={drive.jobDescriptionUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  color: 'var(--accent)',
-                  textDecoration: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                📄 View JD (PDF) ↗
-              </a>
+              <div style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
+                {drive.jobDescriptionText}
+              </div>
             </div>
           )}
 
-          {/* Selection rounds */}
-          {drive.selectionRounds && (
+          {drive.jobDescriptionUrl && (
+            <a
+              href={drive.jobDescriptionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--accent)', textDecoration: 'none' }}
+            >
+              📄 View JD (PDF) ↗
+            </a>
+          )}
+
+          {selectionRounds.length > 0 && (
             <div>
               <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
                 Selection Process
               </div>
               <div style={{ color: 'var(--text-secondary)' }}>
-                {drive.selectionRounds}
+                {selectionRounds.join(' → ')}
               </div>
             </div>
           )}
 
-          {/* Venue & logistics */}
           {hasLogistics && (
-            <div
-              style={{
-                borderTop: '0.5px solid var(--border)',
-                paddingTop: 10,
-                marginTop: 2,
-              }}
-            >
+            <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 10 }}>
               <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
-                Venue & Logistics
+                Venue &amp; Logistics
               </div>
               {drive.venue && (
                 <div style={{ marginBottom: 4 }}>
@@ -256,23 +259,14 @@ export function DriveCard({
             </div>
           )}
 
-          {/* External links */}
           {(drive.externalApplyUrl || drive.pptLink) && (
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {drive.externalApplyUrl && (
                 <a
                   href={drive.externalApplyUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{
-                    color: 'var(--accent)',
-                    fontWeight: 600,
-                    textDecoration: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    fontSize: 11,
-                  }}
+                  style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'none', fontSize: 11 }}
                 >
                   🔗 Company Portal ↗
                 </a>
@@ -282,15 +276,7 @@ export function DriveCard({
                   href={drive.pptLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{
-                    color: 'var(--teal)',
-                    fontWeight: 600,
-                    textDecoration: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    fontSize: 11,
-                  }}
+                  style={{ color: 'var(--teal)', fontWeight: 600, textDecoration: 'none', fontSize: 11 }}
                 >
                   🎥 PPT Link ↗
                 </a>
@@ -300,25 +286,27 @@ export function DriveCard({
         </div>
       )}
 
-      {/* Action strip - V1 simplified */}
+      {/* Action strip */}
       <div
         className="dc-action-row"
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
-          marginTop: 4,
+          gap: 8,
+          marginTop: 'auto',
+          paddingTop: 10,
+          borderTop: '0.5px solid var(--border)',
+          flexWrap: 'wrap',
         }}
       >
         {isApplied ? (
           <>
             <span
-              className="dc-applied-chip"
               style={{
                 padding: '4px 10px',
                 borderRadius: 'var(--radius-pill)',
-                background: 'var(--success-surface)',
-                color: 'var(--success)',
+                background: 'var(--teal-light)',
+                color: 'var(--teal)',
                 fontSize: 11,
                 fontWeight: 600,
               }}
@@ -327,65 +315,32 @@ export function DriveCard({
             </span>
             <button
               type="button"
+              className="btn btn-outline btn-sm"
+              style={{ fontSize: 11 }}
               onClick={() => onApplyClick(drive.id)}
-              style={{
-                padding: '6px 12px',
-                fontSize: 12,
-                fontWeight: 500,
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                background: 'var(--surface-0)',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-              }}
             >
-              View details →
+              👁 View Application
             </button>
-          </>
-        ) : status === 'closed' ? (
-          <>
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-              {applicantCount} applicant{applicantCount !== 1 ? 's' : ''}
-            </span>
-            <button
-              type="button"
-              onClick={() => onApplyClick(drive.id)}
-              style={{
-                padding: '6px 12px',
-                fontSize: 12,
-                fontWeight: 500,
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                background: 'var(--surface-0)',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-              }}
-            >
-              View details →
-            </button>
-            <StatusBadge variant="red">Closed</StatusBadge>
           </>
         ) : (
           <>
             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
               {applicantCount} applicant{applicantCount !== 1 ? 's' : ''}
             </span>
-            <button
-              type="button"
-              onClick={() => onApplyClick(drive.id)}
-              style={{
-                padding: '6px 14px',
-                fontSize: 12,
-                fontWeight: 600,
-                border: 'none',
-                borderRadius: 6,
-                background: 'var(--accent)',
-                color: 'white',
-                cursor: 'pointer',
-              }}
-            >
-              View & Apply →
-            </button>
+            {canApply ? (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                style={{ fontSize: 12 }}
+                onClick={() => onApplyClick(drive.id)}
+              >
+                Apply now
+              </button>
+            ) : (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {status === 'upcoming' ? 'Applications closed' : 'Closed'}
+              </span>
+            )}
           </>
         )}
 
@@ -394,7 +349,7 @@ export function DriveCard({
           onClick={() => setExpanded((e) => !e)}
           style={{
             marginLeft: 'auto',
-            padding: '4px 10px',
+            padding: '4px 8px',
             fontSize: 11,
             fontWeight: 500,
             border: 'none',
@@ -403,7 +358,7 @@ export function DriveCard({
             cursor: 'pointer',
           }}
         >
-          {expanded ? '▲ Less' : '▼ Info'}
+          {expanded ? '▲ Less' : '▾ Info'}
         </button>
       </div>
     </div>

@@ -165,3 +165,87 @@ export async function deleteImportFile(url: string): Promise<void> {
     console.error('Failed to delete import Blob file:', error);
   }
 }
+
+/**
+ * Supporting documents a student attaches to their profile: marksheets,
+ * semester grade cards, and internship certificates.
+ */
+const ALLOWED_DOCUMENT_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+/** Maximum size for a profile document (5MB) */
+const MAX_DOCUMENT_SIZE = 5 * 1024 * 1024;
+
+/** Document slots a student can upload into. */
+export const DOCUMENT_KINDS = [
+  "tenth-marksheet",
+  "twelfth-marksheet",
+  "grade-card",
+  "experience-certificate",
+] as const;
+
+export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
+
+export function validateStudentDocument(
+  file: File
+): { valid: boolean; error?: string } {
+  if (file.size > MAX_DOCUMENT_SIZE) {
+    return {
+      valid: false,
+      error: `File must be smaller than ${MAX_DOCUMENT_SIZE / (1024 * 1024)}MB`,
+    };
+  }
+
+  if (
+    !ALLOWED_DOCUMENT_TYPES.includes(
+      file.type as (typeof ALLOWED_DOCUMENT_TYPES)[number]
+    )
+  ) {
+    return { valid: false, error: "Upload a PDF, JPEG, PNG, or WebP file" };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Upload a supporting profile document to Vercel Blob.
+ *
+ * The filename is derived server-side from the student id and document kind,
+ * so a caller cannot choose where the file lands.
+ */
+export async function uploadStudentDocument(
+  file: File,
+  studentId: string,
+  kind: DocumentKind
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    if (!env.BLOB_READ_WRITE_TOKEN) {
+      return {
+        success: false,
+        error: "File upload is not configured. Please contact administrator.",
+      };
+    }
+
+    const validation = validateStudentDocument(file);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
+    const extension = file.name.split(".").pop()?.toLowerCase() || "pdf";
+    const filename = `student-documents/${studentId}/${kind}-${Date.now()}.${extension}`;
+
+    const blob = await put(filename, file, {
+      access: "public",
+      token: env.BLOB_READ_WRITE_TOKEN,
+    });
+
+    return { success: true, url: blob.url };
+  } catch (error) {
+    console.error("Student document upload error:", error);
+    return { success: false, error: "Failed to upload file. Please try again." };
+  }
+}

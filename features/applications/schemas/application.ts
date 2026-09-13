@@ -10,6 +10,17 @@ export const applyToDriveSchema = z.object({
 export type ApplyToDriveInput = z.infer<typeof applyToDriveSchema>;
 
 /**
+ * Schema for withdrawing an application
+ */
+export const withdrawApplicationSchema = z.object({
+  driveId: z.string().cuid("Invalid drive ID format"),
+});
+
+export type WithdrawApplicationInput = z.infer<
+  typeof withdrawApplicationSchema
+>;
+
+/**
  * Schema for pagination in application queries
  */
 export const getApplicationsSchema = z.object({

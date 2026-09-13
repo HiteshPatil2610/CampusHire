@@ -26,6 +26,11 @@ Update this file after every meaningful implementation change.
 - **Unit 09 — Audit Logging & System Activity: COMPLETE**
   - Backend implementation complete with UI
   - ✅ Migration complete and operational
+- **Unit 11 — Super Admin Central Drives: COMPLETE**
+  - Schema: `Drive.departmentId` now nullable, `createdByUserId` + `isCentralDrive` added
+  - Super-admin-only create/update/list/get actions and queries
+  - Master-detail "Central Drives" page with post modal and field-toggle panel
+  - Student eligibility path unchanged and verified compatible
 - **Unit 10 — In-App Notifications & System Communication: COMPLETE**
   - ✅ Backend implementation complete
   - ✅ UI components and universal page complete
@@ -49,6 +54,62 @@ Update this file after every meaningful implementation change.
 - Ready for deployment or additional feature development
 
 ## Completed
+
+- **Unit 11 — Super Admin Central Drives (COMPLETE):**
+  - **Schema changes (`Drive` only):**
+    - `departmentId String?` — was required; null now means the drive was posted centrally by the Super Admin rather than owned by one department
+    - `createdByUserId String?` + `createdByUser User?` relation (`"DriveCreatedBy"`, `onDelete: SetNull`) — records who posted the drive, distinct from department ownership
+    - `isCentralDrive Boolean @default(false)` — explicit flag so queries and UI branch on intent rather than inferring from a null departmentId
+    - `jobDescriptionText String? @db.Text` — added because the central drive form captures a free-text "Job Description & Instructions"; the pre-existing `jobDescriptionUrl` is a link, not prose, so there was nowhere to persist it
+    - Indexes added on `isCentralDrive` and `createdByUserId`
+  - **Migrations:** `20260913120000_central_drives` and `20260913121000_central_drive_jd_text`, both applied via `prisma migrate deploy`
+    - `prisma migrate dev` was deliberately NOT used: the live Neon database has pre-existing drift (extra `Student.readinessScore`, `profileCompletion`, `resumeScore`, `semester`, `StudentAcademic.tenthBoard/tenthYear/twelfthBoard/twelfthYear`, `StudentPreferences.workMode` columns applied outside migration history). `migrate dev` would have detected that drift and offered a database reset, destroying live data. Hand-written migrations + `migrate deploy` apply only the intended changes with no drift check and no reset
+    - **This drift is still outstanding** — `schema.prisma` and the live database disagree on those columns, so any future `migrate dev` carries the same reset risk until it is reconciled
+  - **Backend files created:**
+    - `features/drives/schemas/central-drive.ts` — `createCentralDriveSchema` (omits departmentId, requires ≥1 eligible department, deadline-before-drive-date refinement), `updateCentralDriveSchema`, `centralDriveApplicationFieldsSchema`
+    - `features/drives/actions/create-central-drive.ts` — `requireSuperAdmin()`, forces `departmentId: null` / `isCentralDrive: true` / `createdByUserId` server-side, re-verifies departments exist and are active, audit-logs CREATE
+    - `features/drives/actions/update-central-drive.ts` — `requireSuperAdmin()`, refuses to edit a drive whose `isCentralDrive` is false (department drives stay with their dept admin), audit-logs UPDATE
+    - `features/drives/actions/update-central-drive-application-fields.ts` — narrow action for the "Save Configuration" panel; sets only `enabled`, preserves each field's stored `required`, ignores keys absent from both storage and the catalog so arbitrary fields cannot be injected
+    - `features/drives/queries/get-central-drives.ts` — paginated, `isCentralDrive: true`, open drives sorted first (status always computed, never stored)
+    - `features/drives/queries/get-central-drive-by-id.ts` — returns null for non-central drives
+    - `features/drives/utils/application-fields.ts` — parse/merge helpers over the shared 21-field catalog
+    - `features/drives/utils/parse-package-display.ts` — derives numeric `packageOffered` from the free-text CTC field
+  - **Frontend files created:**
+    - `app/(super-admin)/super-admin-dashboard/drives/page.tsx` — REPLACED the previous read-only all-departments list; now a server component fetching central drives + active departments in parallel
+    - `app/(super-admin)/super-admin-dashboard/drives/loading.tsx` and `error.tsx` — added per the route-level loading/error standard in `code-standards.md`
+    - `features/drives/components/central-drives-view.tsx` — master-detail container, scrollable drive list, selection state, "+ Post Central Drive"
+    - `features/drives/components/central-drive-detail-panel.tsx` — header, Key Placement Dates, Portals & Online Links, Venue & Logistics, Application Fields Required
+    - `features/drives/components/post-central-drive-modal.tsx` — shadcn Dialog with the 9 specified fields
+    - `features/drives/components/central-drive-fields-toggle.tsx` — flat field list with on/off switches and "Save Configuration"
+    - `app/globals.css` — added a shared `.skeleton` utility (none existed) for the new loading state
+    - Deleted `super-admin-drives-client.tsx` (the replaced read-only view, no longer referenced)
+  - **Derived-value decisions (fields not present on the modal but required by the schema):**
+    - `eligibleDepartments` defaults to **all active departments** — a central drive is institution-wide by definition, matching the modal's lack of a department picker
+    - `applyMethod` is derived: a Company Portal URL means `EXTERNAL` with that URL as `externalApplyUrl`; no portal URL means `IN_APP`
+    - `packageOffered` is parsed from the free-text CTC ("14 – 22 LPA" → 14); `packageDisplay` remains what students see
+    - `selectionRounds` stored as `[]`, `maxActiveBacklogs` defaults to 0
+  - **Eligibility compatibility:** `getEligibleDrives()` and `isStudentEligibleForDrive()` filter only on `eligibleDepartments` JSON, CGPA, backlogs and deadline — no `departmentId` dependency — so central drives flow through the student path unmodified. Student drive pages read department codes from the `eligibleDepartments` map, never from `drive.department`, so a null owning department renders correctly
+  - **Isolation verified by code:** `getAdminDrives()` filters `departmentId: department.id`, so central drives (null) never appear in a dept admin's list; all three central actions call `requireSuperAdmin()` as their first statement
+  - **Verification:** `tsc --noEmit` clean ✅ · `npm run lint` only pre-existing `<img>` warnings ✅ · `npm run build` successful, `/super-admin-dashboard/drives` at 4.15 kB ✅ · drives tests 23/23 passing (includes 6 new `parse-package-display` tests) ✅
+    - Full suite: 186 passed / 28 failed — all 28 failures pre-existing and unrelated (incomplete `vi.mock` of `@/lib/auth` missing `getCurrentUser` in departments/admin-accounts/notifications tests, and FE-03 snapshot-field assertions in apply-to-drive)
+    - Browser verification not performed: the page requires an authenticated Clerk Super Admin session. Route confirmed live and auth-gated (307 → /sign-in)
+  - **Known follow-up:** the Super Admin dashboard KPI labelled "Central drives" still uses `stats.totalDrives` (all drives) while `/super-admin-dashboard/drives` now lists only central drives — the number and the page it links to no longer agree
+
+- **Student drives page redesign (COMPLETE):**
+  - Reworked `/student-dashboard/drives` to match the provided mockup, using only real data.
+  - **New pure helper:** `getDriveDisplayStatus(applicationDeadline, driveDate)` in `features/drives/utils/drive-status.ts` returns `open` / `upcoming` / `closed` — "upcoming" means the application window has closed but the drive itself has not been held yet. Still always computed, never stored. 4 unit tests added (`drive-status.test.ts`, suite now 27 passing).
+  - The `Upcoming` and `Closed` filter pills now use this same rule, so a pill and the badges inside it agree (previously `upcoming` was `open && driveDate > now`, which returned drives badged "Open").
+  - **`drive-card.tsx` rebuilt:** company logo tile, truncated role + Open/Upcoming/Closed badge, company · package, eligibility meta row (drive date, min CGPA, department codes), backlogs row, "Deadline passed" red pill vs deadline date, venue chip, footer with applicant count + "Apply now" / "✓ Applied" + "View Application", and a `▾ Info` expander (now also renders `jobDescriptionText` and parses `selectionRounds` as JSON rather than dumping the raw string).
+  - **Fixed broken style tokens:** the card referenced `--accent-surface`, `--surface-hover`, `--success` and `--success-surface`, none of which are defined in `globals.css`, so those colours silently fell back. Replaced with the real tokens (`--surface-1`, `--teal`, `--teal-light`, `--red-light`).
+  - **Identity card:** gradient top strip, circular avatar, department **code** + year of study (derived from the real `academic.currentSemester`, 2 semesters per year) + roll + CGPA + email, Profile % badge retained.
+  - **Deliberately excluded as out of V1 scope (user confirmed both):** the Applied→Aptitude→Interview→Offer stage stepper, `In progress` badge, `Locked` button and `Withdraw` link (no application-stage tracking; applications are immutable), and the `Readiness 78` / `Resume 64` / "Ready for TCS & Infosys" badges plus `View readiness` / `Build resume` buttons (readiness scoring, resume builder and AI matching all deferred).
+  - **Verification:** `tsc --noEmit` clean, `lint` no errors, `build` successful, drives tests 27/27. Not visually verified in a browser — the page is behind Clerk student auth; route confirmed serving (307 → sign-in) with no module errors.
+
+- **Unit 11 follow-up fix — central drive visibility (COMPLETE):**
+  - **Root cause on the student side (data, not a bug):** the only student account linked to a real login had no `StudentAcademic` record at all. `getEligibleDrives()` correctly returns an empty list for any student without academic info — that's true for every drive, not just central ones. Fixed the confusing silent-empty-list UX: `components/drives/drives-grid.tsx` now accepts `hasAcademicProfile` and shows "Complete your Academic Info to see eligible drives" with a link to the profile, instead of a generic "no drives found" message that gave no hint why. Wired from `app/(student)/student-dashboard/drives/page.tsx` via `Boolean(studentWithProfile.academic)`.
+  - **Root cause on the dept admin side (real gap, now closed by request):** Unit 11 deliberately excluded central drives from `getAdminDrives()` (department-owned drives only) — confirmed correct in isolation, but the dept admin had no visibility at all into central drives affecting their own students. Added `features/drives/queries/get-central-drives-for-department.ts` (central drives whose `eligibleDepartments` includes the admin's department, read-only), merged into `app/(admin)/admin-dashboard/drives/page.tsx` alongside the paginated own-department list (central drives are institution-wide and expected to be few, so shown in full rather than paginated separately). `drives-list-client.tsx` marks them with a "Central" badge and replaces the Edit action with "Posted by Super Admin" — editing a central drive stays exclusively with the Super Admin's `updateCentralDrive`.
+  - **Applicants view bug fixed:** `getDriveApplications()` rejected every central drive outright (`drive.departmentId !== department.id` is always true when `departmentId` is null), so "View Applicants" would have thrown `AuthorizationError` the moment a dept admin clicked it. Now allows a central drive when the admin's department is in its `eligibleDepartments`, and — preserving the department-scoping invariant — filters the returned applications to that department's own students rather than the whole central drive's applicant pool.
+  - **Verification:** `tsc --noEmit` clean, `lint` only pre-existing `<img>` warnings, `build` successful, `vitest run features/applications features/drives` → 45/46 passing (the 1 failure is the same pre-existing snapshot-field test debt already noted under Unit 11, unrelated to `getDriveApplications`).
 
 - **FE-07 — Excel/CSV Bulk Student Import (COMPLETE):**
   - **Package Installed:** xlsx@0.18.5 (includes bundled TypeScript types)
@@ -1646,3 +1707,93 @@ The `campushire_frontend (temp)` React/Vite SPA has been fully integrated into t
 - Report Export (Excel/CSV for admin reports)
 - System Settings backend persistence (UI-only in V1)
 - NIRF/NAAC Export Reports
+
+---
+
+## Student Dashboard Redesign — COMPLETE ✅
+
+Rebuilt the student dashboard to match the approved reference design, and
+promoted application stage tracking and withdrawal out of the deferred list.
+
+**Data model change**
+- Added `ApplicationStage` (`APPLIED`, `APTITUDE`, `INTERVIEW`, `OFFER`) and
+  `ApplicationStatus` (`IN_PROGRESS`, `SELECTED`, `REJECTED`, `WITHDRAWN`)
+  enums, plus `stage` and `status` columns on `DriveApplication`.
+- Migration `20260913140000_application_stage`, applied.
+- Applications default to `APPLIED` / `IN_PROGRESS`. Nothing advances the
+  stage yet — a department-admin control is the next step.
+
+**New behaviour**
+- `withdrawApplication` server action: deletes the student's own application,
+  allowed only while the deadline is open and the stage is still `APPLIED`,
+  audit-logged under the new `WITHDRAW` action.
+- Topbar role pill (`components/shared/role-switcher.tsx`) reports the active
+  portal. `REACHABLE` intentionally lists one portal per role to match
+  `middleware.ts`; widen both together or the menu offers blocked routes.
+
+**Dashboard layout** (`app/(student)/student-dashboard/page.tsx`)
+- Welcome header, three score cards, "Your drives" cards, three quick-action
+  tiles, notifications + deadlines panels, and an "Active drives" table.
+- `getStudentDashboardData` batches applications, applicant counts and
+  department codes for the drives the caller is already eligible for; it
+  never widens visibility beyond what `getEligibleDrives` returned.
+
+**Sidebar** now matches the design: Home, Dashboard, Profile, Resume Builder,
+AI Analyzer, Self Assessment, Readiness, Notifications, Settings, with
+Settings and Log out pinned to the footer. Drives and Applications remain
+reachable through the dashboard's "View all" links.
+
+### Still deferred (rendered as "Coming soon", routes exist)
+- Resume Builder — `/student-dashboard/resume-builder`
+- AI Resume Analyzer — `/student-dashboard/ai-analyzer`
+- Readiness Self-Assessment — `/student-dashboard/self-assessment`
+- Readiness dashboard — `/student-dashboard/readiness`
+- Readiness score and Resume score cards show `—` until those features land.
+- Admin UI for advancing an application's stage.
+
+---
+
+## Student Profile Redesign — COMPLETE ✅
+
+Rebuilt the Academic Info, Projects, Internships & Experience, Certifications
+and Preferences tabs to match the approved reference design.
+
+**Data model change** (migration `20260913160000_profile_documents`, applied)
+- `StudentAcademic`: `tenthBoard`, `tenthYear`, `tenthMarksheetUrl`,
+  `twelfthBoard`, `twelfthYear`, `twelfthMarksheetUrl`, `pastBacklogCount`.
+- `SemesterMark`: `gradeCardUrl`, `isVerified`.
+- `StudentExperience`: `certificateUrl`.
+- `StudentPreferences`: `workModes` — a JSON array that **maps to the
+  pre-existing `workMode` column** rather than adding a duplicate.
+
+The migration is written with `ADD COLUMN IF NOT EXISTS` throughout, because
+`manual_frontend_student_fields.sql` had already added several of these columns
+to the database out of band. The database still carries one drifted column,
+`StudentAcademic.semesterMarks`, that no Prisma model references.
+
+**Document uploads**
+- `uploadStudentDocument` in `lib/blob.ts` and `POST /api/students/documents`
+  accept PDF/JPEG/PNG/WebP up to 5MB. The student is resolved from the session
+  and the storage path is derived server-side, so a caller can only write into
+  their own folder.
+- `components/ui/file-attach-field.tsx` is the shared attach/replace row used
+  by both marksheets, every semester grade card, and experience certificates.
+
+**Bulk section saves**
+- The repeated sections are edited as a whole list and saved with one button.
+  `features/students/actions/profile-sync-collections.ts` reconciles each
+  submitted list against storage — update by id, create without one, delete
+  anything dropped from the form — always scoped to the caller's studentId.
+- `updateSemesterMarks` now deletes semesters removed from the form too.
+- The header "Save changes" button runs the active tab's save handler through
+  `ProfileSaveProvider`; each tab publishes its handler with
+  `useRegisterProfileSave`.
+
+**Fields removed from the forms** (columns kept, no data lost): Expected
+Package Min/Max on Preferences, and Start/End dates on Projects. Preferences
+now offers a single Preferred Company Type, still stored in the existing
+`preferredCompanyTypes` JSON array.
+
+### Next step
+`SemesterMark.isVerified` is student-visible but nothing sets it — semester
+cards read "Pending" until a department-admin verification control is built.
