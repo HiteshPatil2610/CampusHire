@@ -1840,3 +1840,60 @@ falls back to the catalog defaults.
   is still a stub. Add the row when that feature lands.
 - Only the dashboard's drive cards use this card. The drives listing page and
   the drive detail page still use the older confirm dialog.
+
+---
+
+## Department Admin — Super Admin Drives Configuration — COMPLETE ✅
+
+`/admin-dashboard/drives` is now the department admin's configuration screen for
+central drives posted by the Super Admin, replacing the old combined drives
+table.
+
+**Data model** (migration `20260913200000_drive_department_config`)
+- `DriveDepartmentConfig` — unique on `(driveId, departmentId)`. Holds venue,
+  reporting time, coordinator name/phone/email, seating allocation, PPT link,
+  special instructions, and the department's `applicationFields` JSON.
+- A central drive is authored once by the Super Admin but runs separately in
+  each eligible department, so these belong to the department admin, not to the
+  Drive row. Two departments configuring the same drive never collide.
+
+**The screen** (`features/drives/components/department-central-drives-view.tsx`)
+- KPI row: central drives, logistics configured, pending setup, applicants.
+  A drive counts as configured once venue and reporting time are both set.
+- Master list with search and All / Ready / Needs Setup filters, scoped to the
+  admin's own department.
+- `department-drive-config-panel.tsx` — read-only Super Admin drive header and
+  eligibility strip, the logistics form, and the required-application-fields
+  table with quick presets, a catalog picker, and per-row Mandatory/Optional.
+  The save bar is the last element in normal flow, not sticky — a sticky bar
+  drifted up and down the panel as its height changed.
+- `student-portal-preview.tsx` — live preview of the student drive card and the
+  Student Application Review Card, rendered from unsaved form state.
+- `student-application-preview.tsx` — the review card plus the full "ADMIN
+  PREVIEW MODE" modal opened by Preview Student View, Test Full Modal and Test
+  Student Modal. Both split the admin's configured fields into locked
+  institutional records and auto-filled editable rows using the same
+  `LOCKED_FIELD_KEYS` / `EDITABLE_FIELD_KEYS` the real submission card uses, so
+  a row previewed as locked is locked in the student's actual flow. Values come
+  from `preview-review-rows.ts`, which supplies representative sample data —
+  no student is loaded for a preview.
+
+**Reaching students** (`features/drives/utils/department-config-overlay.ts`)
+- `applyDepartmentConfig` overlays a department's config onto the Drive row in
+  `getEligibleDrives` and `getDriveDetail`, so every downstream consumer keeps
+  working on a plain Drive shape while each student sees only their own
+  department's venue, coordinator and required fields.
+
+### Not included
+- The Resume (PDF) row from the reference design, in the fields table and in
+  both previews, consistent with the existing scoping decision — there is no
+  resume in the data model yet.
+- "Add Custom Field": the picker offers catalog fields only, since the student
+  apply flow resolves values by catalog key and the server rejects unknown keys.
+- No department switcher in the scope banner — an admin's department is fixed by
+  their DepartmentAdmin record.
+
+### Next step
+"Post Department Drive" still links to the existing `/admin-dashboard/drives/new`
+form. The department's own drives table (`drives-list-client.tsx`, unused by the
+page for now) is the starting point for that second view.

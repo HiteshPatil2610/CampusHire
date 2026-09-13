@@ -36,6 +36,37 @@ export function parseApplicationFields(
 }
 
 /**
+ * The ordered list of fields a department asks students for on a drive.
+ *
+ * Unlike `buildApplicationFieldRows`, this returns only the selected fields —
+ * the department-admin panel shows chosen rows and adds new ones from a
+ * catalog picker rather than listing every catalog entry. A drive with no
+ * saved configuration falls back to the catalog's default-required fields.
+ */
+export function resolveSelectedApplicationFields(
+  storedValue: string | null | undefined
+): StoredApplicationField[] {
+  const stored = parseApplicationFields(storedValue).filter(
+    (field) => field.enabled !== false
+  );
+
+  if (stored.length > 0) return stored;
+
+  return AVAILABLE_STUDENT_FIELDS.filter((entry) => entry.defaultRequired).map(
+    (entry) => ({
+      key: entry.key,
+      label: entry.label,
+      source: entry.source,
+      category: entry.category,
+      icon: entry.icon,
+      description: entry.description,
+      required: true,
+      enabled: true,
+    })
+  );
+}
+
+/**
  * Merge a drive's stored field configuration over the full catalog so the
  * toggle panel always lists every available field, with stored values winning.
  */

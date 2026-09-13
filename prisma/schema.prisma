@@ -76,9 +76,10 @@ model Department {
   updatedAt DateTime @updatedAt
 
   // Relations
-  admins   DepartmentAdmin[]
-  students Student[]
-  drives   Drive[]
+  admins       DepartmentAdmin[]
+  students     Student[]
+  drives       Drive[]
+  driveConfigs DriveDepartmentConfig[]
 
   @@index([code])
 }
@@ -326,14 +327,45 @@ model Drive {
   updatedAt           DateTime    @updatedAt
 
   // Relations
-  department    Department?        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  createdByUser User?              @relation("DriveCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  applications  DriveApplication[]
+  department        Department?             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  createdByUser     User?                   @relation("DriveCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  applications      DriveApplication[]
+  departmentConfigs DriveDepartmentConfig[]
 
   @@index([departmentId])
   @@index([applicationDeadline])
   @@index([isCentralDrive])
   @@index([createdByUserId])
+}
+
+// Per-department configuration layered over a central drive.
+//
+// A central drive is authored once by the Super Admin but runs separately in
+// each eligible department, so venue, coordinator and required application
+// fields are owned by the department admin and are visible only to students of
+// that department. The Drive row itself stays untouched by department admins.
+model DriveDepartmentConfig {
+  id                  String   @id @default(cuid())
+  driveId             String
+  departmentId        String
+  venue               String?
+  reportingTime       String?
+  coordinatorName     String?
+  coordinatorPhone    String?
+  coordinatorEmail    String?
+  seatingAllocation   String?  @db.Text
+  pptLink             String?
+  specialInstructions String?  @db.Text
+  applicationFields   String?  @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relations
+  drive      Drive      @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([driveId, departmentId])
+  @@index([departmentId])
 }
 
 // ============================================================================

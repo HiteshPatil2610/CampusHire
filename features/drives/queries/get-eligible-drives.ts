@@ -6,6 +6,8 @@ import {
   isStudentAcademicallyEligibleForDrive,
   isStudentEligibleForDrive,
 } from "./drive-eligibility";
+import { applyDepartmentConfig } from "../utils/department-config-overlay";
+import type { DriveForStudent } from "../utils/department-config-overlay";
 import type { Drive } from "@prisma/client";
 
 export interface StudentDrivesParams {
@@ -16,7 +18,7 @@ export interface StudentDrivesParams {
 }
 
 export interface StudentDrivesResult {
-  data: Drive[];
+  data: DriveForStudent[];
   page: number;
   pageSize: number;
   totalCount: number;
@@ -102,8 +104,22 @@ export async function getEligibleDrives(
   // Apply pagination after filtering
   const paginatedDrives = eligibleDrives.slice(skip, skip + pageSize);
 
+  // A central drive's venue, coordinator and required fields are configured per
+  // department, so show this student their own department's setup.
+  const configs = await prisma.driveDepartmentConfig.findMany({
+    where: {
+      departmentId: studentWithAcademic.departmentId,
+      driveId: { in: paginatedDrives.map((drive) => drive.id) },
+    },
+  });
+  const configByDriveId = new Map(
+    configs.map((config) => [config.driveId, config])
+  );
+
   return {
-    data: paginatedDrives,
+    data: paginatedDrives.map((drive) =>
+      applyDepartmentConfig(drive, configByDriveId.get(drive.id))
+    ),
     page,
     pageSize,
     totalCount,

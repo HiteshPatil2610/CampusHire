@@ -8,18 +8,18 @@ import { parseJsonArray } from "@/lib/parse-json-array";
  * card: the caller's own application (if any), how many students applied, and
  * the human-readable department codes the drive is open to.
  */
-export interface DashboardDrive {
-  drive: Drive;
+export interface DashboardDrive<TDrive extends Drive = Drive> {
+  drive: TDrive;
   application: DriveApplication | null;
   applicantCount: number;
   departmentCodes: string[];
 }
 
-export interface StudentDashboardData {
+export interface StudentDashboardData<TDrive extends Drive = Drive> {
   /** Drives surfaced as cards - applied drives first, then closest deadline. */
-  featured: DashboardDrive[];
+  featured: DashboardDrive<TDrive>[];
   /** Every drive the student can see, for the "Active drives" table. */
-  all: DashboardDrive[];
+  all: DashboardDrive<TDrive>[];
   totalApplications: number;
   openDriveCount: number;
 }
@@ -29,11 +29,11 @@ export interface StudentDashboardData {
  * state. Eligibility filtering happens against the drives already resolved by
  * the caller, so this never widens what a student can see.
  */
-export async function getStudentDashboardData(
+export async function getStudentDashboardData<TDrive extends Drive>(
   studentId: string,
-  eligibleDrives: Drive[],
+  eligibleDrives: TDrive[],
   featuredLimit = 4
-): Promise<StudentDashboardData> {
+): Promise<StudentDashboardData<TDrive>> {
   const driveIds = eligibleDrives.map((drive) => drive.id);
 
   const [applications, totalApplications, counts, departments] =
@@ -62,7 +62,7 @@ export async function getStudentDashboardData(
     departments.map((department) => [department.id, department.code])
   );
 
-  const all: DashboardDrive[] = eligibleDrives.map((drive) => ({
+  const all: DashboardDrive<TDrive>[] = eligibleDrives.map((drive) => ({
     drive,
     application: applicationByDrive.get(drive.id) ?? null,
     applicantCount: countByDrive.get(drive.id) ?? 0,
@@ -93,7 +93,7 @@ export async function getStudentDashboardData(
   return { featured, all, totalApplications, openDriveCount };
 }
 
-function featureRank(item: DashboardDrive, now: Date): number {
+function featureRank(item: DashboardDrive<Drive>, now: Date): number {
   if (item.application) return 0;
   const status = getDriveDisplayStatus(
     item.drive.applicationDeadline,

@@ -4,10 +4,12 @@ import { getOrCreateUser, requireStudent, requireDepartmentAdmin, AuthorizationE
 import { prisma } from "@/lib/prisma";
 import { isStudentEligibleForDrive } from "./drive-eligibility";
 import { checkApplicationExists } from "@/features/applications/queries/check-application-exists";
+import { applyDepartmentConfig } from "../utils/department-config-overlay";
+import type { DriveForStudent } from "../utils/department-config-overlay";
 import type { Drive, Department } from "@prisma/client";
 
 // department is null for central drives, which have no single owning department
-export type DriveWithDepartment = Drive & {
+export type DriveWithDepartment = (Drive | DriveForStudent) & {
   department: Pick<Department, "id" | "name" | "code"> | null;
 };
 
@@ -70,15 +72,22 @@ export async function getDriveDetail(driveId: string): Promise<DriveWithDepartme
 
     const hasApplied = await checkApplicationExists(student.id, drive.id);
 
-    if (hasApplied) {
-      return drive;
-    }
-
-    if (!isStudentEligibleForDrive(student, drive)) {
+    if (!hasApplied && !isStudentEligibleForDrive(student, drive)) {
       throw new AuthorizationError("You are not eligible for this drive");
     }
 
-    return drive;
+    // A central drive's venue, coordinator and required fields are configured
+    // per department, so show this student their own department's setup.
+    const config = await prisma.driveDepartmentConfig.findUnique({
+      where: {
+        driveId_departmentId: {
+          driveId: drive.id,
+          departmentId: student.departmentId,
+        },
+      },
+    });
+
+    return { ...applyDepartmentConfig(drive, config), department: drive.department };
   } else {
     // Super admin or other roles
     throw new AuthorizationError("Access denied");
