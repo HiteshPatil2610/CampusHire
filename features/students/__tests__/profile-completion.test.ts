@@ -17,6 +17,14 @@ function createMockProfile(overrides?: Partial<CompleteProfile>): CompleteProfil
     linkedinUrl: null,
     githubUrl: null,
     portfolioUrl: null,
+    gender: null,
+    dateOfBirth: null,
+    address: null,
+    personalEmail: null,
+    batchYear: 2025,
+    placementStatus: "UNPLACED",
+    placedCompany: null,
+    placedPackage: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     department: {
@@ -29,6 +37,7 @@ function createMockProfile(overrides?: Partial<CompleteProfile>): CompleteProfil
   return {
     student: baseStudent,
     academic: null,
+    semesterMarks: [],
     skills: [],
     projects: [],
     experiences: [],

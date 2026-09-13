@@ -2,7 +2,10 @@
 
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isStudentEligibleForDrive } from "./drive-eligibility";
+import {
+  isStudentAcademicallyEligibleForDrive,
+  isStudentEligibleForDrive,
+} from "./drive-eligibility";
 import type { Drive } from "@prisma/client";
 
 export interface StudentDrivesParams {
@@ -84,9 +87,14 @@ export async function getEligibleDrives(
     ],
   });
 
-  // Filter by full eligibility criteria (including department check)
+  const matchesEligibility =
+    status === "open"
+      ? (drive: Drive) => isStudentEligibleForDrive(studentWithAcademic, drive)
+      : (drive: Drive) =>
+          isStudentAcademicallyEligibleForDrive(studentWithAcademic, drive);
+
   const eligibleDrives = allDrives.filter((drive) =>
-    isStudentEligibleForDrive(studentWithAcademic, drive)
+    matchesEligibility(drive)
   );
 
   const totalCount = eligibleDrives.length;

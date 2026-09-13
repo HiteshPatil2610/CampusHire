@@ -52,6 +52,16 @@ export const driveSchema = z
       .array(z.string().min(1))
       .min(1, "At least one eligible department is required")
       .max(50, "Too many departments"),
+    // New display fields
+    packageDisplay: z.string().max(100).optional(),
+    // Logistics fields (all optional)
+    venue: z.string().max(500).optional(),
+    reportingTime: z.string().max(100).optional(),
+    contactPerson: z.string().max(200).optional(),
+    contactPhone: z.string().max(50).optional(),
+    pptLink: z.string().url().optional().or(z.literal("")),
+    // Application fields configuration (JSON string)
+    applicationFields: z.string().optional(),
   })
   .refine(
     (data) => {

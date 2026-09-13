@@ -72,3 +72,34 @@
 - `lib/` — Prisma client singleton, Clerk helpers, permission/role-check utilities, Vercel Blob helpers, `env.ts` (validated environment variables), `pagination.ts` (shared offset-pagination helpers).
 - `prisma/` — `schema.prisma` and migrations.
 - `scripts/` — One-off operational scripts (`seed-super-admin.ts`), per `architecture.md`. Not part of the app runtime.
+
+Frontend Performance Patterns
+
+Perceived speed matters more than raw speed at this scale. These patterns are mandatory wherever they apply — a route without a loading.tsx, or a list without a skeleton state, is not considered done.
+
+Route-level loading states
+Every route segment under (student)/, (admin)/, (super-admin)/ that fetches data has a sibling loading.tsx. Next.js wraps the segment in Suspense automatically — this is not optional scaffolding, it is the primary defense against blank-screen navigation.
+Skeletons should mirror the real layout (card count, table row count, roughly correct heights) rather than a generic spinner — this avoids layout shift when real content arrives.
+Every route segment with a loading.tsx also gets an error.tsx alongside it, so a slow or failed query resolves to a retry UI instead of a stuck skeleton.
+Data fetching
+Fetch in server components. Client-side useEffect fetching after mount is not used for initial page data — it produces a waterfall (page → JS → fetch → data) that a server component avoids entirely.
+When a route needs more than one independent piece of data (e.g. a dashboard needing profile completion, active drives, and application status), fetch them in parallel — either Promise.all inside the server component or parallel Suspense boundaries. Sequential awaits for independent data are a bug, not a style choice.
+"use client" components that need data (e.g. a filter dropdown) receive it as props from the server component or fetch through a server action — they do not own their own initial fetch.
+Neon cold starts
+Neon's serverless compute scales to zero after ~5 minutes idle; the first query after a cold period has extra latency. This is expected, not a bug to chase.
+Do not attempt to work around this with keep-alive pings or always-on compute — it costs money for a problem the UI can absorb.
+Handle it entirely in the UI: the route's loading.tsx skeleton covers the wake-up delay. No cold-start-specific logic is written in application code.
+Long-running operations (Excel import, bulk eligibility runs)
+Any operation that runs for more than ~1 second (Excel bulk upload, eligibility matching against a large drive) reports progress rather than blocking on a spinner with no feedback — e.g. "Validating row 340/500."
+A server action that triggers a slow operation returns immediately with an accepted/pending state where possible; the UI polls or re-fetches for completion rather than holding the request open.
+Pairs with the existing Excel-import invariant (transactional import, file retained only on failure) — failure states must be visible mid-progress, not just as a final error.
+Paginated lists
+Every paginated list (student roster, drive list, audit log) shows a lightweight row-shimmer or skeleton table during page transitions, not a blank table or full-page loader — pagination is a partial update, and it should feel like one.
+Search and filter inputs on these lists are debounced (300ms) — no query fires on every keystroke.
+Optimistic UI
+Fast, low-risk mutations (applying to a drive, marking a task) use useOptimistic to update the UI immediately and reconcile with the server response. Reserve this for actions with a clear, predictable success path — do not use it for actions with real validation risk (e.g. Excel import, drive creation), where an incorrect optimistic state would be misleading.
+Images
+All images (student avatars, department logos, company logos on drive cards) use next/image, not a raw <img> tag — this prevents layout shift and gets automatic sizing/format optimization for free.
+Non-negotiables
+A PR that adds a data-fetching route without a loading.tsx is not complete per the six-point unit completion checklist in ai-workflow-rules.md — treat "add loading state" as part of building the route, not a follow-up task.
+These patterns cost nothing at CampusHire's scale (no paid infra required) — they are implementation discipline, not a budget decision.

@@ -1,4 +1,4 @@
-export type StatusVariant = 'green' | 'amber' | 'red' | 'purple' | 'accent' | 'gray';
+export type StatusVariant = 'green' | 'amber' | 'red' | 'purple' | 'accent' | 'gray' | 'teal';
 
 export interface StatusBadgeProps {
   variant: StatusVariant;

@@ -15,13 +15,13 @@ export default async function AuditLogsPage() {
   });
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
-          Audit Logs
+    <div>
+      <div style={{ marginBottom: 24 }}>
+        <h1 className="page-title" style={{ marginBottom: 4 }}>
+          Audit Log
         </h1>
-        <p className="mt-2 text-[var(--text-secondary)]">
-          View and track all administrative actions and system activity
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+          Immutable record of all administrative actions across the system
         </p>
       </div>
 

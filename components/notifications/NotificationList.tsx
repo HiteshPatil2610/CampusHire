@@ -1,9 +1,10 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { markNotificationRead } from "@/features/notifications/actions/mark-notification-read";
-import { markAllNotificationsRead } from "@/features/notifications/actions/mark-all-notifications-read";
-import type { Notification } from "@prisma/client";
+import { useState, useMemo } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { markNotificationRead } from '@/features/notifications/actions/mark-notification-read';
+import Pagination from '@/components/ui/pagination';
+import type { Notification } from '@prisma/client';
 
 interface NotificationListProps {
   initialNotifications: {
@@ -12,14 +13,38 @@ interface NotificationListProps {
     pageSize: number;
     totalCount: number;
   };
+  typeFilter?: 'all' | 'drives' | 'system';
 }
 
-export function NotificationList({ initialNotifications }: NotificationListProps) {
+/**
+ * Notification list with CSS-class-based design
+ * Supports type filtering for Drives and System categories
+ */
+export function NotificationList({ 
+  initialNotifications,
+  typeFilter = 'all' 
+}: NotificationListProps) {
   const [notifications, setNotifications] = useState(initialNotifications.data);
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Apply client-side type filtering
+  const visibleNotifications = useMemo(() => {
+    if (typeFilter === 'drives') {
+      return notifications.filter(n =>
+        n.type === 'DRIVE' || n.type === 'APPLICATION'
+      );
+    }
+    if (typeFilter === 'system') {
+      return notifications.filter(n =>
+        n.type === 'SYSTEM' || n.type === 'PROFILE' || n.type === 'ADMIN'
+      );
+    }
+    return notifications; // 'all'
+  }, [notifications, typeFilter]);
 
   const handleMarkAsRead = async (notificationId: string) => {
-    setLoading(true);
     const result = await markNotificationRead(notificationId);
     
     if (result.success) {
@@ -27,21 +52,9 @@ export function NotificationList({ initialNotifications }: NotificationListProps
       setNotifications(notifications.map(n => 
         n.id === notificationId ? { ...n, isRead: true } : n
       ));
+      // Refresh server component to update bell count
+      router.refresh();
     }
-    
-    setLoading(false);
-  };
-
-  const handleMarkAllAsRead = async () => {
-    setLoading(true);
-    const result = await markAllNotificationsRead();
-    
-    if (result.success) {
-      // Update local state
-      setNotifications(notifications.map(n => ({ ...n, isRead: true })));
-    }
-    
-    setLoading(false);
   };
 
   const formatTimestamp = (date: Date) => {
@@ -51,107 +64,158 @@ export function NotificationList({ initialNotifications }: NotificationListProps
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return "Just now";
+    if (minutes < 1) return 'Just now';
     if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
     if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
     if (days < 7) return `${days} day${days > 1 ? 's' : ''} ago`;
     return new Date(date).toLocaleDateString();
   };
 
-  const getTypeColor = (type: string) => {
+  function getTypeBadgeClass(type: string): string {
     switch (type) {
-      case "APPLICATION":
-        return "bg-[var(--teal-light)] text-[var(--teal)]";
-      case "DRIVE":
-        return "bg-[var(--purple-light)] text-[var(--purple)]";
-      case "PROFILE":
-        return "bg-[var(--amber-light)] text-[var(--amber)]";
-      case "ADMIN":
-        return "bg-[var(--accent-light)] text-[var(--accent)]";
-      case "SYSTEM":
-        return "bg-[var(--surface-1)] text-[var(--text-secondary)]";
-      default:
-        return "bg-[var(--surface-1)] text-[var(--text-secondary)]";
+      case 'APPLICATION': return 'badge-green';
+      case 'DRIVE':       return 'badge-purple';
+      case 'PROFILE':     return 'badge-amber';
+      case 'ADMIN':       return 'badge-accent';
+      case 'SYSTEM':
+      default:            return 'badge-gray';
     }
-  };
+  }
 
-  const hasUnread = notifications.some(n => !n.isRead);
-  const totalPages = Math.ceil(initialNotifications.totalCount / initialNotifications.pageSize);
+  function handlePageChange(newPage: number) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (newPage === 1) {
+      params.delete('page');
+    } else {
+      params.set('page', String(newPage));
+    }
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  // Empty state
+  if (visibleNotifications.length === 0) {
+    return (
+      <div
+        style={{
+          padding: 48,
+          textAlign: 'center',
+          color: 'var(--text-muted)',
+          fontSize: 13,
+        }}
+      >
+        <div style={{ fontSize: 28, marginBottom: 10 }}>🔔</div>
+        <p>No notifications in this category.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header with Mark All as Read button */}
-      {hasUnread && (
-        <div className="flex justify-end">
-          <button
-            onClick={handleMarkAllAsRead}
-            disabled={loading}
-            className="px-4 py-2 text-sm text-[var(--accent)] hover:text-[var(--accent-dark)] transition-colors disabled:opacity-50"
+    <>
+      <div
+        className="card"
+        style={{ padding: 0, overflow: 'hidden' }}
+      >
+        {visibleNotifications.map((n) => (
+          <div
+            key={n.id}
+            onClick={() => !n.isRead && handleMarkAsRead(n.id)}
+            style={{
+              padding: '16px 20px',
+              borderBottom: '0.5px solid var(--border)',
+              background: n.isRead ? 'transparent' : 'var(--accent-light)',
+              cursor: n.isRead ? 'default' : 'pointer',
+              display: 'flex',
+              gap: 14,
+              alignItems: 'flex-start',
+              transition: 'background 0.15s ease',
+            }}
           >
-            Mark All as Read
-          </button>
-        </div>
-      )}
-
-      {/* Notification List */}
-      <div className="space-y-3">
-        {notifications.length === 0 ? (
-          <div className="text-center py-12 bg-[var(--surface-2)] border border-[var(--border)] rounded-xl">
-            <p className="text-[var(--text-secondary)]">No notifications yet</p>
-          </div>
-        ) : (
-          notifications.map((notification) => (
+            {/* Unread dot */}
             <div
-              key={notification.id}
-              className={`bg-[var(--surface-2)] border border-[var(--border)] rounded-xl p-4 transition-colors hover:bg-[var(--surface-1)] ${
-                !notification.isRead ? "border-l-4 border-l-[var(--accent)]" : ""
-              }`}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  {/* Type Badge */}
-                  <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getTypeColor(notification.type)}`}>
-                    {notification.type}
-                  </span>
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: n.isRead ? 'transparent' : 'var(--accent-dark)',
+                marginTop: 6,
+                flexShrink: 0,
+              }}
+            />
 
-                  {/* Title */}
-                  <h3 className={`mt-2 text-base ${!notification.isRead ? "font-semibold" : ""} text-[var(--text-primary)]`}>
-                    {notification.title}
-                  </h3>
-
-                  {/* Message */}
-                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                    {notification.message}
-                  </p>
-
-                  {/* Timestamp */}
-                  <p className="mt-2 text-xs text-[var(--text-muted)]">
-                    {formatTimestamp(notification.createdAt)}
-                  </p>
-                </div>
-
-                {/* Mark as Read button (only for unread) */}
-                {!notification.isRead && (
-                  <button
-                    onClick={() => handleMarkAsRead(notification.id)}
-                    disabled={loading}
-                    className="text-sm text-[var(--accent)] hover:text-[var(--accent-dark)] transition-colors disabled:opacity-50 whitespace-nowrap"
-                  >
-                    Mark as Read
-                  </button>
-                )}
+            {/* Content */}
+            <div style={{ flex: 1 }}>
+              {/* Type badge */}
+              <span className={`badge ${getTypeBadgeClass(n.type)}`}>
+                {n.type}
+              </span>
+              {/* Title */}
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: n.isRead ? 400 : 600,
+                  color: 'var(--text-primary)',
+                  lineHeight: 1.5,
+                  marginTop: 4,
+                }}
+              >
+                {n.title}
               </div>
+              {/* Message */}
+              <div
+                style={{
+                  fontSize: 12,
+                  color: 'var(--text-secondary)',
+                  marginTop: 2,
+                  lineHeight: 1.5,
+                }}
+              >
+                {n.message}
+              </div>
+              {/* Timestamp */}
+              <div
+                className="text-muted"
+                style={{ fontSize: 11, marginTop: 4 }}
+              >
+                {formatTimestamp(n.createdAt)}
+              </div>
+              
+              {/* TODO FE-DEEP-LINK: When resourceType and resourceId are present,
+                  navigate to the relevant resource page instead of just marking as read.
+                  e.g. DRIVE → /student-dashboard/drives/{resourceId}
+                       APPLICATION → /student-dashboard/applications */}
             </div>
-          ))
-        )}
+
+            {/* New badge */}
+            {!n.isRead && (
+              <span
+                className="badge badge-purple"
+                style={{ fontSize: 10, flexShrink: 0 }}
+              >
+                New
+              </span>
+            )}
+          </div>
+        ))}
       </div>
 
-      {/* Pagination Info */}
-      {notifications.length > 0 && (
-        <div className="text-center text-sm text-[var(--text-secondary)]">
-          Page {initialNotifications.page} of {totalPages} ({initialNotifications.totalCount} total notifications)
+      {/* Pagination */}
+      {initialNotifications.totalCount > initialNotifications.pageSize && (
+        <div
+          style={{
+            marginTop: 24,
+            background: 'var(--surface-0)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+          }}
+        >
+          <Pagination
+            page={initialNotifications.page}
+            pageSize={initialNotifications.pageSize}
+            totalCount={initialNotifications.totalCount}
+            onPageChange={handlePageChange}
+          />
         </div>
       )}
-    </div>
+    </>
   );
 }

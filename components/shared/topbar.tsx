@@ -1,10 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
-import { Bell } from 'lucide-react';
-import { getUnreadCountAction } from '@/features/notifications/actions/get-unread-count-action';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 export interface TopbarProps {
   role: 'student' | 'admin' | 'superadmin';
@@ -13,24 +11,6 @@ export interface TopbarProps {
 export default function Topbar({ role }: TopbarProps) {
   const { user } = useUser();
   const router = useRouter();
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    // Fetch unread notification count
-    getUnreadCountAction()
-      .then((result) => {
-        if (result.success) {
-          setUnreadCount(result.count);
-        }
-      })
-      .catch(() => {
-        // Silently ignore if unauthenticated
-      });
-  }, []);
-
-  function handleBellClick() {
-    router.push('/notifications');
-  }
 
   function handleAvatarClick() {
     if (role === 'superadmin') {
@@ -62,36 +42,8 @@ export default function Topbar({ role }: TopbarProps) {
           position: 'relative',
         }}
       >
-        {/* Notifications */}
-        <button
-          type="button"
-          aria-label="Notifications"
-          onClick={handleBellClick}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-            color: 'var(--text-secondary)',
-          }}
-        >
-          <Bell size={18} />
-          {unreadCount > 0 && (
-            <span
-              style={{
-                position: 'absolute',
-                top: -2,
-                right: -2,
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: 'var(--accent)',
-              }}
-            />
-          )}
-        </button>
+        {/* Notifications - using shared NotificationBell component */}
+        <NotificationBell size={18} />
 
         {/* User profile */}
         <div

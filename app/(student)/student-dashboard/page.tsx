@@ -10,20 +10,14 @@ import { getOrCreateUser } from '@/lib/auth';
 import { getStudentProfileByUserId } from '@/features/students/queries/get-profile';
 import { calculateProfileCompletion } from '@/features/students/queries/profile-completion';
 import { getNotifications } from '@/features/notifications/queries/get-notifications';
+import { getEligibleDrives } from '@/features/drives/queries/get-eligible-drives';
+import { getMyApplications } from '@/features/applications/queries/get-my-applications';
 import { RegistrationForm } from '@/components/students/RegistrationForm';
+import StudentIdentityCard from '@/components/students/dashboard/student-identity-card';
 import KpiCard from '@/components/shared/kpi-card';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 
 export const dynamic = 'force-dynamic';
-
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
 
 export default async function StudentDashboardPage() {
   const user = await getOrCreateUser();
@@ -35,46 +29,21 @@ export default async function StudentDashboardPage() {
   }
 
   const completion = calculateProfileCompletion(profile);
+  const eligibleDrivesResult = await getEligibleDrives({
+    status: 'open',
+    pageSize: 1,
+  });
+  const eligibleDrivesCount = eligibleDrivesResult.totalCount;
+  const applicationsResult = await getMyApplications(profile.student.id, 1, 1);
+  const applicationsCount = applicationsResult.totalCount;
   const notifications = await getNotifications(user.id, {
     page: 1,
     pageSize: 5,
   });
 
-  const firstName = profile.student.name.split(' ')[0];
-
   return (
     <div style={{ maxWidth: 1080, margin: '0 auto' }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          marginBottom: 24,
-        }}
-      >
-        <Link href="/student-dashboard/profile">
-          {profile.student.profilePhotoUrl ? (
-            <img
-              src={profile.student.profilePhotoUrl}
-              alt={profile.student.name}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: '50%',
-                objectFit: 'cover',
-              }}
-            />
-          ) : (
-            <div
-              className="sid-avatar"
-              style={{ width: 44, height: 44, fontSize: 15 }}
-            >
-              {getInitials(profile.student.name)}
-            </div>
-          )}
-        </Link>
-        <h1 className="page-title">Welcome back, {firstName}</h1>
-      </div>
+      <StudentIdentityCard profile={profile} completion={completion} />
 
       <div
         style={{
@@ -90,13 +59,15 @@ export default async function StudentDashboardPage() {
             label="Profile Completion"
           />
         </Link>
-        <KpiCard
-          value="0"
-          label="Eligible Drives"
-          trend="Available soon"
-          trendPositive
-        />
-        <KpiCard value="0" label="Applications Submitted" />
+        <Link href="/student-dashboard/drives" style={{ display: 'block' }}>
+          <KpiCard value={String(eligibleDrivesCount)} label="Eligible Drives" />
+        </Link>
+        <Link href="/student-dashboard/applications" style={{ display: 'block' }}>
+          <KpiCard
+            value={String(applicationsCount)}
+            label="Applications Submitted"
+          />
+        </Link>
       </div>
 
       <div
@@ -187,7 +158,11 @@ export default async function StudentDashboardPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <ClipboardList size={16} color="var(--text-secondary)" />
           <span className="text-secondary" style={{ fontSize: 13 }}>
-            Upcoming drive deadlines will appear here in FE-03.
+            Browse{' '}
+            <Link href="/student-dashboard/drives" style={{ color: 'var(--accent-dark)' }}>
+              eligible drives
+            </Link>{' '}
+            and track deadlines from your applications.
           </span>
         </div>
       </div>

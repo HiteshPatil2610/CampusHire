@@ -12,8 +12,14 @@ export interface AdminDrivesParams {
   search?: string;
 }
 
+export type DriveWithCount = Drive & {
+  _count: {
+    applications: number;
+  };
+};
+
 export interface AdminDrivesResult {
-  data: Drive[];
+  data: DriveWithCount[];
   page: number;
   pageSize: number;
   totalCount: number;
@@ -68,6 +74,9 @@ export async function getAdminDrives(
     ],
     skip,
     take: pageSize,
+    include: {
+      _count: { select: { applications: true } },
+    },
   });
 
   return {

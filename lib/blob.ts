@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { put, del } from "@vercel/blob";
 import { env } from "./env";
 
 /**
@@ -10,6 +10,22 @@ const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
  * Maximum file size for profile photos (5MB)
  */
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+
+/**
+ * Maximum import file size: 5MB
+ */
+const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024;
+
+/**
+ * Allowed import MIME types / extensions
+ */
+const ALLOWED_IMPORT_EXTENSIONS = ['.xlsx', '.xls', '.csv'];
+const ALLOWED_IMPORT_MIMES = [
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel',  // .xls
+  'text/csv',
+  'application/csv',
+];
 
 /**
  * Validate an image file for profile photo upload
@@ -87,5 +103,65 @@ export async function uploadProfilePhoto(
       success: false,
       error: "Failed to upload photo. Please try again.",
     };
+  }
+}
+
+/**
+ * Validate an import file (Excel or CSV).
+ */
+export function validateImportFile(
+  file: File
+): { valid: boolean; error?: string } {
+  if (file.size > MAX_IMPORT_FILE_SIZE) {
+    return { valid: false, error: `File exceeds 5MB limit.` };
+  }
+  const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+  if (!ALLOWED_IMPORT_EXTENSIONS.includes(ext)) {
+    return {
+      valid: false,
+      error: `Unsupported file format. Upload .xlsx, .xls, or .csv only.`,
+    };
+  }
+  return { valid: true };
+}
+
+/**
+ * Upload an import file to Vercel Blob.
+ * Returns the Blob URL reference (stored transiently).
+ */
+export async function uploadImportFile(
+  file: File,
+  adminId: string
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    if (!env.BLOB_READ_WRITE_TOKEN) {
+      return { success: false, error: 'File storage not configured.' };
+    }
+    const timestamp = Date.now();
+    const ext = file.name.split('.').pop() ?? 'xlsx';
+    const filename = `imports/${adminId}-${timestamp}.${ext}`;
+    const blob = await put(filename, file, {
+      access: 'public',
+      token: env.BLOB_READ_WRITE_TOKEN,
+    });
+    return { success: true, url: blob.url };
+  } catch (error) {
+    console.error('Import file upload error:', error);
+    return { success: false, error: 'Failed to upload file.' };
+  }
+}
+
+/**
+ * Delete an import file from Vercel Blob after successful import.
+ * Called in the SAME transaction/flow as the successful commit — not
+ * as a separate background job.
+ */
+export async function deleteImportFile(url: string): Promise<void> {
+  try {
+    if (!env.BLOB_READ_WRITE_TOKEN) return;
+    await del(url, { token: env.BLOB_READ_WRITE_TOKEN });
+  } catch (error) {
+    // Log but don't throw — Blob cleanup failure should not fail the import
+    console.error('Failed to delete import Blob file:', error);
   }
 }

@@ -22,6 +22,34 @@ export type StudentWithEligibilityInfo = Student & {
  * @param drive - Drive to check eligibility for
  * @returns true if student is eligible, false otherwise
  */
+export function isStudentAcademicallyEligibleForDrive(
+  student: StudentWithEligibilityInfo,
+  drive: Drive
+): boolean {
+  if (!student.academic) {
+    return false;
+  }
+
+  try {
+    const eligibleDeptIds: string[] = JSON.parse(drive.eligibleDepartments);
+    if (!eligibleDeptIds.includes(student.departmentId)) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+
+  if (student.academic.currentCGPA < drive.minCGPA) {
+    return false;
+  }
+
+  if (student.academic.activeBacklogs > drive.maxActiveBacklogs) {
+    return false;
+  }
+
+  return true;
+}
+
 export function isStudentEligibleForDrive(
   student: StudentWithEligibilityInfo,
   drive: Drive
@@ -36,28 +64,7 @@ export function isStudentEligibleForDrive(
     return false;
   }
 
-  // Check department eligibility
-  try {
-    const eligibleDeptIds: string[] = JSON.parse(drive.eligibleDepartments);
-    if (!eligibleDeptIds.includes(student.departmentId)) {
-      return false;
-    }
-  } catch {
-    // Invalid JSON in eligibleDepartments
-    return false;
-  }
-
-  // Check CGPA requirement
-  if (student.academic.currentCGPA < drive.minCGPA) {
-    return false;
-  }
-
-  // Check backlogs limit
-  if (student.academic.activeBacklogs > drive.maxActiveBacklogs) {
-    return false;
-  }
-
-  return true;
+  return isStudentAcademicallyEligibleForDrive(student, drive);
 }
 
 /**

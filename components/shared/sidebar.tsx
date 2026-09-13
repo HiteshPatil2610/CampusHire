@@ -14,10 +14,6 @@ import {
   Settings,
   Megaphone,
   BarChart2,
-  Globe,
-  Building2,
-  UserCog,
-  ClipboardList,
   LogOut,
   type LucideIcon,
 } from 'lucide-react';
@@ -26,7 +22,7 @@ import { getUnreadCountAction } from '@/features/notifications/actions/get-unrea
 interface NavItem {
   label: string;
   href: string;
-  icon: LucideIcon;
+  icon: LucideIcon | string;
   badge?: boolean;
 }
 
@@ -47,25 +43,21 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { label: 'Reports', href: '/admin-dashboard/reports', icon: BarChart2 },
   ],
   superadmin: [
-    { label: 'Overview', href: '/super-admin-dashboard', icon: Globe },
-    { label: 'Students', href: '/super-admin-dashboard/students', icon: Users },
-    { label: 'Drives', href: '/super-admin-dashboard/drives', icon: Briefcase },
-    { label: 'Departments', href: '/super-admin-dashboard/departments', icon: Building2 },
-    {
-      label: 'Admin Accounts',
-      href: '/super-admin-dashboard/admins',
-      icon: UserCog,
-    },
-    { label: 'Reports', href: '/super-admin-dashboard/reports', icon: BarChart2 },
-    { label: 'Audit Log', href: '/audit-logs', icon: ClipboardList },
-    { label: 'Settings', href: '/super-admin-dashboard/settings', icon: Settings },
+    { label: 'Institutional Overview', href: '/super-admin-dashboard', icon: '🌐' },
+    { label: 'All Students', href: '/super-admin-dashboard/students', icon: '◉' },
+    { label: 'Campus Drives', href: '/super-admin-dashboard/drives', icon: '🚀' },
+    { label: 'Departments', href: '/super-admin-dashboard/departments', icon: '🏛' },
+    { label: 'Admin Accounts', href: '/super-admin-dashboard/admins', icon: '👤' },
+    { label: 'Global Reports', href: '/super-admin-dashboard/reports', icon: '📊' },
+    { label: 'Audit Log', href: '/audit-logs', icon: '🔍' },
+    { label: 'System Settings', href: '/super-admin-dashboard/settings', icon: '⚙' },
   ],
 };
 
 const ROLE_LABELS: Record<string, string> = {
   student: 'Student Portal',
   admin: 'Dept Admin',
-  superadmin: 'Super Admin',
+  superadmin: 'Super Admin / TPO',
 };
 
 export interface SidebarProps {
@@ -93,7 +85,18 @@ export default function Sidebar({ role }: SidebarProps) {
   }, []);
 
   function isActive(href: string): boolean {
-    return pathname === href || pathname?.startsWith(href + '/');
+    // Exact match for the href
+    if (pathname === href) {
+      return true;
+    }
+    
+    // For dashboard links, only match exact path (not subpaths)
+    if (href.endsWith('dashboard')) {
+      return pathname === href;
+    }
+    
+    // For other links, check if current path starts with the href
+    return pathname?.startsWith(href + '/') || false;
   }
 
   function handleSignOut() {
@@ -127,8 +130,9 @@ export default function Sidebar({ role }: SidebarProps) {
 
       <nav className="app-sidebar-nav">
         {items.map((item) => {
-          const Icon = item.icon;
           const active = isActive(item.href);
+          const isEmojiIcon = typeof item.icon === 'string';
+          const Icon = isEmojiIcon ? null : (item.icon as LucideIcon);
 
           return (
             <Link
@@ -143,7 +147,13 @@ export default function Sidebar({ role }: SidebarProps) {
               }}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Icon size={16} />
+                {isEmojiIcon ? (
+                  <span aria-hidden style={{ fontSize: 15, lineHeight: 1 }}>
+                    {item.icon as string}
+                  </span>
+                ) : (
+                  Icon && <Icon size={16} />
+                )}
                 <span>{item.label}</span>
               </span>
               {item.badge && unreadCount > 0 && (

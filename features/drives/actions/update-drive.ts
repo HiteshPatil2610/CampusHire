@@ -51,6 +51,7 @@ export async function updateDrive(
         roleName: validated.roleName,
         jobDescriptionUrl: validated.jobDescriptionUrl || null,
         packageOffered: validated.packageOffered,
+        packageDisplay: validated.packageDisplay ?? null,
         selectionRounds: JSON.stringify(validated.selectionRounds),
         driveDate: new Date(validated.driveDate),
         applicationDeadline: new Date(validated.applicationDeadline),
@@ -59,6 +60,12 @@ export async function updateDrive(
         minCGPA: validated.minCGPA,
         maxActiveBacklogs: validated.maxActiveBacklogs,
         eligibleDepartments: JSON.stringify(validated.eligibleDepartments),
+        venue: validated.venue ?? null,
+        reportingTime: validated.reportingTime ?? null,
+        contactPerson: validated.contactPerson ?? null,
+        contactPhone: validated.contactPhone ?? null,
+        pptLink: validated.pptLink ?? null,
+        applicationFields: validated.applicationFields ?? null,
       },
     });
 

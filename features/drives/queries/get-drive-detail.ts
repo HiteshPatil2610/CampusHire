@@ -3,6 +3,7 @@
 import { getOrCreateUser, requireStudent, requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isStudentEligibleForDrive } from "./drive-eligibility";
+import { checkApplicationExists } from "@/features/applications/queries/check-application-exists";
 import type { Drive, Department } from "@prisma/client";
 
 export type DriveWithDepartment = Drive & {
@@ -64,6 +65,12 @@ export async function getDriveDetail(driveId: string): Promise<DriveWithDepartme
 
     if (!student) {
       throw new AuthorizationError("Student profile not found");
+    }
+
+    const hasApplied = await checkApplicationExists(student.id, drive.id);
+
+    if (hasApplied) {
+      return drive;
     }
 
     if (!isStudentEligibleForDrive(student, drive)) {

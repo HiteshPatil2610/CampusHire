@@ -4,11 +4,8 @@ import Link from 'next/link';
 import {
   ArrowUpRight,
   Briefcase,
-  ClipboardList,
-  Compass,
   Sparkles,
   Target,
-  UserCheck,
   Zap,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -24,28 +21,24 @@ const MODULES = [
     title: 'Verified Profile',
     desc: 'One structured, college-verified profile for every application.',
     href: '/sign-up',
-    icon: UserCheck,
   },
   {
     num: '02',
-    title: 'Campus Drives',
-    desc: 'Browse eligibility-filtered placement drives posted by your department.',
+    title: 'Resume Builder',
+    desc: 'Auto-generate a clean, ATS-friendly resume from your profile.',
     href: '/sign-up',
-    icon: Briefcase,
   },
   {
     num: '03',
-    title: 'Applications',
-    desc: 'Apply once to eligible drives and track your submission history.',
+    title: 'AI Analyzer',
+    desc: 'Get an ATS score and targeted suggestions before you apply.',
     href: '/sign-up',
-    icon: ClipboardList,
   },
   {
     num: '04',
-    title: 'Admin Tools',
-    desc: 'Department admins manage rosters, drives, and reports in one place.',
-    href: '/sign-in',
-    icon: Target,
+    title: 'Readiness Score',
+    desc: 'Know where you stand against real placement criteria.',
+    href: '/sign-up',
   },
 ];
 
@@ -168,10 +161,10 @@ export default function LandingPage({
           ) : (
             <>
               <Link href="/sign-in" className="btn btn-outline btn-sm">
-                Sign In
+                Admin view
               </Link>
-              <Link href="/sign-up" className="btn btn-primary btn-sm">
-                Sign Up
+              <Link href="/sign-in" className="btn btn-primary btn-sm">
+                Student login
               </Link>
             </>
           )}
@@ -201,7 +194,7 @@ export default function LandingPage({
           }}
         >
           <Sparkles size={14} />
-          Placement Season 2026
+          + Placement Season 2026 Live
         </div>
         <h1
           className="page-title"
@@ -223,8 +216,8 @@ export default function LandingPage({
             lineHeight: 1.6,
           }}
         >
-          CampusHire connects verified student credentials, campus recruitment
-          drives, and department coordination in one streamlined platform.
+          CampusHire connects verified student credentials, AI resume
+          optimization, and campus recruitment drives in one streamlined platform.
         </p>
 
         <div
@@ -303,7 +296,7 @@ export default function LandingPage({
               className="badge badge-green"
               style={{ fontSize: 11, padding: '4px 8px' }}
             >
-              Eligible
+              Tier 1 Eligible
             </span>
           </div>
 
@@ -326,16 +319,25 @@ export default function LandingPage({
                 className="text-muted"
                 style={{ fontSize: 11, marginBottom: 4 }}
               >
-                Open Drives
+                Readiness Score
               </div>
               <div
                 style={{
-                  fontSize: 14,
-                  fontWeight: 600,
+                  fontSize: 18,
+                  fontWeight: 700,
                   color: 'var(--teal)',
                 }}
               >
-                Browse eligible
+                78
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 400,
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  /100
+                </span>
               </div>
             </div>
             <div
@@ -349,16 +351,25 @@ export default function LandingPage({
                 className="text-muted"
                 style={{ fontSize: 11, marginBottom: 4 }}
               >
-                Applications
+                Resume Score
               </div>
               <div
                 style={{
-                  fontSize: 14,
-                  fontWeight: 600,
+                  fontSize: 18,
+                  fontWeight: 700,
                   color: 'var(--accent-dark)',
                 }}
               >
-                Track status
+                64
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 400,
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  /100
+                </span>
               </div>
             </div>
             <div
@@ -376,12 +387,12 @@ export default function LandingPage({
               </div>
               <div
                 style={{
-                  fontSize: 14,
-                  fontWeight: 600,
+                  fontSize: 18,
+                  fontWeight: 700,
                   color: 'var(--text-primary)',
                 }}
               >
-                Build once
+                72%
               </div>
             </div>
           </div>
@@ -464,7 +475,12 @@ export default function LandingPage({
                 </span>
               </div>
               <div
-                style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}
+                style={{
+                  fontWeight: 600,
+                  fontSize: 16,
+                  marginBottom: 6,
+                  color: 'var(--text-primary)',
+                }}
               >
                 {module.title}
               </div>
@@ -664,6 +680,72 @@ export default function LandingPage({
                   student roster exports.
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        style={{
+          padding: '48px 24px',
+          background: 'var(--surface-1)',
+          borderTop: '1px solid var(--border)',
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 840,
+            margin: '0 auto',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 24,
+            textAlign: 'center',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 36,
+                fontWeight: 700,
+                color: 'var(--teal)',
+                lineHeight: 1,
+              }}
+            >
+              92%
+            </div>
+            <div className="text-secondary" style={{ fontSize: 13, marginTop: 6 }}>
+              Profile completion rate
+            </div>
+          </div>
+          <div>
+            <div
+              style={{
+                fontSize: 36,
+                fontWeight: 700,
+                color: 'var(--accent-dark)',
+                lineHeight: 1,
+              }}
+            >
+              04
+            </div>
+            <div className="text-secondary" style={{ fontSize: 13, marginTop: 6 }}>
+              Departments onboarded
+            </div>
+          </div>
+          <div>
+            <div
+              style={{
+                fontSize: 36,
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                lineHeight: 1,
+              }}
+            >
+              78
+            </div>
+            <div className="text-secondary" style={{ fontSize: 13, marginTop: 6 }}>
+              Average readiness score
             </div>
           </div>
         </div>

@@ -354,7 +354,210 @@ Every motion trigger verifies `window.matchMedia('(prefers-reduced-motion: reduc
 
 ---
 
-## 8. Screen Inventory Reference
+## 8. Integration-Added React Components (FE-01 through FE-09)
+
+> **Context:** These components were built during the 9-unit frontend integration (FE-01 through FE-09) to replace temp frontend components with real Next.js implementations. All follow the CSS class system defined in this document.
+
+### 8.1 DatePicker (`components/ui/DatePicker.tsx`)
+- **Purpose:** Date selection input for filters and forms (audit log date ranges, drive deadlines).
+- **Props:**
+  - `value: Date | null` — Currently selected date.
+  - `onChange: (date: Date | null) => void` — Callback when date changes.
+  - `placeholder?: string` — Optional placeholder text (default: "Select date").
+  - `disabled?: boolean` — Disable interaction.
+- **Style:**
+  - Uses browser-native `<input type="date">` for accessibility.
+  - Wrapped in `.field` CSS class for consistent form styling.
+  - Border: `0.5px solid var(--border-strong)`, radius `8px`, padding `10px 12px`.
+- **Integration:** Used in audit log filters, drive posting forms, and report date ranges.
+
+### 8.2 UrlField (`components/ui/UrlField.tsx`)
+- **Purpose:** URL input with validation and external link indicator.
+- **Props:**
+  - `value: string` — Current URL value.
+  - `onChange: (value: string) => void` — Callback when URL changes.
+  - `placeholder?: string` — Optional placeholder text.
+  - `label?: string` — Optional field label.
+  - `error?: string` — Validation error message to display.
+- **Style:**
+  - Input field follows `.field` styling with `type="url"`.
+  - External link icon (Tabler Icons `IconExternalLink`, `14px`) appears when valid URL entered.
+  - Error state: border color `--red`, error text `11px`, `--red`.
+- **Integration:** Used in student profile forms (LinkedIn, portfolio URLs).
+
+### 8.3 TagInput (`components/ui/TagInput.tsx`)
+- **Purpose:** Multi-value input for skills, tags, and categorization.
+- **Props:**
+  - `value: string[]` — Array of current tags.
+  - `onChange: (tags: string[]) => void` — Callback when tags change.
+  - `placeholder?: string` — Placeholder text for empty state.
+  - `label?: string` — Optional field label.
+- **Style:**
+  - Container (`.tag-input`): Flex wrap, `gap: 6px`, `padding: 8px`, border `0.5px solid var(--border-strong)`, radius `8px`.
+  - Tag Chip (`.tag`): Background `--surface-1`, `padding: 3px 10px`, `border-radius: 8px`, `font-size: 12px`.
+  - Remove Button: Tabler Icons `IconX` (`10px`), cursor pointer, color `--text-muted`, hover `--red`.
+- **Integration:** Used in student profile (skills, certifications), drive posting (required skills).
+
+### 8.4 ProgressBar (`components/ui/ProgressBar.tsx`)
+- **Purpose:** Linear progress indicator for profile completion, readiness scores, and task tracking.
+- **Props:**
+  - `value: number` — Progress percentage (0–100).
+  - `variant?: 'primary' | 'success' | 'warning' | 'danger'` — Color theme.
+  - `showLabel?: boolean` — Display percentage text inside bar.
+  - `height?: number` — Custom height in pixels (default: `6px`).
+- **Style:**
+  - Track (`.progress-track`): Background `--border`, height `6px`, `border-radius: 3px`, overflow hidden.
+  - Fill (`.progress-fill`): Height `100%`, width `${value}%`, transition `width 0.3s ease`.
+  - Variants:
+    - `primary`: Background `--accent` (terracotta).
+    - `success`: Background `--teal`.
+    - `warning`: Background `--amber`.
+    - `danger`: Background `--red`.
+- **Motion:** Animated from `0%` to target width on mount using `CampusMotion.riseIn`.
+- **Integration:** Used in student dashboard (profile completion), readiness dashboard (skill scores).
+
+### 8.5 Pagination (`components/ui/Pagination.tsx`)
+- **Purpose:** Table pagination controls with page size selector.
+- **Props:**
+  - `page: number` — Current page (1-indexed).
+  - `pageSize: number` — Items per page.
+  - `totalCount: number` — Total items across all pages.
+  - `onPageChange: (page: number) => void` — Callback when page changes.
+  - `onPageSizeChange?: (pageSize: number) => void` — Optional callback for page size change.
+- **Style:**
+  - Container: Flex layout, `justify-content: space-between`, `align-items: center`, `padding: 12px 16px`, border-top `0.5px solid var(--border)`.
+  - Page Info: `12px`, `--text-secondary` (e.g., "Showing 1-10 of 42").
+  - Page Buttons: `.btn.btn-sm.btn-outline` styling, disabled state with `opacity: 0.5`.
+  - Page Size Select: `<select>` with `.field` styling, options: 10, 25, 50, 100.
+- **Integration:** Used in all data tables (student roster, drive applications, audit log, notifications).
+
+### 8.6 StatusBadge (`components/ui/StatusBadge.tsx`)
+- **Purpose:** Semantic status pill with consistent color coding across the app.
+- **Props:**
+  - `variant: 'green' | 'amber' | 'red' | 'purple' | 'gray'` — Color theme.
+  - `children: React.ReactNode` — Badge text/content.
+  - `size?: 'sm' | 'md'` — Size variant (default: `md`).
+- **Style:**
+  - Base: `padding: 2px 9px` (sm), `4px 12px` (md), `border-radius: 8px` (sm) or `20px` (md), `font-size: 11px`, `font-weight: 500`.
+  - Variants:
+    - `green`: Background `--teal-light`, text `--teal` (Success, Active, Placed).
+    - `amber`: Background `--amber-light`, text `--amber` (Pending, Review, In Progress).
+    - `red`: Background `--red-light`, text `--red` (Rejected, Closed, Error).
+    - `purple`: Background `--purple-light`, text `--purple` (Applied, Info, Processing).
+    - `gray`: Background `--surface-1`, text `--text-secondary` (Inactive, Draft, Neutral).
+- **Integration:** Replaces all custom badge implementations. Used for drive status, application status, user roles, audit log actions.
+
+### 8.7 KpiCard (`components/admin/KpiCard.tsx`)
+- **Purpose:** Top-of-dashboard metric summary tiles for admins.
+- **Props:**
+  - `title: string` — Metric label.
+  - `value: number | string` — Primary metric value.
+  - `icon: React.ReactNode` — Tabler Icons component (`16px`).
+  - `trend?: { value: number; label: string }` — Optional trend indicator (e.g., "+12% vs last month").
+  - `variant?: 'default' | 'success' | 'warning' | 'danger'` — Color accent for icon tile.
+- **Style:**
+  - Card: Background `--surface-2`, border `0.5px solid var(--border)`, radius `12px`, padding `14px 16px`.
+  - Icon Tile: `28×28px`, `border-radius: 7px`, flex centered, background based on variant.
+  - Metric Value: `20px`, `font-weight: 600`, `--text-primary`.
+  - Label: `12px`, `--text-secondary`, `font-weight: 500`.
+  - Trend Badge: `11px`, color `--teal` (positive) or `--red` (negative).
+- **Motion:** `CampusMotion.scaleIn` entrance animation + `countUp` on numeric values.
+- **Integration:** Used in admin dashboard home and super admin dashboard (total students, active drives, placement rate).
+
+### 8.8 DepartmentScopeBanner (`components/admin/DepartmentScopeBanner.tsx`)
+- **Purpose:** Role-scoped notification banner for department admins showing their assigned department.
+- **Props:**
+  - `departmentName: string` — Name of admin's assigned department.
+  - `variant?: 'default' | 'compact'` — Display size (default shows full message, compact shows icon + name).
+- **Style:**
+  - Container: Background `--teal-light`, border `0.5px solid var(--teal)`, radius `8px`, padding `10px 12px`.
+  - Icon: Tabler Icons `IconInfoCircle` (`16px`), color `--teal`.
+  - Text: `12px`, `font-weight: 500`, `--teal`.
+  - Message: "You are managing {departmentName} department. All views and actions are scoped to this department."
+- **Integration:** Renders at top of all dept admin pages (dashboard home, student roster, drives). Integrated in FE-05/FE-06.
+
+### 8.9 CSV Export Utility (`lib/utils/csv-export.ts`)
+- **Purpose:** Client-side CSV generation and download for admin reports.
+- **Functions:**
+  - `exportToCsv<T>(data: T[], filename: string, columns: ColumnDef<T>[]): void`
+    - Generates CSV from typed data array.
+    - `columns` array defines headers and field extraction.
+    - Creates blob, triggers browser download with `filename.csv`.
+- **Integration:** Used in student roster export, drive applications export, global reports export (super admin).
+- **Column Definition Example:**
+  ```typescript
+  const columns: ColumnDef<Student>[] = [
+    { header: 'Roll No', accessor: (s) => s.rollNo },
+    { header: 'Name', accessor: (s) => s.name },
+    { header: 'Email', accessor: (s) => s.email },
+    { header: 'CGPA', accessor: (s) => s.cgpa.toString() }
+  ];
+  ```
+
+### 8.10 Component Usage Patterns
+
+**Form Field Pattern:**
+```tsx
+<div className="field">
+  <label>Field Label</label>
+  <DatePicker value={startDate} onChange={setStartDate} />
+</div>
+```
+
+**Filter Panel Pattern:**
+```tsx
+<div className="card">
+  <div className="field-row">
+    <div className="field">
+      <label>Start Date</label>
+      <DatePicker value={startDate} onChange={setStartDate} />
+    </div>
+    <div className="field">
+      <label>End Date</label>
+      <DatePicker value={endDate} onChange={setEndDate} />
+    </div>
+  </div>
+  <div className="btn-row">
+    <button className="btn btn-primary">Apply Filters</button>
+    <button className="btn btn-outline">Clear</button>
+  </div>
+</div>
+```
+
+**Data Table with Pagination Pattern:**
+```tsx
+<div className="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Column 1</th>
+        <th>Column 2</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {data.items.map(item => (
+        <tr key={item.id}>
+          <td>{item.name}</td>
+          <td>{item.value}</td>
+          <td><StatusBadge variant="green">Active</StatusBadge></td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+  <Pagination
+    page={page}
+    pageSize={pageSize}
+    totalCount={totalCount}
+    onPageChange={setPage}
+    onPageSizeChange={setPageSize}
+  />
+</div>
+```
+
+---
+
+## 9. Screen Inventory Reference
 
 | Module | Screens & File References |
 |---|---|

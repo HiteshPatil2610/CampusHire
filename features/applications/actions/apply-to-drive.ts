@@ -136,6 +136,8 @@ export async function applyToDrive(
       data: {
         studentId: studentWithAcademic.id,
         driveId: drive.id,
+        snapshotCgpa: studentWithAcademic.academic.currentCGPA,
+        snapshotBacklogs: studentWithAcademic.academic.activeBacklogs,
       },
     });
 

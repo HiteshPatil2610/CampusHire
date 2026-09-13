@@ -276,6 +276,14 @@ model Drive {
   minCGPA              Float
   maxActiveBacklogs    Int
   eligibleDepartments  String      @db.Text // JSON array of department IDs
+  companyLogoUrl       String?
+  packageDisplay       String?
+  venue                String?
+  reportingTime        String?
+  contactPerson        String?
+  contactPhone         String?
+  pptLink              String?
+  applicationFields    String?     @db.Text
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
@@ -297,9 +305,11 @@ model DriveApplication {
   id        String   @id @default(cuid())
   studentId String
   driveId   String
-  appliedAt DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  appliedAt        DateTime @default(now())
+  snapshotCgpa     Float?
+  snapshotBacklogs Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)

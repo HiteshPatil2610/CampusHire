@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { getAuditLogsAction } from "@/features/audit/actions/get-audit-logs-action";
+import DatePicker from "@/components/ui/date-picker";
+import StatusBadge from "@/components/ui/status-badge";
+import Pagination from "@/components/ui/pagination";
+import type { StatusVariant } from "@/components/ui/status-badge";
 
 interface AuditLog {
   id: string;
@@ -34,8 +38,8 @@ export function AuditLogsTable({ initialData }: AuditLogsTableProps) {
   // Filters
   const [actionFilter, setActionFilter] = useState("");
   const [entityTypeFilter, setEntityTypeFilter] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
@@ -51,8 +55,8 @@ export function AuditLogsTable({ initialData }: AuditLogsTableProps) {
       pageSize,
       action: actionFilter || undefined,
       entityType: entityTypeFilter || undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
+      startDate: startDate ? startDate.toISOString() : undefined,
+      endDate: endDate ? endDate.toISOString() : undefined,
     });
 
     if (result.success && result.data) {
@@ -72,8 +76,8 @@ export function AuditLogsTable({ initialData }: AuditLogsTableProps) {
   const handleClearFilters = () => {
     setActionFilter("");
     setEntityTypeFilter("");
-    setStartDate("");
-    setEndDate("");
+    setStartDate(null);
+    setEndDate(null);
     setPage(1);
   };
 
@@ -101,29 +105,21 @@ export function AuditLogsTable({ initialData }: AuditLogsTableProps) {
 
   if (!data) {
     return (
-      <div className="p-8 text-center text-[var(--text-secondary)]">
+      <div style={{ padding: 40, textAlign: 'center' }} className="text-muted">
         Loading audit logs...
       </div>
     );
   }
 
-  const totalPages = Math.ceil(data.totalCount / data.pageSize);
-
   return (
-    <div className="space-y-6">
+    <div>
       {/* Filters */}
-      <div className="bg-[var(--surface-2)] border border-[var(--border)] rounded-xl p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="field-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
           {/* Action Filter */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-              Action
-            </label>
-            <select
-              value={actionFilter}
-              onChange={(e) => setActionFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--surface-0)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-            >
+          <div className="field">
+            <label>Action</label>
+            <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
               <option value="">All Actions</option>
               <option value="CREATE">CREATE</option>
               <option value="UPDATE">UPDATE</option>
@@ -139,15 +135,9 @@ export function AuditLogsTable({ initialData }: AuditLogsTableProps) {
           </div>
 
           {/* Entity Type Filter */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-              Entity Type
-            </label>
-            <select
-              value={entityTypeFilter}
-              onChange={(e) => setEntityTypeFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--surface-0)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-            >
+          <div className="field">
+            <label>Entity Type</label>
+            <select value={entityTypeFilter} onChange={(e) => setEntityTypeFilter(e.target.value)}>
               <option value="">All Types</option>
               <option value="Department">Department</option>
               <option value="DepartmentAdmin">DepartmentAdmin</option>
@@ -160,45 +150,32 @@ export function AuditLogsTable({ initialData }: AuditLogsTableProps) {
           </div>
 
           {/* Start Date */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-              Start Date
-            </label>
-            <input
-              type="date"
+          <div className="field">
+            <label>From Date</label>
+            <DatePicker
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--surface-0)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+              onChange={(date) => setStartDate(date)}
+              placeholder="Select start date"
             />
           </div>
 
           {/* End Date */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-              End Date
-            </label>
-            <input
-              type="date"
+          <div className="field">
+            <label>To Date</label>
+            <DatePicker
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--surface-0)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+              onChange={(date) => setEndDate(date)}
+              placeholder="Select end date"
             />
           </div>
         </div>
 
         {/* Filter Actions */}
-        <div className="flex gap-3 mt-4">
-          <button
-            onClick={handleFilterChange}
-            disabled={loading}
-            className="px-4 py-2 bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent-dark)] transition-colors disabled:opacity-50"
-          >
-            {loading ? "Loading..." : "Apply Filters"}
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          <button className="btn btn-primary" onClick={handleFilterChange} disabled={loading}>
+            {loading ? 'Loading…' : 'Apply Filters'}
           </button>
-          <button
-            onClick={handleClearFilters}
-            className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-1)] transition-colors text-[var(--text-primary)]"
-          >
+          <button className="btn btn-outline" onClick={handleClearFilters}>
             Clear Filters
           </button>
         </div>
@@ -206,171 +183,174 @@ export function AuditLogsTable({ initialData }: AuditLogsTableProps) {
 
       {/* Error State */}
       {error && (
-        <div className="bg-[var(--red-light)] border border-[var(--red)] rounded-lg p-4 text-[var(--red)]">
+        <div
+          style={{
+            padding: 12,
+            marginBottom: 20,
+            background: 'var(--red-light)',
+            border: '1px solid var(--red)',
+            borderRadius: 'var(--radius)',
+            color: 'var(--red)',
+            fontSize: 13,
+          }}
+        >
           {error}
         </div>
       )}
 
       {/* Table */}
-      <div className="bg-[var(--surface-2)] border border-[var(--border)] rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-[var(--surface-1)] border-b border-[var(--border)]">
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Actor</th>
+              <th>Action</th>
+              <th>Entity Type</th>
+              <th>Entity ID</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.data.length === 0 ? (
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-                  Timestamp
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-                  Actor
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-                  Action
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-                  Entity Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-                  Entity ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-                  Details
-                </th>
+                <td colSpan={6} style={{ textAlign: 'center', padding: 40 }}>
+                  <div className="text-muted">No audit activity found</div>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {data.data.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-[var(--text-secondary)]">
-                    No audit activity found
+            ) : (
+              data.data.map((log) => (
+                <tr key={log.id}>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                    {new Date(log.createdAt).toLocaleString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </td>
-                </tr>
-              ) : (
-                data.data.map((log) => (
-                  <tr key={log.id} className="hover:bg-[var(--surface-1)] transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-primary)]">
-                      {new Date(log.createdAt).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="text-[var(--text-primary)]">{log.userEmail}</div>
-                      <div className="text-[var(--text-muted)] text-xs">{log.userRole}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium ${getActionBadgeColor(
-                          log.action
-                        )}`}
+                  <td>
+                    <div style={{ fontSize: 13 }}>{log.userEmail}</div>
+                    <div className="text-muted" style={{ fontSize: 11 }}>
+                      {log.userRole}
+                    </div>
+                  </td>
+                  <td>
+                    <StatusBadge variant={getActionBadgeVariant(log.action)}>
+                      {log.action}
+                    </StatusBadge>
+                  </td>
+                  <td>
+                    <StatusBadge variant="purple">{log.entityType}</StatusBadge>
+                  </td>
+                  <td className="text-muted" style={{ fontSize: 12 }}>
+                    {log.entityId ? (
+                      <button
+                        onClick={() => copyToClipboard(log.entityId!)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                        }}
+                        className="hover-accent"
+                        title="Click to copy"
                       >
-                        {log.action}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-[var(--purple-light)] text-[var(--purple)]">
-                        {log.entityType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-[var(--text-muted)]">
-                      {log.entityId ? (
-                        <button
-                          onClick={() => copyToClipboard(log.entityId!)}
-                          className="hover:text-[var(--accent)] transition-colors font-mono text-xs"
-                          title="Click to copy"
-                        >
-                          {log.entityId.substring(0, 8)}...
-                        </button>
-                      ) : (
-                        <span className="text-[var(--text-muted)]">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      {log.metadata ? (
+                        {log.entityId.substring(0, 8)}...
+                      </button>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td>
+                    {log.metadata ? (
+                      <div>
                         <button
                           onClick={() => toggleMetadata(log.id)}
-                          className="text-[var(--accent)] hover:text-[var(--accent-dark)] transition-colors"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--accent)',
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            padding: 0,
+                          }}
                         >
-                          {expandedRows.has(log.id) ? "Hide" : "Show"} Metadata
+                          {expandedRows.has(log.id) ? 'Hide' : 'Show'} Metadata
                         </button>
-                      ) : (
-                        <span className="text-[var(--text-muted)]">—</span>
-                      )}
-                      {expandedRows.has(log.id) && log.metadata && (
-                        <pre className="mt-2 p-3 bg-[var(--surface-0)] rounded text-xs overflow-x-auto border border-[var(--border)]">
-                          {JSON.stringify(log.metadata, null, 2)}
-                        </pre>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {data.data.length > 0 && (
-          <div className="px-6 py-4 border-t border-[var(--border)] flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-[var(--text-secondary)]">
-                Page {data.page} of {totalPages} ({data.totalCount} total)
-              </span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                }}
-                className="px-3 py-1 border border-[var(--border)] rounded-lg bg-[var(--surface-0)] text-sm text-[var(--text-primary)]"
-              >
-                <option value={25}>25 per page</option>
-                <option value={50}>50 per page</option>
-                <option value={100}>100 per page</option>
-              </select>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage(page - 1)}
-                disabled={page === 1 || loading}
-                className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-1)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[var(--text-primary)]"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPage(page + 1)}
-                disabled={page >= totalPages || loading}
-                className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-1)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[var(--text-primary)]"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+                        {expandedRows.has(log.id) && (
+                          <pre
+                            style={{
+                              marginTop: 8,
+                              padding: '10px 12px',
+                              background: 'var(--surface-1)',
+                              borderRadius: 'var(--radius)',
+                              border: '0.5px solid var(--border)',
+                              fontSize: 11,
+                              overflowX: 'auto',
+                              color: 'var(--text-secondary)',
+                            }}
+                          >
+                            {JSON.stringify(log.metadata, null, 2)}
+                          </pre>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
+
+      {/* Pagination */}
+      {data.data.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <Pagination
+            page={data.page}
+            pageSize={data.pageSize}
+            totalCount={data.totalCount}
+            onPageChange={(newPage) => setPage(newPage)}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
-function getActionBadgeColor(action: string): string {
+function getActionBadgeVariant(action: string): StatusVariant {
   switch (action) {
-    case "CREATE":
-      return "bg-[var(--teal-light)] text-[var(--teal)]";
-    case "UPDATE":
-      return "bg-[var(--amber-light)] text-[var(--amber)]";
-    case "DELETE":
-      return "bg-[var(--red-light)] text-[var(--red)]";
-    case "ACTIVATE":
-      return "bg-[var(--teal-light)] text-[var(--teal)]";
-    case "DEACTIVATE":
-      return "bg-[var(--amber-light)] text-[var(--amber)]";
-    case "ASSIGN":
-      return "bg-[var(--purple-light)] text-[var(--purple)]";
-    case "UNASSIGN":
-      return "bg-[var(--amber-light)] text-[var(--amber)]";
-    case "APPLY":
-      return "bg-[var(--teal-light)] text-[var(--teal)]";
-    case "IMPORT":
-      return "bg-[var(--purple-light)] text-[var(--purple)]";
-    case "ROLE_CHANGE":
-      return "bg-[var(--amber-light)] text-[var(--amber)]";
+    case 'CREATE':
+      return 'green';
+    case 'ACTIVATE':
+      return 'green';
+    case 'APPLY':
+      return 'green';
+    case 'UPDATE':
+      return 'amber';
+    case 'DEACTIVATE':
+      return 'amber';
+    case 'UNASSIGN':
+      return 'amber';
+    case 'ROLE_CHANGE':
+      return 'amber';
+    case 'DELETE':
+      return 'red';
+    case 'ASSIGN':
+      return 'purple';
+    case 'IMPORT':
+      return 'purple';
     default:
-      return "bg-[var(--surface-1)] text-[var(--text-secondary)]";
+      return 'gray';
   }
 }

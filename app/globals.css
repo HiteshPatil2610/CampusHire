@@ -113,14 +113,6 @@
     font-family: inherit;
   }
 
-  .text-muted {
-    color: var(--text-muted);
-  }
-
-  .text-secondary {
-    color: var(--text-secondary);
-  }
-
   ::selection {
     background: var(--accent-light);
     color: var(--accent-dark);
@@ -236,6 +228,62 @@
     border: 0.5px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 32px;
+  }
+
+  /* Fix Clerk component alignment - aggressive overrides */
+  .auth-card .cl-rootBox {
+    width: 100% !important;
+    display: block !important;
+  }
+
+  .auth-card .cl-card {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .auth-card .cl-main {
+    width: 100% !important;
+    display: block !important;
+  }
+
+  .auth-card .cl-internal-b3fm6y {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .auth-card .cl-formFieldRow {
+    width: 100% !important;
+  }
+
+  .auth-card .cl-form {
+    width: 100% !important;
+  }
+
+  .auth-card .cl-formFieldInput,
+  .auth-card .cl-formButtonPrimary,
+  .auth-card .cl-socialButtonsBlockButton {
+    width: 100% !important;
+  }
+
+  .auth-card .cl-headerTitle,
+  .auth-card .cl-headerSubtitle {
+    text-align: center !important;
+  }
+
+  .auth-card .cl-footer {
+    text-align: center !important;
+    width: 100% !important;
+  }
+
+  .auth-card .cl-footerAction {
+    justify-content: center !important;
+  }
+
+  /* Remove any Clerk internal margins that cause offset */
+  .auth-card [class*="cl-internal"] {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
 
   .brand-dot {
@@ -942,6 +990,7 @@
     display: flex;
     gap: 20px;
     align-items: center;
+    flex-wrap: wrap;
     overflow: hidden;
   }
 
@@ -968,6 +1017,68 @@
     font-size: 22px;
     flex-shrink: 0;
     cursor: pointer;
+    overflow: hidden;
+  }
+
+  .sid-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .sid-name {
+    font-size: 22px;
+    font-weight: 700;
+  }
+
+  .sid-meta {
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin: 6px 0 10px;
+  }
+
+  .sid-scores {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .sid-score-pill {
+    border-radius: var(--radius-pill);
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .sid-score-pill.readiness {
+    background: var(--teal-light);
+    color: var(--teal);
+  }
+
+  .sid-score-pill.resume {
+    background: var(--amber-light);
+    color: var(--amber);
+  }
+
+  .sid-score-pill.profile {
+    background: var(--accent-light);
+    color: var(--accent-dark);
+  }
+
+  .sid-score-pill.badge {
+    background: var(--purple-light);
+    color: var(--purple);
+  }
+
+  .sid-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-left: auto;
+    flex-shrink: 0;
   }
 
   /* Drives grid */
@@ -1028,6 +1139,37 @@
   .drive-company {
     font-size: 13px;
     color: var(--text-secondary);
+  }
+
+  .dc-action-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .dc-applied-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--teal-light);
+    color: var(--teal);
+  }
+
+  .dc-action-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: var(--radius-md);
+    border: 0.5px solid var(--border);
+    background: var(--surface-2);
+    cursor: pointer;
+    color: var(--text-primary);
+  }
+
+  .dc-action-btn.view:hover {
+    background: var(--surface-1);
   }
 
   /* Stage stepper */
@@ -1441,5 +1583,16 @@
   .dp-today-btn {
     color: var(--accent-dark);
     background: var(--accent-light);
+  }
+}
+
+/* Override Tailwind text-secondary/text-muted (surface colors) with semantic text colors */
+@layer utilities {
+  .text-secondary {
+    color: var(--text-secondary);
+  }
+
+  .text-muted {
+    color: var(--text-muted);
   }
 }
