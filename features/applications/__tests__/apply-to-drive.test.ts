@@ -121,6 +121,8 @@ describe("applyToDrive", () => {
     appliedAt: new Date(),
     stage: "APPLIED" as const,
     status: "IN_PROGRESS" as const,
+    submittedDetails: null,
+    consentAcceptedAt: null,
     snapshotCgpa: null,
     snapshotBacklogs: null,
     createdAt: new Date(),
@@ -132,6 +134,57 @@ describe("applyToDrive", () => {
   });
 
   describe("Success Cases", () => {
+    it("should reject submission when the accuracy declaration is not ticked", async () => {
+      vi.mocked(requireStudent).mockResolvedValue(mockAuth);
+      vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        ...mockStudent,
+        academic: mockAcademic,
+      } as any);
+      vi.mocked(prisma.drive.findUnique).mockResolvedValue(mockDrive);
+      vi.mocked(checkApplicationExists).mockResolvedValue(false);
+
+      const result = await applyToDrive("clpq0000000000000000000");
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("confirm");
+      }
+      expect(prisma.driveApplication.create).not.toHaveBeenCalled();
+    });
+
+    it("should store only editable fields and drop locked institutional keys", async () => {
+      vi.mocked(requireStudent).mockResolvedValue(mockAuth);
+      vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        ...mockStudent,
+        academic: mockAcademic,
+      } as any);
+      vi.mocked(prisma.drive.findUnique).mockResolvedValue(mockDrive);
+      vi.mocked(checkApplicationExists).mockResolvedValue(false);
+      vi.mocked(prisma.driveApplication.create).mockResolvedValue(
+        mockApplication
+      );
+
+      await applyToDrive("clpq0000000000000000000", {
+        consent: true,
+        submittedDetails: {
+          phone: "9876543210",
+          // A client must never be able to overwrite a registrar-owned record
+          cgpa: "10.0",
+          rollNo: "FAKE-001",
+          backlogs: "No Active",
+        },
+      });
+
+      const created = vi.mocked(prisma.driveApplication.create).mock
+        .calls[0][0] as any;
+      const stored = JSON.parse(created.data.submittedDetails);
+
+      expect(stored).toEqual({ phone: "9876543210" });
+      // The snapshot keeps the server-read values, not the client's
+      expect(created.data.snapshotCgpa).toBe(mockAcademic.currentCGPA);
+      expect(created.data.snapshotBacklogs).toBe(mockAcademic.activeBacklogs);
+    });
+
     it("should successfully create application for eligible student", async () => {
       // Setup mocks
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
@@ -143,7 +196,7 @@ describe("applyToDrive", () => {
       vi.mocked(checkApplicationExists).mockResolvedValue(false);
       vi.mocked(prisma.driveApplication.create).mockResolvedValue(mockApplication);
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -153,6 +206,10 @@ describe("applyToDrive", () => {
         data: {
           studentId: "student-1",
           driveId: "clpq0000000000000000000",
+          snapshotCgpa: mockAcademic.currentCGPA,
+          snapshotBacklogs: mockAcademic.activeBacklogs,
+          submittedDetails: "{}",
+          consentAcceptedAt: expect.any(Date),
         },
       });
     });
@@ -162,7 +219,7 @@ describe("applyToDrive", () => {
     it("should reject unauthenticated user", async () => {
       vi.mocked(requireStudent).mockRejectedValue(new Error("Not authenticated"));
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -174,7 +231,7 @@ describe("applyToDrive", () => {
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue(null);
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -189,7 +246,7 @@ describe("applyToDrive", () => {
         academic: null,
       } as any);
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -200,7 +257,7 @@ describe("applyToDrive", () => {
 
   describe("Input Validation", () => {
     it("should reject invalid drive ID format", async () => {
-      const result = await applyToDrive("invalid-id");
+      const result = await applyToDrive("invalid-id", { consent: true });
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -218,7 +275,7 @@ describe("applyToDrive", () => {
       } as any);
       vi.mocked(prisma.drive.findUnique).mockResolvedValue(null);
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -239,7 +296,7 @@ describe("applyToDrive", () => {
       } as any);
       vi.mocked(prisma.drive.findUnique).mockResolvedValue(mockDrive);
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -260,7 +317,7 @@ describe("applyToDrive", () => {
       } as any);
       vi.mocked(prisma.drive.findUnique).mockResolvedValue(mockDrive);
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -279,7 +336,7 @@ describe("applyToDrive", () => {
       } as any);
       vi.mocked(prisma.drive.findUnique).mockResolvedValue(mockDrive);
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -304,7 +361,7 @@ describe("applyToDrive", () => {
       } as any);
       vi.mocked(prisma.drive.findUnique).mockResolvedValue(closedDrive);
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -325,7 +382,7 @@ describe("applyToDrive", () => {
       vi.mocked(prisma.drive.findUnique).mockResolvedValue(mockDrive);
       vi.mocked(checkApplicationExists).mockResolvedValue(true);
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -352,7 +409,7 @@ describe("applyToDrive", () => {
       );
       vi.mocked(prisma.driveApplication.create).mockRejectedValue(constraintError);
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -374,7 +431,7 @@ describe("applyToDrive", () => {
         new Error("Database connection failed")
       );
 
-      const result = await applyToDrive("clpq0000000000000000000"); // Valid CUID format
+      const result = await applyToDrive("clpq0000000000000000000", { consent: true }); // Valid CUID format
 
       expect(result.success).toBe(false);
       if (!result.success) {

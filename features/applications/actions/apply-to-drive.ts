@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireStudent } from "@/lib/auth";
 import { applyToDriveSchema } from "../schemas/application";
+import { EDITABLE_FIELD_KEYS } from "../utils/application-review-fields";
 import { isStudentEligibleForDrive, getIneligibilityReasons } from "@/features/drives/queries/drive-eligibility";
 import { getDriveStatus } from "@/features/drives/utils/drive-status";
 import { checkApplicationExists } from "../queries/check-application-exists";
@@ -34,11 +35,16 @@ export type ApplyToDriveResult =
  * @returns Result with application or error
  */
 export async function applyToDrive(
-  driveId: string
+  driveId: string,
+  options: { submittedDetails?: Record<string, string>; consent?: boolean } = {}
 ): Promise<ApplyToDriveResult> {
   try {
     // 1. Validate input
-    const validated = applyToDriveSchema.safeParse({ driveId });
+    const validated = applyToDriveSchema.safeParse({
+      driveId,
+      submittedDetails: options.submittedDetails ?? {},
+      consent: options.consent ?? false,
+    });
     if (!validated.success) {
       return {
         success: false,
@@ -130,7 +136,24 @@ export async function applyToDrive(
       };
     }
 
-    // 8. Create application
+    // 8. Require the accuracy declaration
+    if (!validated.data.consent) {
+      return {
+        success: false,
+        error: "Please confirm your details are accurate before submitting.",
+      };
+    }
+
+    // 9. Keep only the fields the applicant is allowed to change. Anything
+    // else the client sent (a locked institutional record, say) is dropped
+    // rather than trusted.
+    const submittedDetails = Object.fromEntries(
+      Object.entries(validated.data.submittedDetails).filter(([key]) =>
+        EDITABLE_FIELD_KEYS.has(key)
+      )
+    );
+
+    // 10. Create application
     // Note: Database unique constraint provides final protection against duplicates
     const application = await prisma.driveApplication.create({
       data: {
@@ -138,10 +161,12 @@ export async function applyToDrive(
         driveId: drive.id,
         snapshotCgpa: studentWithAcademic.academic.currentCGPA,
         snapshotBacklogs: studentWithAcademic.academic.activeBacklogs,
+        submittedDetails: JSON.stringify(submittedDetails),
+        consentAcceptedAt: new Date(),
       },
     });
 
-    // 9. Create audit log
+    // 11. Create audit log
     await createAuditLog({
       action: AuditAction.APPLY,
       entityType: AuditEntityType.DRIVE_APPLICATION,
@@ -154,7 +179,7 @@ export async function applyToDrive(
       },
     });
 
-    // 10. Create notification (best-effort, doesn't fail operation)
+    // 12. Create notification (best-effort, doesn't fail operation)
     await createApplicationSubmittedNotification(
       auth.user.id,
       drive.companyName,

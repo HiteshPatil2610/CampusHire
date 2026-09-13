@@ -5,6 +5,17 @@ import { z } from "zod";
  */
 export const applyToDriveSchema = z.object({
   driveId: z.string().cuid("Invalid drive ID format"),
+  /**
+   * Values the student reviewed and possibly corrected in the submission
+   * card, keyed by application-field key. Only editable keys are accepted;
+   * institutional records are re-read server-side and never trusted here.
+   */
+  submittedDetails: z
+    .record(z.string(), z.string().max(2000))
+    .optional()
+    .default({}),
+  /** The accuracy declaration must be ticked before an application is taken. */
+  consent: z.boolean().optional().default(false),
 });
 
 export type ApplyToDriveInput = z.infer<typeof applyToDriveSchema>;

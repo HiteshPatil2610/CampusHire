@@ -7,6 +7,11 @@ import { calculateProfileCompletion } from '@/features/students/queries/profile-
 import { getStudentDashboardData } from '@/features/students/queries/get-dashboard-data';
 import { getNotifications } from '@/features/notifications/queries/get-notifications';
 import { getEligibleDrives } from '@/features/drives/queries/get-eligible-drives';
+import {
+  isStudentEligibleForDrive,
+  getIneligibilityReasons,
+} from '@/features/drives/queries/drive-eligibility';
+import { buildApplicationReviewData } from '@/features/applications/utils/application-review-fields';
 import { RegistrationForm } from '@/components/students/RegistrationForm';
 import DashboardDriveCard from '@/components/students/dashboard/dashboard-drive-card';
 import StatusBadge from '@/components/ui/status-badge';
@@ -70,6 +75,12 @@ export default async function StudentDashboardPage() {
         b.drive.applicationDeadline.getTime()
     )
     .slice(0, 5);
+
+  // The submission card re-states eligibility, and the apply action re-checks
+  // it server-side before writing.
+  const eligibilityStudent = { ...profile.student, academic: profile.academic };
+  const eligibilityFor = (drive: (typeof eligible.data)[number]) =>
+    isStudentEligibleForDrive(eligibilityStudent, drive);
 
   const firstName = profile.student.name.split(' ')[0];
   const initials = profile.student.name
@@ -158,15 +169,29 @@ export default async function StudentDashboardPage() {
           </div>
         ) : (
           <div className="dash-grid-2">
-            {dashboard.featured.map((item) => (
-              <DashboardDriveCard
-                key={item.drive.id}
-                drive={item.drive}
-                stage={item.application?.stage ?? null}
-                applicantCount={item.applicantCount}
-                departmentCodes={item.departmentCodes}
-              />
-            ))}
+            {dashboard.featured.map((item) => {
+              const eligible = eligibilityFor(item.drive);
+
+              return (
+                <DashboardDriveCard
+                  key={item.drive.id}
+                  drive={item.drive}
+                  stage={item.application?.stage ?? null}
+                  applicantCount={item.applicantCount}
+                  departmentCodes={item.departmentCodes}
+                  reviewFields={buildApplicationReviewData(
+                    profile,
+                    item.drive.applicationFields
+                  )}
+                  eligible={eligible}
+                  ineligibilityReasons={
+                    eligible
+                      ? []
+                      : getIneligibilityReasons(eligibilityStudent, item.drive)
+                  }
+                />
+              );
+            })}
           </div>
         )}
       </section>

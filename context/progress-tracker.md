@@ -1797,3 +1797,46 @@ now offers a single Preferred Company Type, still stored in the existing
 ### Next step
 `SemesterMark.isVerified` is student-visible but nothing sets it — semester
 cards read "Pending" until a department-admin verification control is built.
+
+---
+
+## Application Submission Card — COMPLETE ✅
+
+Clicking "Apply now" on a student dashboard drive card now opens the
+Application Submission Card instead of applying immediately.
+
+**Data model** (migration `20260913180000_application_submitted_details`)
+- `DriveApplication.submittedDetails` — JSON object of the profile values the
+  student submitted, keyed by application-field key, frozen at submission time
+  so a later profile edit never rewrites what the recruiter saw.
+- `DriveApplication.consentAcceptedAt` — when the accuracy declaration was
+  ticked.
+
+**The card** (`components/drives/application-review-modal.tsx`)
+- Drive summary strip with an eligibility verdict, plus the admin's venue /
+  reporting time / coordinator when set.
+- "Institutional Records (Locked · Verified by Registrar)" — roll number,
+  CGPA, department, active backlogs, 10th and 12th percentages, read-only.
+- "Application Details & Submission Assets" — inline-editable rows with Reset
+  to Profile Defaults.
+- Accuracy declaration, and a Submit button gated on consent, eligibility and
+  every required field having a value.
+
+**Which rows appear** comes from the drive's admin-configured
+`applicationFields`, resolved by `buildApplicationReviewData`. A drive that
+never asked for GitHub shows no GitHub row; a drive with no configuration
+falls back to the catalog defaults.
+
+**Server rules** (`applyToDrive`)
+- The accuracy declaration is required before an application is written.
+- Submitted values are filtered to `EDITABLE_FIELD_KEYS`, so a client cannot
+  overwrite a registrar-owned record. CGPA and backlog snapshots are still
+  read server-side from the student record, never from the request.
+- Both rules are covered by tests in `apply-to-drive.test.ts`.
+
+### Not included
+- Per the scoping decision, the resume block from the reference design is
+  omitted — there is no resume anywhere in the data model and Resume Builder
+  is still a stub. Add the row when that feature lands.
+- Only the dashboard's drive cards use this card. The drives listing page and
+  the drive detail page still use the older confirm dialog.

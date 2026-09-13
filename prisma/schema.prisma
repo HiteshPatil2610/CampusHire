@@ -342,16 +342,22 @@ model Drive {
 
 // DriveApplication model - represents a student's application to a drive
 model DriveApplication {
-  id               String            @id @default(cuid())
-  studentId        String
-  driveId          String
-  appliedAt        DateTime          @default(now())
-  stage            ApplicationStage  @default(APPLIED)
-  status           ApplicationStatus @default(IN_PROGRESS)
-  snapshotCgpa     Float?
-  snapshotBacklogs Int?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id                String            @id @default(cuid())
+  studentId         String
+  driveId           String
+  appliedAt         DateTime          @default(now())
+  stage             ApplicationStage  @default(APPLIED)
+  status            ApplicationStatus @default(IN_PROGRESS)
+  snapshotCgpa      Float?
+  snapshotBacklogs  Int?
+  // JSON object of the profile values the student submitted for this drive,
+  // keyed by application-field key. Frozen at submission time so a later
+  // profile edit never rewrites what the recruiter was shown.
+  submittedDetails  String?           @db.Text
+  // When the student ticked the accuracy declaration.
+  consentAcceptedAt DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)

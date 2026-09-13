@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
-import RoleSwitcher from './role-switcher';
 
 export interface TopbarProps {
   role: 'student' | 'admin' | 'superadmin';
@@ -43,8 +42,6 @@ export default function Topbar({ role }: TopbarProps) {
           position: 'relative',
         }}
       >
-        <RoleSwitcher role={role} />
-
         {/* Notifications - using shared NotificationBell component */}
         <NotificationBell size={18} />
 

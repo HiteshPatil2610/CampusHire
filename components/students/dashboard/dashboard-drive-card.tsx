@@ -17,8 +17,9 @@ import {
 } from 'lucide-react';
 import type { ApplicationStage, Drive } from '@prisma/client';
 import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
-import { applyToDrive } from '@/features/applications/actions/apply-to-drive';
 import { withdrawApplication } from '@/features/applications/actions/withdraw-application';
+import ApplicationReviewModal from '@/components/drives/application-review-modal';
+import type { ApplicationReviewData } from '@/features/applications/utils/application-review-fields';
 import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
 import { parseJsonArray } from '@/lib/parse-json-array';
 import StatusBadge from '@/components/ui/status-badge';
@@ -38,6 +39,10 @@ export interface DashboardDriveCardProps {
   stage: ApplicationStage | null;
   applicantCount: number;
   departmentCodes: string[];
+  /** Fields the submission card shows, resolved from the drive's config. */
+  reviewFields: ApplicationReviewData;
+  eligible: boolean;
+  ineligibilityReasons: string[];
 }
 
 /**
@@ -50,10 +55,14 @@ export default function DashboardDriveCard({
   stage,
   applicantCount,
   departmentCodes,
+  reviewFields,
+  eligible,
+  ineligibilityReasons,
 }: DashboardDriveCardProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [expanded, setExpanded] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -76,25 +85,6 @@ export default function DashboardDriveCard({
   const logisticsLabel = drive.venue
     ? drive.venue.split(',')[0]
     : 'Logistics set';
-
-  function handleApply() {
-    startTransition(async () => {
-      const result = await applyToDrive(drive.id);
-      if (result.success) {
-        toast({
-          title: 'Application submitted',
-          description: `${drive.companyName} — ${drive.roleName}`,
-        });
-        router.refresh();
-      } else {
-        toast({
-          title: 'Could not apply',
-          description: result.reasons?.join(' ') || result.error,
-          variant: 'destructive',
-        });
-      }
-    });
-  }
 
   function handleWithdraw() {
     startTransition(async () => {
@@ -395,10 +385,9 @@ export default function DashboardDriveCard({
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
-                onClick={handleApply}
-                disabled={isPending}
+                onClick={() => setReviewOpen(true)}
               >
-                {isPending ? 'Applying…' : 'Apply now'}
+                Apply now
               </button>
             ) : (
               <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
@@ -458,6 +447,15 @@ export default function DashboardDriveCard({
           </button>
         </div>
       )}
+
+      <ApplicationReviewModal
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        drive={drive}
+        fields={reviewFields}
+        eligible={eligible}
+        ineligibilityReasons={ineligibilityReasons}
+      />
 
       <Dialog open={confirmWithdraw} onOpenChange={setConfirmWithdraw}>
         <DialogContent>
