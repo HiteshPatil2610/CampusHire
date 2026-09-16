@@ -78,22 +78,25 @@ export async function getDriveApplications(
     ? { driveId: params.driveId }
     : { driveId: params.driveId, student: { departmentId: department.id } };
 
-  const totalCount = await prisma.driveApplication.count({ where });
-
-  const data = await prisma.driveApplication.findMany({
-    where,
-    skip,
-    take: pageSize,
-    orderBy: { appliedAt: "desc" },
-    include: {
-      student: {
-        include: {
-          academic: true,
-          department: { select: { id: true, name: true, code: true } },
+  // The total and the page are independent queries, so they go out
+  // together rather than paying two serial round trips for one screen.
+  const [totalCount, data] = await Promise.all([
+    prisma.driveApplication.count({ where }),
+    prisma.driveApplication.findMany({
+      where,
+      skip,
+      take: pageSize,
+      orderBy: { appliedAt: "desc" },
+      include: {
+        student: {
+          include: {
+            academic: true,
+            department: { select: { id: true, name: true, code: true } },
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
 
   return { data, page, pageSize, totalCount };
 }

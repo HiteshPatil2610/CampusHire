@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
@@ -26,24 +27,30 @@ export interface StudentDrivesResult {
 }
 
 /**
+ * The student's academic record, memoised per request. Eligibility is checked
+ * on several paths in a single render and each one used to re-read it.
+ */
+const getAcademicForStudent = cache((studentId: string) =>
+  prisma.studentAcademic.findUnique({ where: { studentId } })
+);
+
+/**
  * Get eligible drives for authenticated student
  * Server-side eligibility filtering - student only sees drives they qualify for
  */
 export async function getEligibleDrives(
   params: StudentDrivesParams = {}
 ): Promise<StudentDrivesResult> {
-  // Verify authentication and get student
-  const { user, student } = await requireStudent();
+  // Verify authentication and get student. `requireStudent` is request-cached,
+  // so this costs nothing when the caller has already authenticated.
+  const { student } = await requireStudent();
 
-  // Get student with academic info
-  const studentWithAcademic = await prisma.student.findUnique({
-    where: { id: student.id },
-    include: {
-      academic: true,
-    },
-  });
+  // Only the academic record is still missing, so fetch that rather than
+  // re-reading the whole student row a third time in one request.
+  const academic = await getAcademicForStudent(student.id);
+  const studentWithAcademic = { ...student, academic };
 
-  if (!studentWithAcademic || !studentWithAcademic.academic) {
+  if (!studentWithAcademic.academic) {
     // Student hasn't completed academic profile - no eligible drives
     return {
       data: [],
@@ -65,6 +72,13 @@ export async function getEligibleDrives(
     // Initial filters at query level for performance
     minCGPA: { lte: studentWithAcademic.academic.currentCGPA },
     maxActiveBacklogs: { gte: studentWithAcademic.academic.activeBacklogs },
+    // `eligibleDepartments` is a JSON array of department IDs stored as text,
+    // so a substring match is a *narrowing* prefilter, never a widening one:
+    // any drive that passes `isStudentAcademicallyEligibleForDrive` below must
+    // contain this ID. It can over-match (an ID that is a substring of
+    // another), and the exact JSON check that follows still rejects those.
+    // Without it every student's dashboard read every drive row in the system.
+    eligibleDepartments: { contains: studentWithAcademic.departmentId },
   };
 
   // Status filter

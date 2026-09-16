@@ -41,16 +41,17 @@ export async function getNotifications(
     where.type = { in: ["SYSTEM", "PROFILE", "ADMIN"] };
   }
 
-  // Get total count
-  const totalCount = await prisma.notification.count({ where });
-
-  // Get paginated data
-  const notifications = await prisma.notification.findMany({
-    where,
-    skip,
-    take: pageSize,
-    orderBy: { createdAt: "desc" }, // Newest first
-  });
+  // The count and the page are independent, so they go out together rather
+  // than paying two serial round trips for one screen.
+  const [totalCount, notifications] = await Promise.all([
+    prisma.notification.count({ where }),
+    prisma.notification.findMany({
+      where,
+      skip,
+      take: pageSize,
+      orderBy: { createdAt: "desc" }, // Newest first
+    }),
+  ]);
 
   return {
     data: notifications,

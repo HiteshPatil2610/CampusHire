@@ -62,22 +62,23 @@ export async function getAdminDrives(
     ];
   }
 
-  // Get total count
-  const totalCount = await prisma.drive.count({ where });
-
-  // Get drives
-  const drives = await prisma.drive.findMany({
-    where,
-    orderBy: [
-      { applicationDeadline: "desc" }, // Most recent deadline first
-      { createdAt: "desc" },
-    ],
-    skip,
-    take: pageSize,
-    include: {
-      _count: { select: { applications: true } },
-    },
-  });
+  // The total and the page are independent queries, so they go out
+  // together rather than paying two serial round trips for one screen.
+  const [totalCount, drives] = await Promise.all([
+    prisma.drive.count({ where }),
+    prisma.drive.findMany({
+      where,
+      orderBy: [
+        { applicationDeadline: "desc" }, // Most recent deadline first
+        { createdAt: "desc" },
+      ],
+      skip,
+      take: pageSize,
+      include: {
+        _count: { select: { applications: true } },
+      },
+    }),
+  ]);
 
   return {
     data: drives,

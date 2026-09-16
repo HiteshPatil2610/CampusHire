@@ -84,25 +84,30 @@ export async function getDepartmentStudents(
     where.optedIn = false;
   }
 
-  const totalCount = await prisma.student.count({ where });
-
-  const data = await prisma.student.findMany({
-    where,
-    skip,
-    take: pageSize,
-    orderBy: [{ name: "asc" }],
-    include: {
-      academic: true,
-      department: { select: { id: true, name: true, code: true } },
-      _count: { select: { skills: true, projects: true, applications: true } },
-      // Only the selected offers, so placement state and the company list
-      // come from one query rather than a per-row follow-up.
-      applications: {
-        where: { status: "SELECTED" },
-        select: { drive: { select: { companyName: true } } },
+  // The total and the page are independent queries, so they go out
+  // together rather than paying two serial round trips for one screen.
+  const [totalCount, data] = await Promise.all([
+    prisma.student.count({ where }),
+    prisma.student.findMany({
+      // Four relations per row would otherwise be four extra queries.
+      relationLoadStrategy: "join",
+      where,
+      skip,
+      take: pageSize,
+      orderBy: [{ name: "asc" }],
+      include: {
+        academic: true,
+        department: { select: { id: true, name: true, code: true } },
+        _count: { select: { skills: true, projects: true, applications: true } },
+        // Only the selected offers, so placement state and the company list
+        // come from one query rather than a per-row follow-up.
+        applications: {
+          where: { status: "SELECTED" },
+          select: { drive: { select: { companyName: true } } },
+        },
       },
-    },
-  });
+    }),
+  ]);
 
   return {
     data: data.map(({ applications, ...student }) => ({

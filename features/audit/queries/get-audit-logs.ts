@@ -41,25 +41,26 @@ export async function getAuditLogs(input: GetAuditLogsInput) {
     }
   }
 
-  // Get total count
-  const totalCount = await prisma.auditLog.count({ where });
-
-  // Get paginated data with user details
-  const logs = await prisma.auditLog.findMany({
-    where,
-    skip,
-    take: pageSize,
-    orderBy: { createdAt: "desc" }, // Newest first
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          role: true,
+  // The total and the page are independent queries, so they go out
+  // together rather than paying two serial round trips for one screen.
+  const [totalCount, logs] = await Promise.all([
+    prisma.auditLog.count({ where }),
+    prisma.auditLog.findMany({
+      where,
+      skip,
+      take: pageSize,
+      orderBy: { createdAt: "desc" }, // Newest first
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
 
   // Transform data for response
   const data = logs.map((log) => ({

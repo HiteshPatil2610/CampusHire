@@ -15,25 +15,26 @@ export async function getDepartments(input: GetDepartmentsInput) {
   // Build where clause
   const where = includeInactive ? {} : { isActive: true };
 
-  // Get total count
-  const totalCount = await prisma.department.count({ where });
-
-  // Get paginated data with counts
-  const departments = await prisma.department.findMany({
-    where,
-    skip,
-    take: pageSize,
-    orderBy: { name: "asc" },
-    include: {
-      _count: {
-        select: {
-          admins: true,
-          students: true,
-          drives: true,
+  // The total and the page are independent queries, so they go out
+  // together rather than paying two serial round trips for one screen.
+  const [totalCount, departments] = await Promise.all([
+    prisma.department.count({ where }),
+    prisma.department.findMany({
+      where,
+      skip,
+      take: pageSize,
+      orderBy: { name: "asc" },
+      include: {
+        _count: {
+          select: {
+            admins: true,
+            students: true,
+            drives: true,
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
 
   // Transform to include counts at top level
   const data = departments.map((dept) => ({

@@ -87,19 +87,19 @@ export default async function StudentDashboardPage() {
 
   // Every drive the student is academically eligible for, open or not - the
   // table below shows the full picture, the cards show what needs action.
-  const eligible = await getEligibleDrives({ status: 'all', pageSize: 100 });
+  // Notifications do not depend on the drive list, so both go out at once.
+  // Pull a wider slice than we render so the widget can rank by urgency
+  // rather than showing whichever three arrived most recently — an offer must
+  // not be pushed off the dashboard by three announcements.
+  const [eligible, notificationPool] = await Promise.all([
+    getEligibleDrives({ status: 'all', pageSize: 100 }),
+    getNotifications(user.id, { page: 1, pageSize: 15 }),
+  ]);
   const dashboard = await getStudentDashboardData(
     profile.student.id,
     eligible.data,
     2
   );
-  // Pull a wider slice than we render so the widget can rank by urgency
-  // rather than showing whichever three arrived most recently — an offer must
-  // not be pushed off the dashboard by three announcements.
-  const notificationPool = await getNotifications(user.id, {
-    page: 1,
-    pageSize: 15,
-  });
   const notifications = sortByPriority(notificationPool.data).slice(
     0,
     DASHBOARD_NOTIFICATION_LIMIT

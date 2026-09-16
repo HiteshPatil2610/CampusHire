@@ -49,6 +49,38 @@
 - Access control is enforced in three layers: (1) Next.js middleware blocks unauthenticated access to any `(student)`, `(admin)`, or `(super-admin)` route group; (2) each server action/route handler re-checks the caller's role and department scope before reading or writing; (3) all list/read queries for a `DEPT_ADMIN` are automatically scoped with a `departmentId` filter — there is no code path that returns cross-department data to a department admin.
 - Drive eligibility is computed and filtered server-side. The API/server action that lists drives for a student runs the eligibility comparison (CGPA, backlogs, department) against that student's own record before returning results — the client never receives ineligible drives to hide.
 
+## Read Path and Query Cost
+
+Every hosted Postgres query is a network round trip, and a page that issues
+twenty of them is slow no matter how well indexed it is. Two rules keep the
+read path cheap, and both are load-bearing rather than stylistic:
+
+- **Auth helpers are request-memoised.** Every DB-reading helper in
+  `lib/auth.ts` is wrapped in React's `cache()`. Pages, layouts and the query
+  functions they call all re-invoke these helpers — that is the intended
+  design, and it is only affordable because the first call per request is the
+  only one that reaches Postgres. A new helper that reads the database on an
+  authorization path belongs in that file, wrapped the same way. Do not
+  "optimise" by threading the user object through every signature.
+- **Multi-relation reads use `relationLoadStrategy: "join"`.** Prisma's
+  default emits one query per `include`d relation, so a nine-relation read is
+  ten round trips. The `relationJoins` preview feature is enabled in
+  `schema.prisma` for this. Any read with more than two relations should set
+  it.
+- **Independent queries go out together.** A `count` and its `findMany` for
+  the same screen do not depend on each other and belong in one
+  `Promise.all`. The same goes for unrelated sections of a page.
+- **Filter in SQL, not in JavaScript.** Where a filter cannot be expressed
+  exactly — eligibility depends on `eligibleDepartments`, a JSON array stored
+  as text — push a *narrowing* prefilter to the database and keep the exact
+  check in JS afterwards. A prefilter may over-match; it must never
+  under-match, or it silently hides rows a user is entitled to.
+
+The app server must be deployed in the same region as the database. Latency
+between the two multiplies by the query count on every single request; latency
+between the user and the app server costs one round trip. Co-locating the two
+is worth more than any query-level optimisation in this file.
+
 ## Invariants
 
 1. Role and department scope are re-verified on the server for every mutation and every list query — the client's UI state is never treated as an access-control decision.

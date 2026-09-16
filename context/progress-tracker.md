@@ -2222,7 +2222,75 @@ fill.
 - `330a67d` — Dev server launch config. Only one entry, deliberately:
   `next dev` and `next start` share `.next` and corrupt each other.
 
+---
+
+## Read-path performance pass
+
+The student dashboard took 4-5s to render. Measured rather than guessed: the
+cause was round-trip count against a Neon instance in `aws-us-east-2` (Ohio),
+which is **221 ms per query** from here. The database holds almost no data
+(1 drive, 8 students), so neither data volume nor missing indexes were
+involved — the schema's indexes were already correct.
+
+Measured, same warm connection pool, replaying the dashboard's exact query
+sequence:
+
+| | before | after |
+|---|---|---|
+| dashboard DB time | 4,556 ms | ~1,930 ms |
+| queries per render | 13 | 9 |
+
+What changed:
+
+- **`lib/auth.ts` helpers are wrapped in React `cache()`.** `getOrCreateUser`,
+  `requireStudent` and `requireDepartmentAdmin` are called from the page, the
+  layout and again inside every query function they call — 96 call sites. Each
+  call was its own round trip; one dashboard render issued the same `user` and
+  `student` lookups five times. They are now memoised per request, so the
+  helpers stay free to call anywhere and only the first costs a query.
+- **`relationJoins` preview feature enabled**, and the profile reads use
+  `relationLoadStrategy: "join"`. Prisma's default issues one query per
+  relation, so a nine-relation profile load cost ten round trips. Measured
+  here: **2,207 ms / 10 queries -> 234 ms / 1 query.** Also applied to the
+  department student roster, which pulls four relations per row.
+- **`getEligibleDrives` no longer re-reads the student three times.** It
+  reused `requireStudent` and then fetched the whole student row again just
+  for `academic`; it now fetches only the academic record, request-cached.
+- **Drive eligibility is prefiltered in SQL.** `eligibleDepartments` is a JSON
+  array stored as text, so `contains: departmentId` is a *narrowing* filter —
+  it can over-match but never under-match, and the exact JSON check still
+  runs after. Previously every student's dashboard read every drive row in
+  the system; that was the one query that would not have survived 500 users.
+- **Seven paginated list queries** ran `count` then `findMany` serially for
+  one screen. Both now go out together via `Promise.all`, halving the DB time
+  of every list page (roster, drives, applications, audit logs, departments,
+  admins, notifications).
+- **The student dashboard** awaited drives and notifications in series; they
+  are independent and now overlap.
+- **`app/not-found.tsx` lost its `force-dynamic`**, so `/_not-found` is
+  prerendered as static rather than server-rendered on every 404.
+
+Pre-existing test failures were verified unchanged: 27 failed / 255 passed,
+identical before and after, confirmed by stashing the changes and re-running.
+
+### The remaining 1.9s is distance, not code
+
+Nine queries at 221 ms is a floor no amount of refactoring gets under. Neon
+has **no India region** — the closest available is `aws-ap-southeast-1`
+(Singapore). The decision that actually matters for production is covered
+below.
+
 ## Open questions / next steps
+
+0. **Database region is the open performance decision.** The 221 ms per query
+   measured from here is laptop-to-Ohio and is *not* what production pays: on
+   a deployment co-located with the database it drops to single-digit ms and
+   the dashboard's DB time becomes negligible. The rule is that the **app
+   server** must sit beside the database, not the user. Deploying to a US
+   region next to the current Ohio instance is therefore a valid answer, and
+   costs nothing to keep. Moving both to Singapore only helps if the app
+   server moves too. What must not happen is an app server in one region and
+   the database in another.
 
 1. **The two-list import UI is not built.** `partitionRows` already returns
    both lists and the CSV shape, but the import screen still renders the old

@@ -34,23 +34,24 @@ export async function getMyApplications(
   // Calculate offset
   const offset = (page - 1) * pageSize;
 
-  // Get total count
-  const totalCount = await prisma.driveApplication.count({
-    where: { studentId },
-  });
-
-  // Get paginated applications
-  const data = await prisma.driveApplication.findMany({
-    where: { studentId },
-    include: {
-      drive: true,
-    },
-    orderBy: {
-      appliedAt: "desc",
-    },
-    skip: offset,
-    take: pageSize,
-  });
+  // The total and the page are independent queries, so they go out
+  // together rather than paying two serial round trips for one screen.
+  const [totalCount, data] = await Promise.all([
+    prisma.driveApplication.count({
+      where: { studentId },
+    }),
+    prisma.driveApplication.findMany({
+      where: { studentId },
+      include: {
+        drive: true,
+      },
+      orderBy: {
+        appliedAt: "desc",
+      },
+      skip: offset,
+      take: pageSize,
+    }),
+  ]);
 
   return {
     data,
