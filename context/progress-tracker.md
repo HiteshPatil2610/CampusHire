@@ -2059,3 +2059,192 @@ exports `NODE_ENV=development` into a build will reproduce the failure.
 student notification preferences are still UI without persistence — the
 settings panels are the next candidates now that the pattern for a
 student-and-admin-writable field exists.
+
+
+---
+
+## Notification Panel Redesign — COMPLETE ✅
+
+Commit `e2c90a9`. Reworked the student notification surface and fixed two
+defects behind it.
+
+**Two producers were dead.** `createNewDriveNotification` and
+`createProfileIncompleteNotification` existed in `lib/notifications.ts` from
+the start but were never called from anywhere — a student was never told a
+drive had opened and had to find it by browsing.
+`features/notifications/actions/notify-eligible-students-of-drive.ts` now fans
+out on both drive-creation paths. Recipients resolve through the same
+`isStudentAcademicallyEligibleForDrive` the student drive list uses, so nobody
+is notified about a drive the listing would then hide. Opted-out students are
+skipped. The fan-out is best-effort and never fails the drive creation.
+The profile nudge fires from the same place — a missing academic record is what
+disqualifies a student, and a new drive is when that first costs them
+something — deduplicated to one per student per week.
+
+**Priority is derived, not stored** (`utils/notification-priority.ts`):
+critical / attention / info / confirmation, computed from type, title and
+resourceType. Same reasoning as `getDriveStatus()` and `placement-status.ts`.
+Tiers reuse the semantic colour scale already in `ui-context.md`. Badges read
+"Outcome" / "Announcement" rather than the raw enum.
+
+**Deep links.** The `FE-DEEP-LINK` TODO is implemented. `getNotificationHref`
+returns null where there is nowhere useful to go, and those rows render
+non-clickable — a notification you cannot act on teaches people to ignore the
+panel.
+
+**Grouping.** The full page sections into Needs your attention / Today /
+Earlier this week / Older. An unread critical item lifts into the attention
+section regardless of age and drops back once read. The dashboard widget
+fetches wider and ranks by priority instead of taking the three most recent.
+The bell shows a real count and turns red when an unread item is critical.
+
+**Bug fixed:** the Drives/System filter ran client-side on an already-paginated
+page, so it could show three rows out of twenty-five while more matches sat on
+page two, and the total count disagreed with the rows rendered. It now runs in
+the database.
+
+27 unit tests across `notification-priority` and `notification-grouping`.
+
+---
+
+## Registration & Diploma Entry — COMPLETE ✅
+
+Commit `ba62f4d`, migration
+`20260916180000_entry_type_on_student_nullable_roll_number`.
+
+`entryType` moved from `StudentAcademic` to `Student`. It is asked on the
+registration card, before any academic row exists — that table's CGPA and
+semester columns are NOT NULL, so capturing it there would need a placeholder
+row, and a 0.0 CGPA reads as a real value to every eligibility comparison.
+Entry type describes how a student was admitted, not their marks.
+
+The registration card now asks "How did you join this programme?" and requires
+a phone number. A diploma student may leave the roll number blank; a regular
+student may not.
+
+`Student.rollNumber` is nullable but **not optional** — `applyToDrive` refuses
+an application without one, and `getIneligibilityReasons` surfaces it on the
+drive card so the student sees the gap before clicking. The profile's personal
+tab renders it editable only while missing; `updatePersonalInfo` fills it once,
+re-reading the current value from the database and refusing to overwrite an
+existing number, which is registrar-owned.
+
+The Academic tab's entry-type selector is now read-only. Changing it used to
+delete semester 1-2 marks, so a student who picked wrong could silently lose
+data; they are pointed at their department admin instead.
+
+9 registration-schema tests.
+
+---
+
+## Bulk Import Rework — COMPLETE ✅
+
+Commit `42912fb`.
+
+The sheet now carries what the sign-up card asks for: Full Name, College
+Email, Phone Number, **Diploma** (1/0), Roll Number, then the optional
+academic columns. Name, email, phone and Diploma are required; roll number is
+required unless Diploma is 1.
+
+The Diploma column maps onto `Student.entryType` rather than adding a second
+column for the same fact — a separate diploma flag alongside entryType is the
+`placementStatus` pattern again. The parser accepts 1/0, Yes/No, True/False
+and the words, and leaves anything unrecognised undefined so validation
+reports it. Note the bare header "Diploma" is now the flag; the percentage
+column must say "Diploma Percentage".
+
+**Per-row import.** `commitImport` used to abort the entire file if any row
+failed, so one typo in a 300-row sheet blocked all 300.
+`validator/partition-rows.ts` splits the file into importable and rejected
+rows; only the rejected are skipped. It is a pure function shared by preview
+and commit, so the list an admin approves is computed by the same code that
+decides what is written. Each rejected row carries every issue found on it,
+shaped for a downloadable CSV.
+
+Fixed an index bug this exposed: the academic-record loop walked every parsed
+row while the created students came from the importable subset, which would
+have paired a student with another row's marks.
+
+7 partition tests.
+
+---
+
+## Self-Registration Approval Queue — COMPLETE ✅
+
+Commit `1fd0600`, migration `20260916210000_student_access_requests`.
+
+Public sign-up stays, but signing up no longer grants student access. On
+submitting the registration card the person's Clerk-verified email is matched
+against the imported roster:
+
+- **Match** — the admin already vouched for them. The account links to that
+  row, `isPending` flips to false, dashboard immediately.
+- **No match** — details go to `StudentAccessRequest` and they see a waiting
+  screen until a department admin decides.
+
+The match key is the verified email, never a self-typed field. A roster row
+already linked to another account is refused outright rather than re-linked,
+which would hand one student another student's record.
+
+Requests live in their own table because the details are self-asserted and
+unverified — writing them into `Student` before approval would put an
+unapproved stranger in the roster, in `totalStudents`, and in the
+placement-rate denominator. Approving is what creates the `Student` row.
+
+Admin side: a "Student access requests" section on the bulk import page,
+scoped to the admin's own department, with approve/decline and an optional
+note the student sees. Both outcomes notify the student and are audit logged.
+Approval re-checks that the email and roll number are still free, since an
+import may have claimed them while the request waited, and takes the
+department from the reviewing admin rather than the applicant.
+
+Merging is deliberately asymmetric: a linked student's phone number comes from
+what they submitted, but roll number, department and entry type stay as the
+admin imported them — those decide eligibility and which academic records the
+profile demands. A blank imported roll number is the one thing the student may
+fill.
+
+10 tests on the matching and merge rules.
+
+---
+
+## Smaller changes
+
+- `2b88614` — Department Admin / Super Admin login buttons in the landing
+  footer. Not separate logins: Clerk has one sign-in flow and the role comes
+  from the account, so these carry a `redirect_url` and middleware still
+  enforces the role.
+- `4a274cd` — Promoting a student account to an admin role left its `Student`
+  row behind, so the admin kept appearing in the roster and in
+  `totalStudents`. Both promotion scripts now retire it, and refuse when the
+  record carries applications, because `DriveApplication` cascades on
+  `Student` delete and would destroy that history.
+- `330a67d` — Dev server launch config. Only one entry, deliberately:
+  `next dev` and `next start` share `.next` and corrupt each other.
+
+## Open questions / next steps
+
+1. **The two-list import UI is not built.** `partitionRows` already returns
+   both lists and the CSV shape, but the import screen still renders the old
+   single blocked-errors view. This is the next unit.
+2. **No student account exists for end-to-end testing.** Both of the owner's
+   accounts are admins, and middleware blocks non-STUDENT roles from
+   `/student-dashboard`. The diploma profile branch, the opt-in toggle and the
+   stage tracker have not been exercised against a real session.
+3. **OTP / set-password first-login flow** was specified but not built —
+   keeping public sign-up means Clerk's own flow already handles password and
+   email verification. Revisit if imported students should be able to activate
+   without ever visiting the sign-up page.
+4. **30 pre-existing test failures** remain, untouched by any of this work
+   (admin-assignment, admin-security, department-crud, excel-import,
+   notification-authorization). They predate this session and were verified
+   unchanged after every commit.
+
+## Local development note
+
+`next dev` and `next build` share the `.next` directory. Running a production
+build, or deleting `.next`, while a dev server is live corrupts it — the
+symptoms are misleading (`Cannot find module './vendor-chunks/@clerk.js'`,
+`[object Event]`, pages rendering with no CSS) and none of them point at the
+real cause. Two dev servers on the same directory do the same thing. Always
+stop the server, confirm the process is gone, then clear `.next`.

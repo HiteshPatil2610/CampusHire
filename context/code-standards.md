@@ -36,6 +36,14 @@
 - Wrap multi-row writes (e.g. Excel import) in a single Prisma transaction so partial imports can never occur.
 - Any list endpoint that can return more than a screenful of rows (student rosters, drive lists, the audit log) uses offset pagination — `page` and `pageSize` query params or server-action args, `pageSize` defaulting to 25. Response shape includes `{ data, page, pageSize, totalCount }` so the UI can render page controls without a second query. Do not build an unpaginated list "for now" — paginate from the first implementation.
 
+## Derived State
+
+- If a value can be computed from data already stored, compute it — do not add a column for it. A stored equivalent has to be set correctly at every write site, and the first caller that forgets produces a silently wrong value that nothing catches.
+- This is not theoretical: `Student.placementStatus` was written by exactly one code path with a casing no reader used, so every "Placed" KPI in the product read zero from the day it shipped.
+- Established examples: `getDriveStatus()` (open/closed from a deadline), `features/students/utils/placement-status.ts` (placement from applications), `features/notifications/utils/notification-priority.ts` (urgency from type and title).
+- Put the derivation in one exported function and route every screen through it, so two panels cannot disagree about what the same word means.
+- Where a decision is genuinely a rule rather than a lookup — whether a stage transition is legal, whether a student record can be retired, whether a sign-up matches the roster — write it as a pure function taking plain arguments, and unit test it. The server action stays thin around it.
+
 ## Route Rendering
 
 - A route segment whose data is scoped to the signed-in user (anything calling `requireStudent`, `requireDepartmentAdmin`, or `requireSuperAdmin`) declares `export const dynamic = 'force-dynamic'`. Without it Next tries to prerender the page at build time, where there is no session, and the build fails. These pages have no meaning without a session, so there is nothing to cache.

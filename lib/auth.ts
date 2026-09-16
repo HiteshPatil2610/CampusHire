@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import type { User, Role, Department, DepartmentAdmin } from "@prisma/client";
@@ -13,6 +14,14 @@ import type { User, Role, Department, DepartmentAdmin } from "@prisma/client";
  * 2. Throw descriptive errors for unauthorized access
  * 3. Return strongly-typed results
  * 4. Handle missing records gracefully
+ *
+ * Every helper that reads the database is wrapped in React's `cache()`, which
+ * memoises the call for the lifetime of a single server request. A page, its
+ * layout and every query function it calls all invoke these helpers, and
+ * without memoisation each call was its own round trip to Postgres — a single
+ * dashboard render issued the same `user` and `student` lookups five times
+ * over. The helpers stay free to call anywhere; only the first one per request
+ * costs a query.
  */
 
 // ============================================================================
@@ -54,7 +63,7 @@ export async function getAuthUserId(): Promise<string | null> {
  * 
  * @returns User record or null if not authenticated
  */
-export async function getOrCreateUser(): Promise<User | null> {
+export const getOrCreateUser = cache(async (): Promise<User | null> => {
   const { userId: clerkId } = await auth();
 
   if (!clerkId) {
@@ -106,7 +115,7 @@ export async function getOrCreateUser(): Promise<User | null> {
   }
 
   return user;
-}
+});
 
 /**
  * Get the current authenticated user (database lookup)
@@ -227,7 +236,7 @@ export interface DepartmentAdminContext {
  * @throws AuthenticationError if not authenticated
  * @throws AuthorizationError if not DEPT_ADMIN or no department association
  */
-export async function requireDepartmentAdmin(): Promise<DepartmentAdminContext> {
+export const requireDepartmentAdmin = cache(async (): Promise<DepartmentAdminContext> => {
   const user = await requireRole("DEPT_ADMIN");
 
   // Verify user has valid DepartmentAdmin record
@@ -253,7 +262,7 @@ export async function requireDepartmentAdmin(): Promise<DepartmentAdminContext> 
     admin,
     department: admin.department,
   };
-}
+});
 
 /**
  * Check if current user can access a specific department
@@ -325,10 +334,10 @@ export async function requireDepartmentAccess(departmentId: string): Promise<voi
  * @throws AuthenticationError if not authenticated
  * @throws AuthorizationError if not a student or no student record
  */
-export async function requireStudent(): Promise<{
+export const requireStudent = cache(async (): Promise<{
   user: User;
   student: import("@prisma/client").Student;
-}> {
+}> => {
   const user = await requireRole("STUDENT");
 
   const student = await prisma.student.findUnique({
@@ -342,7 +351,7 @@ export async function requireStudent(): Promise<{
   }
 
   return { user, student };
-}
+});
 
 /**
  * Check if current user is a student with profile

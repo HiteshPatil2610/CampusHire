@@ -106,11 +106,12 @@ enum Role {
 - `id`: CUID primary key
 - `userId`: Foreign key to User (unique - one student profile per user)
 - `departmentId`: Foreign key to Department
-- `rollNumber`: Student roll number (unique per institution)
+- `rollNumber`: Student roll number (unique per institution, **nullable**). A lateral-entry student may register before one is issued; `applyToDrive` refuses any application without one, and the student's profile can fill a blank but never overwrite an existing value. Postgres permits many NULLs under a unique index, so uniqueness still holds for everyone who has one.
 - `name`: Full name (sourced from Clerk during registration)
 - `phoneNumber`: Contact number (optional initially, can be added during profile completion)
 - `optedIn`: Whether the student is participating in campus placement (boolean, default true)
 - `optedInLocked`: Set by a department admin to freeze the opt-in choice so the student can no longer change it (boolean, default false)
+- `entryType`: Enum (`REGULAR`, `DIPLOMA`), default `REGULAR` — how the student was admitted. Chosen on the registration card and read-only thereafter, because switching it discards whichever pre-college branch was already filled in. Decides which records the profile asks for and which semester the marks table starts at.
 - `createdAt`, `updatedAt`: Timestamps
 
 **Placement is NOT a field on this model.** A student counts as placed when they
@@ -146,6 +147,32 @@ so every KPI built on it read zero; it was dropped in migration
 - Student records are scoped by Department for DEPT_ADMIN access control
 - Roll number uniqueness is institution-wide (not per-department)
 
+## 4B. Student Access Requests — Implemented
+
+**StudentAccessRequest Model** (one per `User`)
+
+Holds the self-asserted details of someone who signed up but whose verified
+email matched no imported student record. Deliberately separate from
+`Student`: these details are unverified, and writing them into `Student`
+before approval would place an unapproved stranger in the department roster,
+in `totalStudents`, and in the placement-rate denominator.
+
+**Fields**: `userId` (unique), `name`, `email`, `rollNumber` (nullable),
+`departmentId`, `phoneNumber`, `entryType`, `status`
+(`PENDING`/`APPROVED`/`REJECTED`), `reviewedById`, `reviewedAt`, `reviewNote`,
+timestamps.
+
+**Lifecycle**
+- Created when registration finds no matching roster row.
+- A department admin approves (creating the `Student` record, with the
+  department taken from the reviewing admin) or declines with a note the
+  student sees.
+- Approval re-checks that the email and roll number are still free, since an
+  import may have claimed them while the request waited.
+
+**Indexes**: `status`, `departmentId`, `(departmentId, status)` for the
+admin's queue query.
+
 ## 5. Student Profile Structure (02C) — To Implement
 
 The student profile is divided into seven sections. Based on the project context, the following structure is established:
@@ -164,7 +191,7 @@ Stored in the `Student` model directly:
 **Fields**:
 - `id`: CUID primary key
 - `studentId`: Foreign key to Student (unique)
-- `entryType`: Enum (`REGULAR`, `DIPLOMA`), default `REGULAR` — how the student entered the degree, which decides the pre-college branch below
+(`entryType` now lives on `Student`, not here — see the Student model above. It is captured on the registration card, before any academic record exists.)
 - `tenthPercentage`: 10th standard percentage (decimal, e.g., 85.5)
 - `twelfthPercentage`: 12th standard percentage (decimal, **nullable** — null for a DIPLOMA student)
 - `twelfthBoard`, `twelfthYear`, `twelfthMarksheetUrl`: optional 12th record detail

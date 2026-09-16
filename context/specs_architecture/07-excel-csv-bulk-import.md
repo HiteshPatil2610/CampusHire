@@ -12,7 +12,7 @@ Implement complete bulk student import workflow for Department Admins, allowing 
 - Row-by-row parsing and validation
 - Duplicate detection (within file and against database)
 - Preview workflow with validation results
-- Atomic all-or-nothing import transaction
+- Per-row import: valid rows are inserted, invalid rows are skipped and reported. The insert of the valid set is a single atomic transaction, so it either all lands or none of it does — but one bad row no longer blocks the whole file
 - Department scope enforcement (admin can only import into their department)
 - Temporary file storage in Vercel Blob
 - Automatic cleanup of successfully imported files
@@ -98,9 +98,10 @@ Based on current Student schema, the template includes:
 3. **email** - college email (email format, max 200 chars)
 
 ### Optional Columns
-4. **phoneNumber** - contact number (text, max 15 chars)
+4. **phoneNumber** - contact number (text, max 15 chars) — **required**
 5. **tenthPercentage** - 10th grade marks (number, 0-100)
-6. **entryType** - "Regular" or "Diploma" (text, defaults to Regular)
+6. **Diploma** - 1 = lateral entry after a diploma, 0 = regular entry after 12th. **Required.** The parser also accepts Yes/No, True/False and the words themselves; anything unrecognised is rejected rather than defaulted, so a diploma student is never silently put on the 12th-marks track. Maps onto `Student.entryType` — there is no separate diploma column.
+   Note: the bare header "Diploma" is this flag. The percentage column must say "Diploma Percentage" explicitly.
 7. **twelfthPercentage** - 12th grade marks (number, 0-100) — leave blank for a Diploma row
 8. **diplomaPercentage** - diploma marks (number, 0-100) — leave blank for a Regular row
 9. **currentCGPA** - current CGPA (number, 0-10)
@@ -269,7 +270,10 @@ which would read as a real 0% score. A Diploma row with `currentSemester` below
 ## Import Transaction
 
 ### Atomic Guarantee
-Use Prisma transaction to ensure all-or-nothing:
+`partitionRows` first splits the file into importable and rejected rows; only
+the importable set reaches the transaction. The rejected rows are returned to
+the admin with every issue found on each, shaped for a downloadable CSV. The
+transaction then guarantees all-or-nothing **for that importable set**:
 
 ```typescript
 await prisma.$transaction(async (tx) => {

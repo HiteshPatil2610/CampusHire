@@ -40,12 +40,14 @@ A department can have more than one department admin (e.g. a primary and a backu
 ## Features
 
 ### Authentication & Roles
-- College-email self-registration for students, with email verification
+- Student accounts originate from the department admin's imported roster. A student who signs up and matches that roster by verified email gets access immediately; one who does not is held for admin approval rather than admitted automatically
+- College-email sign-up for students, with Clerk email verification
 - Department admin and super admin accounts created by the super admin — no public sign-up for those roles
 - Three roles: `STUDENT`, `DEPT_ADMIN`, `SUPER_ADMIN`, enforced at every route and mutation
 
 ### Student Profile
-- Personal info, academic info (10th/12th marks, current CGPA, semester, active backlogs), skills & links (technical/soft skill tags, LinkedIn/GitHub/portfolio), projects, internships/experience, certifications, placement preferences (roles, locations, company type, expected package)
+- Entry type (regular after 12th, or lateral entry after a diploma) chosen at registration and fixed thereafter; it decides which pre-college records the profile asks for and which semesters exist
+- Personal info, academic info (10th, then 12th **or** diploma depending on entry type, current CGPA, semester, active backlogs), skills & links (technical/soft skill tags, LinkedIn/GitHub/portfolio), projects, internships/experience, certifications, placement preferences (roles, locations, company type, expected package)
 - **Profile completion %**: all seven sections (Personal, Academic, Skills & Links, Projects, Experience, Certifications, Preferences) are required. Completion is a simple ratio — `(required fields filled across all sections) / (total required fields)` — not weighted by section. This is a deliberate choice: reaching 100% is meant to be a real achievement, not a formality, so a student with no internship or certification yet will not show 100% until they add one. The exact required-field list per section is defined when that feature is spec'd (see `context/specs/`), not here — this file fixes the *rule* (all sections count, simple ratio), not the field-by-field checklist.
 
 ### Department Admin — Student Management
@@ -68,7 +70,7 @@ A department can have more than one department admin (e.g. a primary and a backu
 ## Scope
 
 ### In Scope (V1)
-- Student self-registration with college-email verification
+- Student sign-up with college-email verification, gated on either matching the imported roster or a department admin approving the request
 - Role-based access for Student, Department Admin, Super Admin
 - Full student profile management (all tabs from the prototype)
 - Excel/CSV bulk student upload with validation
