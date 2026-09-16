@@ -3,6 +3,7 @@
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
+import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
 import {
   createCentralDriveSchema,
   type CreateCentralDriveInput,
@@ -100,6 +101,10 @@ export async function createCentralDrive(
         eligibleDepartmentCodes: departments.map((d) => d.code),
       },
     });
+
+    // Tell the students who can actually apply, across every eligible
+    // department. Best-effort: never fails the drive creation.
+    await notifyEligibleStudentsOfDrive(drive);
 
     return { success: true, driveId: drive.id };
   } catch (error) {

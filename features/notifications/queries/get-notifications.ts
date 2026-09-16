@@ -12,9 +12,14 @@ import type { GetNotificationsInput } from "../schemas/notification";
  */
 export async function getNotifications(
   userId: string,
-  input: GetNotificationsInput
+  // `category` is optional for callers — the schema supplies the default when
+  // input arrives through Zod, and existing callers that never filtered by
+  // category keep working unchanged.
+  input: Omit<GetNotificationsInput, "category"> & {
+    category?: GetNotificationsInput["category"];
+  }
 ) {
-  const { page, pageSize, isRead } = input;
+  const { page, pageSize, isRead, category = "all" } = input;
 
   const skip = (page - 1) * pageSize;
 
@@ -26,6 +31,14 @@ export async function getNotifications(
   // Optional: filter by read/unread
   if (isRead !== undefined) {
     where.isRead = isRead;
+  }
+
+  // Category filter runs in the database so pagination counts match what the
+  // student sees. Filtering after the page was sliced produced short pages.
+  if (category === "drives") {
+    where.type = { in: ["DRIVE", "APPLICATION"] };
+  } else if (category === "system") {
+    where.type = { in: ["SYSTEM", "PROFILE", "ADMIN"] };
   }
 
   // Get total count

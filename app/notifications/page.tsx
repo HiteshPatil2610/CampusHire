@@ -37,11 +37,14 @@ export default async function NotificationsPage({
     'all';
   const page = pageParam ? parseInt(pageParam, 10) : 1;
 
-  // Fetch notifications with server-side isRead filter only
+  // Both filters run in the database. The category filter used to be applied
+  // in the client after the page had already been sliced, which produced
+  // short pages and a total count that disagreed with the rows shown.
   const notifications = await getNotifications(user.id, {
     page,
     pageSize: 25,
     isRead: filter === 'unread' ? false : undefined,
+    category: typeFilter,
   });
 
   // Check if there are unread notifications
@@ -84,10 +87,7 @@ export default async function NotificationsPage({
 
       {/* Notification List */}
       <div style={{ marginTop: 24 }}>
-        <NotificationList
-          initialNotifications={notifications}
-          typeFilter={typeFilter as 'all' | 'drives' | 'system'}
-        />
+        <NotificationList initialNotifications={notifications} />
       </div>
     </div>
   );

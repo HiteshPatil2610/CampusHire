@@ -3,6 +3,7 @@
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { driveSchema, type DriveInput } from "../schemas/drive";
+import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
 
 export interface CreateDriveResult {
   success: boolean;
@@ -57,6 +58,10 @@ export async function createDrive(input: DriveInput): Promise<CreateDriveResult>
         applicationFields: validated.applicationFields ?? null,
       },
     });
+
+    // Tell the students who can actually apply. Best-effort: a failed
+    // fan-out must not fail a drive that was created successfully.
+    await notifyEligibleStudentsOfDrive(drive);
 
     return {
       success: true,

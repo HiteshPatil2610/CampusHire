@@ -6,6 +6,13 @@ import { getStudentProfileByUserId } from '@/features/students/queries/get-profi
 import { calculateProfileCompletion } from '@/features/students/queries/profile-completion';
 import { getStudentDashboardData } from '@/features/students/queries/get-dashboard-data';
 import { getNotifications } from '@/features/notifications/queries/get-notifications';
+import {
+  sortByPriority,
+  getNotificationHref,
+  getNotificationPriority,
+  getNotificationTypeLabel,
+  PRIORITY_PRESENTATION,
+} from '@/features/notifications/utils/notification-priority';
 import { getEligibleDrives } from '@/features/drives/queries/get-eligible-drives';
 import {
   isStudentEligibleForDrive,
@@ -20,6 +27,9 @@ import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 
 export const dynamic = 'force-dynamic';
+
+/** Rows the dashboard notification widget shows before "View all". */
+const DASHBOARD_NOTIFICATION_LIMIT = 4;
 
 const QUICK_ACTIONS = [
   {
@@ -61,10 +71,17 @@ export default async function StudentDashboardPage() {
     eligible.data,
     2
   );
-  const notifications = await getNotifications(user.id, {
+  // Pull a wider slice than we render so the widget can rank by urgency
+  // rather than showing whichever three arrived most recently — an offer must
+  // not be pushed off the dashboard by three announcements.
+  const notificationPool = await getNotifications(user.id, {
     page: 1,
-    pageSize: 3,
+    pageSize: 15,
   });
+  const notifications = sortByPriority(notificationPool.data).slice(
+    0,
+    DASHBOARD_NOTIFICATION_LIMIT
+  );
 
   const now = new Date();
   const upcomingDeadlines = dashboard.all
@@ -229,30 +246,74 @@ export default async function StudentDashboardPage() {
             </Link>
           </div>
 
-          {notifications.data.length === 0 ? (
+          {notifications.length === 0 ? (
             <p className="dash-empty">No notifications yet.</p>
           ) : (
-            notifications.data.map((notification) => (
-              <div key={notification.id} className="dash-list-item">
-                <span
-                  className={`dash-list-dot ${
-                    notification.isRead ? 'read' : ''
-                  }`.trim()}
-                  aria-hidden
-                />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-                    {notification.title}
+            notifications.map((notification) => {
+              const priority = getNotificationPriority(notification);
+              const href = getNotificationHref(notification);
+
+              const row = (
+                <>
+                  <span
+                    className={`dash-list-dot ${
+                      notification.isRead ? 'read' : ''
+                    }`.trim()}
+                    aria-hidden
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <span
+                        className={`badge ${PRIORITY_PRESENTATION[priority].badgeClass}`}
+                        style={{ fontSize: 10 }}
+                      >
+                        {getNotificationTypeLabel(notification)}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: 'var(--text-primary)',
+                        fontWeight: notification.isRead ? 400 : 600,
+                        marginTop: 3,
+                      }}
+                    >
+                      {notification.title}
+                    </div>
+                    <div
+                      className="text-muted"
+                      style={{ fontSize: 11.5, marginTop: 3 }}
+                    >
+                      {formatRelativeTime(new Date(notification.createdAt))}
+                    </div>
                   </div>
-                  <div
-                    className="text-muted"
-                    style={{ fontSize: 11.5, marginTop: 3 }}
-                  >
-                    {formatRelativeTime(new Date(notification.createdAt))}
-                  </div>
+                </>
+              );
+
+              // Link only when there is somewhere to go, so a row never
+              // looks clickable and then does nothing.
+              return href ? (
+                <Link
+                  key={notification.id}
+                  href={href}
+                  className="dash-list-item"
+                  style={{ textDecoration: 'none', color: 'inherit' }}
+                >
+                  {row}
+                </Link>
+              ) : (
+                <div key={notification.id} className="dash-list-item">
+                  {row}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

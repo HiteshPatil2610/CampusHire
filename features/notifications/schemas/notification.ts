@@ -12,6 +12,12 @@ export const getNotificationsSchema = z.object({
     .max(100, "Page size must be 100 or less")
     .default(25),
   isRead: z.boolean().optional(),
+  /**
+   * Category filter, applied in the database. Previously the page fetched a
+   * chronological page and filtered it in the client, so "Drives" could show
+   * three rows out of a 25-row page while more matches sat on page two.
+   */
+  category: z.enum(["all", "drives", "system"]).default("all"),
 });
 
 export type GetNotificationsInput = z.infer<typeof getNotificationsSchema>;
