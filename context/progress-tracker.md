@@ -2292,6 +2292,24 @@ a rolled-back transaction (empty inactive department for the COALESCE path, a
 REJECTED application that must not count as placed, a closed drive that must
 not count as open). Identical in every case.
 
+### Route-transition skeletons
+
+18 `loading.tsx` files, one per data-backed segment, built from a new shared
+`components/shared/skeletons.tsx` (header, KPI row, list card, two-column,
+table, card grid, form). Previously only one segment had one.
+
+This is not decoration. Next prefetches a `force-dynamic` route only as far as
+its nearest `loading.tsx`, so 16 dynamic segments with no loading boundary had
+nothing to prefetch and every click blocked on the full server render. With the
+boundary in place the sidebar's existing `<Link>` prefetch warms the shell, the
+skeleton paints instantly on click, and only the data is still in flight.
+
+Nav links stay at Next's default prefetch on purpose — see architecture.md for
+why `prefetch={true}` across 23 links would be actively harmful at 500 users.
+
+Verified by rendering every shape on a temporary public route and screenshotting
+it; the route and its middleware entry were reverted afterwards.
+
 ### Reading a dev-server log
 
 Numbers from `next dev` are not production numbers, and most of the alarming

@@ -76,6 +76,25 @@ read path cheap, and both are load-bearing rather than stylistic:
   check in JS afterwards. A prefilter may over-match; it must never
   under-match, or it silently hides rows a user is entitled to.
 
+## Navigation and Perceived Speed
+
+Every dashboard route is `force-dynamic`, and Next prefetches a dynamic route
+only **as far as its nearest `loading.tsx`**. A segment without one has nothing
+to prefetch, so the click blocks on the full server render before anything
+paints. Each data-backed segment therefore has a `loading.tsx`, built from the
+shared shapes in `components/shared/skeletons.tsx`. A new data-backed route
+should get one too, and its skeleton should echo the real layout's blocks — a
+skeleton that does not match causes a visible jump when the data arrives.
+
+Sidebar links are left at Next's **default** prefetch, deliberately. The
+default prefetches the shell only, once the link scrolls into view, and only
+in production builds — `next dev` disables prefetching entirely, which is why
+local navigation always feels slower than the deployed app. Setting
+`prefetch={true}` on the nav would instead run a full server render, with its
+queries, for all 23 destinations on every dashboard load. That is a
+self-inflicted load test at 500 users, and it is the wrong trade: the shell is
+what removes the perceived wait, not the data.
+
 The app server must be deployed in the same region as the database. Latency
 between the two multiplies by the query count on every single request; latency
 between the user and the app server costs one round trip. Co-locating the two
