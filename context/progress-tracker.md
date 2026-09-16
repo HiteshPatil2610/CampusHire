@@ -2008,11 +2008,29 @@ No new failures: the suite fails on exactly the same 30 pre-existing tests as
 before this work (admin-assignment, admin-security, department-crud,
 excel-import, notification-authorization).
 
-### Known issue, pre-existing and unrelated
-`npm run build` compiles and typechecks clean, and every page now prerenders
-except `/404`, which fails with `<Html> should not be imported outside of
-pages/_document`. No source file imports `next/document`; this is the Pages
-Router `_error` fallback and predates this work. Not investigated further.
+### Build status — passing (earlier report was wrong)
+`npm run build` passes: compiles, typechecks, and generates 23/23 pages.
+
+An earlier note here recorded a `/404` prerender failure
+(`<Html> should not be imported outside of pages/_document`). That was an
+artifact of the environment it was run in, not a project defect. The cause is
+an inherited `NODE_ENV=development` in the build process: `next build` sets
+`NODE_ENV=production` itself, and when an outer `development` value overrides
+it, the production static-export pipeline runs against development internals
+and Next's built-in Pages Router `_error` page fails to render. Verified both
+ways on an otherwise identical tree — `NODE_ENV` unset exits 0, and
+`NODE_ENV=development npx next build` reproduces the error exactly.
+
+Nothing in the app imports `next/document`, and no app route was involved:
+with a stripped-down root layout the same error simply moved to `/500`.
+
+**Do not set `NODE_ENV` when building.** `.env.local` currently declares
+`NODE_ENV=development`; this does not break `next build` (Next reads `NODE_ENV`
+from the process before loading `.env` files and ignores the `.env` value when
+choosing build mode — it only warns), but per `code-standards.md` env vars are
+declared in `lib/env.ts` and `NODE_ENV` should not be set by hand. Removing the
+line clears the "non-standard NODE_ENV" warning. Any CI or wrapper script that
+exports `NODE_ENV=development` into a build will reproduce the failure.
 
 ### Context files updated
 - `architecture.md` — invariant 8 rewritten (a `DriveApplication`'s stage and
