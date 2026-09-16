@@ -15,6 +15,20 @@ interface LandingPageProps {
   dashboardHref: string;
 }
 
+/**
+ * Where each administrator role lands after signing in.
+ *
+ * Clerk exposes one sign-in page; `redirect_url` takes precedence over the
+ * `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` fallback, which is the
+ * same mechanism `middleware.ts` uses when it bounces an unauthenticated
+ * request. An account without the matching role is redirected home by the
+ * middleware, so these links grant nothing on their own.
+ */
+const ADMIN_SIGN_IN = {
+  dept: '/sign-in?redirect_url=%2Fadmin-dashboard',
+  superAdmin: '/sign-in?redirect_url=%2Fsuper-admin-dashboard',
+} as const;
+
 const MODULES = [
   {
     num: '01',
@@ -858,7 +872,7 @@ export default function LandingPage({
                 Sign Up
               </Link>
               <Link
-                href="/sign-in"
+                href={ADMIN_SIGN_IN.dept}
                 style={{ color: 'var(--text-secondary)' }}
               >
                 Department Admin
@@ -923,6 +937,35 @@ export default function LandingPage({
             All rights reserved © 2026 CampusHire. Built for campus placement
             cells.
           </div>
+
+          {/*
+            Administrator entry points. Clerk has a single sign-in flow and the
+            role comes from the account, so these are not separate logins —
+            each carries the dashboard to land on after signing in, and
+            middleware still enforces that the account actually holds the role.
+            Hidden when already signed in, where the nav shows "Go to
+            Dashboard" instead.
+          */}
+          {!isAuthenticated && (
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}
+            >
+              <Link href={ADMIN_SIGN_IN.dept} className="btn btn-outline btn-sm">
+                Department Admin Login
+              </Link>
+              <Link
+                href={ADMIN_SIGN_IN.superAdmin}
+                className="btn btn-outline btn-sm"
+              >
+                Super Admin Login
+              </Link>
+            </div>
+          )}
         </div>
       </footer>
     </div>
