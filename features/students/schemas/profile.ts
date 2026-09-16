@@ -5,6 +5,17 @@ import { z } from "zod";
  */
 export const personalInfoSchema = z.object({
   name: z.string().min(1, "Name is required").trim(),
+  /**
+   * Only ever used to FILL a missing roll number — a lateral-entry student
+   * may register without one. The action refuses to overwrite an existing
+   * value, because a roll number already on record is registrar-owned.
+   */
+  rollNumber: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .max(50, "Roll number too long")
+    .optional(),
   phoneNumber: z
     .string()
     .trim()

@@ -89,6 +89,17 @@ export async function applyToDrive(
       };
     }
 
+    // A lateral-entry student may register before a roll number is issued.
+    // It identifies them on every roster and export a recruiter sees, so an
+    // application cannot be submitted without one.
+    if (!studentWithAcademic.rollNumber) {
+      return {
+        success: false,
+        error:
+          "Add your roll number in your profile before applying to a drive.",
+      };
+    }
+
     // 4. Verify drive exists
     const drive = await prisma.drive.findUnique({
       where: { id: validated.data.driveId },

@@ -36,16 +36,21 @@ export async function createStudent(
       };
     }
 
-    // Check if roll number is already taken
-    const existingRollNumber = await prisma.student.findUnique({
-      where: { rollNumber: validated.rollNumber },
-    });
+    // A diploma student may register without a roll number; only check for a
+    // clash when one was actually supplied.
+    const rollNumber = validated.rollNumber?.trim() || null;
 
-    if (existingRollNumber) {
-      return {
-        success: false,
-        error: "Roll number is already registered",
-      };
+    if (rollNumber) {
+      const existingRollNumber = await prisma.student.findUnique({
+        where: { rollNumber },
+      });
+
+      if (existingRollNumber) {
+        return {
+          success: false,
+          error: "Roll number is already registered",
+        };
+      }
     }
 
     // Create student record
@@ -53,7 +58,8 @@ export async function createStudent(
       data: {
         userId: user.id,
         name: validated.name,
-        rollNumber: validated.rollNumber,
+        rollNumber,
+        entryType: validated.entryType,
         departmentId: validated.departmentId,
         phoneNumber: validated.phoneNumber || null,
         email: user.email, // Use email from authenticated User

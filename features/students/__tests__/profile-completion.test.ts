@@ -14,6 +14,7 @@ function createMockProfile(overrides?: Partial<CompleteProfile>): CompleteProfil
     phoneNumber: "+91 9876543210",
     isPending: false,
     optedIn: true,
+    entryType: 'REGULAR' as const,
     optedInLocked: false,
     profilePhotoUrl: null,
     linkedinUrl: null,
@@ -71,7 +72,6 @@ describe("Profile Completion Calculation", () => {
     const academic: StudentAcademic = {
       id: "academic-1",
       studentId: "student-1",
-      entryType: 'REGULAR' as const,
       diplomaPercentage: null,
       diplomaBoard: null,
       diplomaYear: null,
@@ -222,7 +222,6 @@ describe("Profile Completion Calculation", () => {
     const academic: StudentAcademic = {
       id: "academic-1",
       studentId: "student-1",
-      entryType: 'REGULAR' as const,
       diplomaPercentage: null,
       diplomaBoard: null,
       diplomaYear: null,
@@ -331,7 +330,6 @@ describe("Profile Completion Calculation", () => {
     const academic: StudentAcademic = {
       id: "academic-1",
       studentId: "student-1",
-      entryType: 'REGULAR' as const,
       diplomaPercentage: null,
       diplomaBoard: null,
       diplomaYear: null,
@@ -377,7 +375,6 @@ describe("Profile Completion Calculation", () => {
     const academic: StudentAcademic = {
       id: "academic-1",
       studentId: "student-1",
-      entryType: 'REGULAR' as const,
       diplomaPercentage: null,
       diplomaBoard: null,
       diplomaYear: null,

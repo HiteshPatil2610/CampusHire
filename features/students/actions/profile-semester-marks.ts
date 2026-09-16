@@ -28,12 +28,13 @@ export async function updateSemesterMarks(
     const { student } = await requireStudent();
     const validated = semesterMarksSchema.parse(input);
 
-    const academic = await prisma.studentAcademic.findUnique({
-      where: { studentId: student.id },
+    // Entry type lives on Student, set at registration.
+    const owner = await prisma.student.findUniqueOrThrow({
+      where: { id: student.id },
       select: { entryType: true },
     });
 
-    const firstSemester = firstSemesterFor(academic?.entryType ?? "REGULAR");
+    const firstSemester = firstSemesterFor(owner.entryType);
     const outOfRange = validated.marks.find(
       (mark) => mark.semester < firstSemester
     );

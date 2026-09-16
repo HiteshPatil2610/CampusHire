@@ -80,6 +80,13 @@ export function getIneligibilityReasons(
 ): string[] {
   const reasons: string[] = [];
 
+  // Surfaced before the academic check so a lateral-entry student who has
+  // neither sees both gaps at once rather than fixing one and discovering
+  // the next. The same rule is enforced server-side in `applyToDrive`.
+  if (!student.rollNumber) {
+    reasons.push("Add your roll number in your profile");
+  }
+
   if (!student.academic) {
     reasons.push("Academic information not completed");
     return reasons; // Can't check other criteria without academic info

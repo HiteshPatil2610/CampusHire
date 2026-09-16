@@ -14,6 +14,7 @@ function createMockStudent(overrides?: Partial<Student & { academic: StudentAcad
     phoneNumber: null,
     isPending: false,
     optedIn: true,
+    entryType: 'REGULAR' as const,
     optedInLocked: false,
     profilePhotoUrl: null,
     linkedinUrl: null,
@@ -31,7 +32,6 @@ function createMockStudent(overrides?: Partial<Student & { academic: StudentAcad
   const baseAcademic: StudentAcademic = {
     id: "academic-1",
     studentId: "student-1",
-    entryType: 'REGULAR' as const,
     diplomaPercentage: null,
     diplomaBoard: null,
     diplomaYear: null,
@@ -107,7 +107,6 @@ describe("Drive Eligibility", () => {
       academic: {
         id: "academic-1",
         studentId: "student-1",
-        entryType: 'REGULAR' as const,
         diplomaPercentage: null,
         diplomaBoard: null,
         diplomaYear: null,
@@ -177,7 +176,6 @@ describe("Drive Eligibility", () => {
       academic: {
         id: "academic-1",
         studentId: "student-1",
-        entryType: 'REGULAR' as const,
         diplomaPercentage: null,
         diplomaBoard: null,
         diplomaYear: null,
@@ -211,7 +209,6 @@ describe("Drive Eligibility", () => {
       academic: {
         id: "academic-1",
         studentId: "student-1",
-        entryType: 'REGULAR' as const,
         diplomaPercentage: null,
         diplomaBoard: null,
         diplomaYear: null,
@@ -245,7 +242,6 @@ describe("Drive Eligibility", () => {
       academic: {
         id: "academic-1",
         studentId: "student-1",
-        entryType: 'REGULAR' as const,
         diplomaPercentage: null,
         diplomaBoard: null,
         diplomaYear: null,
@@ -280,7 +276,6 @@ describe("Drive Eligibility", () => {
       academic: {
         id: "academic-1",
         studentId: "student-1",
-        entryType: 'REGULAR' as const,
         diplomaPercentage: null,
         diplomaBoard: null,
         diplomaYear: null,

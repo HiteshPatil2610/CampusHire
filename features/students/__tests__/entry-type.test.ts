@@ -41,8 +41,7 @@ describe("Entry type — semester range", () => {
 describe("Entry type — pre-college record", () => {
   it("reads the 12th score for a regular student", () => {
     expect(
-      preCollegePercentage({
-        entryType: "REGULAR",
+      preCollegePercentage("REGULAR", {
         twelfthPercentage: 88.5,
         diplomaPercentage: null,
       })
@@ -51,8 +50,7 @@ describe("Entry type — pre-college record", () => {
 
   it("reads the diploma score for a lateral-entry student", () => {
     expect(
-      preCollegePercentage({
-        entryType: "DIPLOMA",
+      preCollegePercentage("DIPLOMA", {
         twelfthPercentage: null,
         diplomaPercentage: 81.2,
       })
@@ -61,12 +59,17 @@ describe("Entry type — pre-college record", () => {
 
   it("returns null rather than falling back to the wrong branch", () => {
     expect(
-      preCollegePercentage({
-        entryType: "DIPLOMA",
+      preCollegePercentage("DIPLOMA", {
         twelfthPercentage: 88.5,
         diplomaPercentage: null,
       })
     ).toBeNull();
+  });
+
+  it("returns null when there is no academic record yet", () => {
+    // A student can now register before any StudentAcademic row exists.
+    expect(preCollegePercentage("REGULAR", null)).toBeNull();
+    expect(preCollegePercentage("DIPLOMA", null)).toBeNull();
   });
 
   it("labels the qualification each entry type submits", () => {

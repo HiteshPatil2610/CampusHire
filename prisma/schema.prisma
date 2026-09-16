@@ -123,7 +123,11 @@ model Student {
   id              String    @id @default(cuid())
   userId          String?   @unique // Optional: null for bulk-imported pending students
   departmentId    String
-  rollNumber      String    @unique
+  // Null only until the student supplies it. A lateral-entry student may not
+  // have been issued one at registration; they are blocked from applying to
+  // any drive until it is filled in. Postgres permits many NULLs under a
+  // unique index, so the constraint still holds for everyone who has one.
+  rollNumber      String?   @unique
   name            String
   email           String    @unique // For matching during self-registration
   phoneNumber     String?
@@ -137,6 +141,10 @@ model Student {
   address         String?   @db.Text
   personalEmail   String?
   batchYear       Int?
+  // How the student entered the degree. Captured at registration, before any
+  // StudentAcademic row exists, which is why it lives here rather than on the
+  // academic record: it is an admission fact, not a marks fact.
+  entryType       EntryType @default(REGULAR)
   // Whether the student is participating in campus placement at all.
   // A student who has opted out is excluded from placement KPIs and is not
   // offered drives. Placement itself is never stored here — it is derived
@@ -193,11 +201,11 @@ model SemesterMark {
 
 // StudentAcademic - stores academic information (one-to-one with Student)
 model StudentAcademic {
-  id                  String    @id @default(cuid())
-  studentId           String    @unique
-  // Decides which pre-college record is required: REGULAR -> 12th,
-  // DIPLOMA -> diploma. The unused branch is left null rather than zero-filled.
-  entryType           EntryType @default(REGULAR)
+  id                  String   @id @default(cuid())
+  studentId           String   @unique
+  // Which pre-college branch is required is decided by `Student.entryType`:
+  // REGULAR -> 12th, DIPLOMA -> diploma. The unused branch is left null
+  // rather than zero-filled.
   tenthPercentage     Float
   tenthBoard          String?
   tenthYear           Int?
@@ -215,11 +223,11 @@ model StudentAcademic {
   diplomaMarksheetUrl String?
   currentCGPA         Float
   currentSemester     Int
-  activeBacklogs      Int       @default(0)
+  activeBacklogs      Int      @default(0)
   // Backlogs cleared in the past, kept separately from active ones
-  pastBacklogCount    Int       @default(0)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  pastBacklogCount    Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)

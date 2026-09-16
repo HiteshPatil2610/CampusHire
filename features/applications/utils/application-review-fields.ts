@@ -82,12 +82,13 @@ export function buildApplicationReviewData(
 
   // A lateral-entry student has no 12th record — their diploma percentage is
   // what fills the catalog's "12th / Diploma Percentage" row.
-  const preCollege = academic ? preCollegePercentage(academic) : null;
+  const preCollege = preCollegePercentage(student.entryType, academic);
   const preCollegeValue = preCollege === null ? "" : `${preCollege}%`;
 
   const valueByKey: Record<string, string> = {
     name: student.name,
-    rollNo: student.rollNumber,
+    // Null until a lateral-entry student supplies it.
+    rollNo: student.rollNumber ?? "",
     email: student.email,
     personalEmail: student.personalEmail ?? "",
     phone: student.phoneNumber ?? "",

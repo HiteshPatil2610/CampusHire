@@ -20,10 +20,39 @@ export async function updatePersonalInfo(input: PersonalInfoInput): Promise<Acti
     // Validate input
     const validated = personalInfoSchema.parse(input);
 
+    // A roll number can be supplied once, to fill a gap left at registration.
+    // It is never overwritten from here: an existing roll number is owned by
+    // the registrar, and it is the key admins and exports identify a student
+    // by. Re-read from the database rather than trusting the submitted state.
+    const current = await prisma.student.findUniqueOrThrow({
+      where: { id: student.id },
+      select: { rollNumber: true },
+    });
+
+    const submittedRollNumber = validated.rollNumber?.trim();
+    let rollNumberUpdate: { rollNumber?: string } = {};
+
+    if (current.rollNumber === null && submittedRollNumber) {
+      const taken = await prisma.student.findUnique({
+        where: { rollNumber: submittedRollNumber },
+        select: { id: true },
+      });
+
+      if (taken) {
+        return {
+          success: false,
+          error: "That roll number is already registered to another student.",
+        };
+      }
+
+      rollNumberUpdate = { rollNumber: submittedRollNumber };
+    }
+
     // Update student record
     await prisma.student.update({
       where: { id: student.id },
       data: {
+        ...rollNumberUpdate,
         name: validated.name,
         phoneNumber: validated.phoneNumber || null,
         gender: validated.gender || null,

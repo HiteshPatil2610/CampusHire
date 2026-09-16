@@ -491,7 +491,7 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
         studentCGPA={studentWithAcademic.academic.currentCGPA}
         studentBacklogs={studentWithAcademic.academic.activeBacklogs}
         studentDepartment={studentWithAcademic.department.name}
-        studentRollNumber={studentWithAcademic.rollNumber}
+        studentRollNumber={studentWithAcademic.rollNumber ?? ''}
       />
     </div>
   );

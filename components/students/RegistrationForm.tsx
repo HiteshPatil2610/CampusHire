@@ -20,7 +20,13 @@ export function RegistrationForm() {
     rollNumber: "",
     departmentId: "",
     phoneNumber: "",
+    entryType: "" as "" | "REGULAR" | "DIPLOMA",
   });
+
+  // A lateral-entry student may not have been issued a roll number yet, so
+  // they may leave it blank here and supply it from their profile later.
+  // Everyone else must provide one now.
+  const isDiploma = formData.entryType === "DIPLOMA";
 
   // Load departments on mount
   useEffect(() => {
@@ -37,7 +43,17 @@ export function RegistrationForm() {
     setLoading(true);
 
     try {
-      const result = await createStudent(formData);
+      if (!formData.entryType) {
+        setError("Please tell us how you joined the programme");
+        setLoading(false);
+        return;
+      }
+
+      const result = await createStudent({
+        ...formData,
+        entryType: formData.entryType,
+        rollNumber: formData.rollNumber.trim() || undefined,
+      });
 
       if (result.success) {
         // Refresh the page to show the dashboard
@@ -85,18 +101,51 @@ export function RegistrationForm() {
           </div>
 
           <div>
+            <label htmlFor="entryType" className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
+              How did you join this programme? *
+            </label>
+            <select
+              id="entryType"
+              required
+              value={formData.entryType}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  entryType: e.target.value as "" | "REGULAR" | "DIPLOMA",
+                })
+              }
+              className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
+            >
+              <option value="">Select an option</option>
+              <option value="REGULAR">Regular — after 12th / HSC</option>
+              <option value="DIPLOMA">Lateral entry — after Diploma</option>
+            </select>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              {isDiploma
+                ? "Your profile will ask for diploma marks instead of 12th, starting from semester 3."
+                : "This decides which academic records your profile asks for. It cannot be changed later."}
+            </p>
+          </div>
+
+          <div>
             <label htmlFor="rollNumber" className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
-              Roll Number *
+              Roll Number {isDiploma ? "" : "*"}
             </label>
             <input
               type="text"
               id="rollNumber"
-              required
+              required={!isDiploma}
               value={formData.rollNumber}
               onChange={(e) => setFormData({ ...formData, rollNumber: e.target.value.toUpperCase() })}
               className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
-              placeholder="Enter your roll number"
+              placeholder={isDiploma ? "Leave blank if not issued yet" : "Enter your roll number"}
             />
+            {isDiploma && (
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Optional for now — you can add it from your profile. You will
+                not be able to apply to any drive until you do.
+              </p>
+            )}
           </div>
 
           <div>
@@ -121,17 +170,20 @@ export function RegistrationForm() {
 
           <div>
             <label htmlFor="phoneNumber" className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
-              Phone Number
+              Phone Number *
             </label>
             <input
               type="tel"
               id="phoneNumber"
+              required
               value={formData.phoneNumber}
               onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
               className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
               placeholder="+91 9876543210"
             />
-            <p className="text-xs text-[var(--text-muted)] mt-1">Optional</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Used by your placement cell to reach you about drives.
+            </p>
           </div>
 
           <button

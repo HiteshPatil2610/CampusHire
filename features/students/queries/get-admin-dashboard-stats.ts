@@ -17,7 +17,7 @@ export interface AdminDashboardStats {
   studentsNeedingAttention: Array<{
     id: string;
     name: string;
-    rollNumber: string;
+    rollNumber: string | null;
     cgpa: number | null;
     activeBacklogs: number;
   }>;

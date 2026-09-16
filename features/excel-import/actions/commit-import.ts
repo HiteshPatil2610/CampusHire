@@ -100,6 +100,9 @@ export async function commitImport(
         name:        row.name,
         email:       row.email,
         phoneNumber: row.phoneNumber ?? null,
+        // Entry type lives on Student — it decides which pre-college branch
+        // the academic record below is allowed to fill.
+        entryType:   row.entryType ?? ("REGULAR" as const),
       };
     });
 
@@ -144,7 +147,6 @@ export async function commitImport(
           await tx.studentAcademic.create({
             data: {
               studentId:          student.id,
-              entryType,
               tenthPercentage:    row.tenthPercentage ?? 0,
               twelfthPercentage:  isDiploma ? null : row.twelfthPercentage ?? null,
               diplomaPercentage:  isDiploma ? row.diplomaPercentage ?? null : null,

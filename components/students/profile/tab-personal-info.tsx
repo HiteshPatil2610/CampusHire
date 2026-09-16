@@ -31,8 +31,14 @@ export default function TabPersonalInfo({ profile }: TabPersonalInfoProps) {
   const [isUploading, setIsUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
+  // A lateral-entry student may have registered without a roll number. It is
+  // editable only while missing; once set it is registrar-owned and the
+  // server refuses to overwrite it.
+  const needsRollNumber = profile.student.rollNumber === null;
+
   const [form, setForm] = useState({
     name: profile.student.name,
+    rollNumber: profile.student.rollNumber ?? '',
     phoneNumber: profile.student.phoneNumber ?? '',
     personalEmail: profile.student.personalEmail ?? '',
     address: profile.student.address ?? '',
@@ -100,6 +106,9 @@ export default function TabPersonalInfo({ profile }: TabPersonalInfoProps) {
     startTransition(async () => {
       const result = await updatePersonalInfo({
         name: form.name,
+        rollNumber: needsRollNumber
+          ? form.rollNumber.trim() || undefined
+          : undefined,
         phoneNumber: form.phoneNumber || undefined,
         personalEmail: form.personalEmail || undefined,
         address: form.address || undefined,
@@ -292,8 +301,33 @@ export default function TabPersonalInfo({ profile }: TabPersonalInfoProps) {
       >
         <div className="field-row">
           <div className="field">
-            <label>Roll Number</label>
-            <input type="text" value={profile.student.rollNumber} readOnly />
+            <label>Roll Number {needsRollNumber && '*'}</label>
+            {needsRollNumber ? (
+              <>
+                <input
+                  type="text"
+                  value={form.rollNumber}
+                  placeholder="Enter your roll number"
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      rollNumber: e.target.value.toUpperCase(),
+                    })
+                  }
+                />
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--red)',
+                    marginTop: 4,
+                  }}
+                >
+                  Required before you can apply to any drive.
+                </p>
+              </>
+            ) : (
+              <input type="text" value={profile.student.rollNumber ?? ''} readOnly />
+            )}
           </div>
           <div className="field">
             <label>Department</label>

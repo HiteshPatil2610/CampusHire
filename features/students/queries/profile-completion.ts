@@ -121,11 +121,13 @@ export function calculateProfileCompletion(profile: CompleteProfile): ProfileCom
     
     // A diploma (lateral-entry) student has no 12th record — their diploma
     // percentage is the field that counts instead.
-    if (preCollegePercentage(profile.academic) !== null) {
+    if (
+      preCollegePercentage(profile.student.entryType, profile.academic) !== null
+    ) {
       academicFieldsFilled++;
     } else {
       missingFields.push(
-        profile.academic.entryType === "DIPLOMA"
+        profile.student.entryType === "DIPLOMA"
           ? "Diploma Percentage"
           : "12th Percentage"
       );

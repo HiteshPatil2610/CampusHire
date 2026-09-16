@@ -28,8 +28,6 @@ interface SemesterRow {
 
 const SEMESTER_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
 
-const ENTRY_TYPE_OPTIONS: EntryType[] = ['REGULAR', 'DIPLOMA'];
-
 const BACKLOG_OPTIONS = [
   { value: 0, label: 'No (0 Active Backlogs)' },
   { value: 1, label: '1 Active Backlog' },
@@ -57,7 +55,9 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
   const [isPending, startTransition] = useTransition();
 
   const [form, setForm] = useState({
-    entryType: (profile.academic?.entryType ?? 'REGULAR') as EntryType,
+    // Chosen at registration and fixed thereafter — see the read-only panel
+    // below. Kept in form state so the branch logic can read it.
+    entryType: profile.student.entryType as EntryType,
     tenthPercentage: profile.academic?.tenthPercentage ?? ('' as number | ''),
     tenthBoard: profile.academic?.tenthBoard ?? '',
     tenthYear: profile.academic?.tenthYear ?? ('' as number | ''),
@@ -129,22 +129,6 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
 
   function handleRemoveSemester(index: number) {
     setSemesterRows((rows) => rows.filter((_, i) => i !== index));
-  }
-
-  /**
-   * Switching to lateral entry drops the semester rows that entry type cannot
-   * have, and lifts the current semester to the first one it can — otherwise
-   * the form would submit a shape the server rejects.
-   */
-  function handleEntryTypeChange(entryType: EntryType) {
-    const nextFirst = firstSemesterFor(entryType);
-
-    setForm((prev) => ({
-      ...prev,
-      entryType,
-      currentSemester: Math.max(prev.currentSemester, nextFirst),
-    }));
-    setSemesterRows((rows) => rows.filter((row) => row.semester >= nextFirst));
   }
 
   function handleSave() {
@@ -244,27 +228,20 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
       </h3>
 
       {/*
-        Entry type decides which pre-college record is asked for and which
-        semesters exist. Changing it rewrites both below.
+        Entry type is chosen at registration and fixed thereafter. It decides
+        which pre-college record is asked for below and which semesters exist,
+        so letting it change here would silently discard whichever branch the
+        student had already filled in.
       */}
       <div className="panel" style={{ marginBottom: 18 }}>
         <div className="field" style={{ marginBottom: 0 }}>
-          <label>How did you enter this degree? *</label>
-          <select
-            value={form.entryType}
-            onChange={(e) => handleEntryTypeChange(e.target.value as EntryType)}
-          >
-            {ENTRY_TYPE_OPTIONS.map((value) => (
-              <option key={value} value={value}>
-                {ENTRY_TYPE_LABELS[value]}
-              </option>
-            ))}
-          </select>
+          <label>How you entered this degree</label>
+          <input type="text" value={ENTRY_TYPE_LABELS[form.entryType]} readOnly />
           <p className="panel-hint" style={{ marginTop: 8 }}>
             <Info size={12} aria-hidden />
             {isDiploma
-              ? 'Lateral entry: submit your diploma instead of 12th, and record marks from semester 3 onwards.'
-              : 'Regular entry: submit your 12th record and record marks from semester 1 onwards.'}
+              ? 'Lateral entry: submit your diploma instead of 12th, and record marks from semester 3 onwards. Contact your department admin if this is wrong.'
+              : 'Regular entry: submit your 12th record and record marks from semester 1 onwards. Contact your department admin if this is wrong.'}
           </p>
         </div>
       </div>

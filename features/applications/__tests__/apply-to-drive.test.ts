@@ -53,6 +53,7 @@ describe("applyToDrive", () => {
     phoneNumber: "1234567890",
     isPending: false,
     optedIn: true,
+    entryType: 'REGULAR' as const,
     optedInLocked: false,
     profilePhotoUrl: null,
     linkedinUrl: null,
@@ -75,7 +76,6 @@ describe("applyToDrive", () => {
   const mockAcademic = {
     id: "academic-1",
     studentId: "student-1",
-    entryType: 'REGULAR' as const,
     diplomaPercentage: null,
     diplomaBoard: null,
     diplomaYear: null,

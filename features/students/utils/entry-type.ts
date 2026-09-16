@@ -62,13 +62,21 @@ export const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
  * The pre-college percentage used for eligibility and display, whichever
  * branch this student filled. Callers should not read `twelfthPercentage`
  * directly, because it is null for every diploma student.
+ *
+ * `entryType` is passed separately because it lives on `Student` while the
+ * percentages live on `StudentAcademic` — entry type is known at
+ * registration, long before any marks are entered.
  */
-export function preCollegePercentage(academic: {
-  entryType: EntryType;
-  twelfthPercentage: number | null;
-  diplomaPercentage: number | null;
-}): number | null {
-  return academic.entryType === "DIPLOMA"
+export function preCollegePercentage(
+  entryType: EntryType,
+  academic: {
+    twelfthPercentage: number | null;
+    diplomaPercentage: number | null;
+  } | null
+): number | null {
+  if (!academic) return null;
+
+  return entryType === "DIPLOMA"
     ? academic.diplomaPercentage
     : academic.twelfthPercentage;
 }

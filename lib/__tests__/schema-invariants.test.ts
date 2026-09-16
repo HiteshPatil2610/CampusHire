@@ -205,7 +205,6 @@ describe('Schema Invariants — Unit 02C: Student Profile Structure', () => {
       const mockAcademic: Partial<StudentAcademic> = {
         id: 'academic_123',
         studentId: 'student_123',
-        entryType: 'REGULAR' as const,
         diplomaPercentage: null,
         diplomaBoard: null,
         diplomaYear: null,
