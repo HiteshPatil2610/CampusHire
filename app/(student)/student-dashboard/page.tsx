@@ -20,6 +20,8 @@ import {
 } from '@/features/drives/queries/drive-eligibility';
 import { buildApplicationReviewData } from '@/features/applications/utils/application-review-fields';
 import { RegistrationForm } from '@/components/students/RegistrationForm';
+import AwaitingApproval from '@/components/students/AwaitingApproval';
+import { getMyAccessRequest } from '@/features/students/queries/get-my-access-request';
 import DashboardDriveCard from '@/components/students/dashboard/dashboard-drive-card';
 import StatusBadge from '@/components/ui/status-badge';
 import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
@@ -58,6 +60,26 @@ export default async function StudentDashboardPage() {
 
   const profile = await getStudentProfileByUserId(user.id);
   if (!profile) {
+    // No Student record. Either they have not submitted their details yet, or
+    // they have and are waiting on a department admin to approve them.
+    const request = await getMyAccessRequest(user.id);
+
+    if (request && request.status !== 'APPROVED') {
+      return (
+        <AwaitingApproval
+          email={request.email}
+          departmentName={request.department.name}
+          submittedAt={request.createdAt}
+          rejectedReason={
+            request.status === 'REJECTED'
+              ? request.reviewNote ??
+                'Your department admin declined this request. Contact them for details.'
+              : null
+          }
+        />
+      );
+    }
+
     return <RegistrationForm />;
   }
 

@@ -3,16 +3,31 @@
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { studentRegistrationSchema, type StudentRegistrationInput } from "../schemas/registration";
+import {
+  decideRegistrationOutcome,
+  mergeOntoImportedRecord,
+} from "../utils/registration-match";
+import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
 
-export interface RegistrationResult {
-  success: boolean;
-  studentId?: string;
-  error?: string;
-}
+export type RegistrationResult =
+  /** Matched an imported record — the student has access immediately. */
+  | { success: true; status: "approved"; studentId: string }
+  /** No imported record matched — a department admin must approve. */
+  | { success: true; status: "pending-review" }
+  | { success: false; error: string };
 
 /**
- * Create a new Student record for an authenticated user with STUDENT role
- * Called after Clerk authentication and User record creation
+ * Handle a student completing the registration card after signing up.
+ *
+ * Two outcomes, decided by `decideRegistrationOutcome`:
+ *
+ *  - Their verified email matches a student their department admin already
+ *    imported. The admin has effectively vouched for them, so the account is
+ *    linked to that record and they go straight to the dashboard.
+ *  - Nothing matches. Their self-asserted details are written to
+ *    `StudentAccessRequest` for an admin to review, and they are shown a
+ *    waiting screen. Nothing is written to `Student`, so an unapproved
+ *    sign-up never appears in a roster or a placement statistic.
  */
 export async function createStudent(
   input: StudentRegistrationInput
@@ -24,7 +39,7 @@ export async function createStudent(
     // Validate input
     const validated = studentRegistrationSchema.parse(input);
 
-    // Check if student record already exists for this user
+    // Already a student — nothing to do.
     const existingStudent = await prisma.student.findUnique({
       where: { userId: user.id },
     });
@@ -36,44 +51,94 @@ export async function createStudent(
       };
     }
 
-    // A diploma student may register without a roll number; only check for a
-    // clash when one was actually supplied.
-    const rollNumber = validated.rollNumber?.trim() || null;
+    // Already waiting on an admin — do not queue a second request.
+    const existingRequest = await prisma.studentAccessRequest.findUnique({
+      where: { userId: user.id },
+    });
 
-    if (rollNumber) {
-      const existingRollNumber = await prisma.student.findUnique({
-        where: { rollNumber },
-      });
-
-      if (existingRollNumber) {
-        return {
-          success: false,
-          error: "Roll number is already registered",
-        };
-      }
+    if (existingRequest && existingRequest.status === "PENDING") {
+      return { success: true, status: "pending-review" };
     }
 
-    // Create student record
-    const student = await prisma.student.create({
-      data: {
+    if (existingRequest && existingRequest.status === "REJECTED") {
+      return {
+        success: false,
+        error:
+          "Your request for student access was declined. Contact your department admin.",
+      };
+    }
+
+    // Match on the Clerk-verified email, never on a self-typed field.
+    const imported = await prisma.student.findUnique({
+      where: { email: user.email },
+      select: { id: true, isPending: true, userId: true, rollNumber: true },
+    });
+
+    const outcome = decideRegistrationOutcome(imported);
+
+    if (outcome.kind === "blocked") {
+      return { success: false, error: outcome.reason };
+    }
+
+    if (outcome.kind === "link" && imported) {
+      // Claim the imported row. The admin's values stay authoritative for
+      // anything the registrar owns; see `mergeOntoImportedRecord`.
+      const merged = mergeOntoImportedRecord(validated, imported);
+
+      const student = await prisma.student.update({
+        where: { id: outcome.studentId },
+        data: {
+          userId: user.id,
+          isPending: false,
+          ...merged,
+        },
+      });
+
+      await createAuditLog({
+        action: AuditAction.UPDATE,
+        entityType: AuditEntityType.STUDENT,
+        entityId: student.id,
+        metadata: {
+          event: "self-registration-linked-to-import",
+          email: user.email,
+        },
+      });
+
+      return { success: true, status: "approved", studentId: student.id };
+    }
+
+    // Nothing matched — queue for review.
+    const rollNumber = validated.rollNumber?.trim() || null;
+
+    await prisma.studentAccessRequest.upsert({
+      where: { userId: user.id },
+      create: {
         userId: user.id,
         name: validated.name,
+        email: user.email,
         rollNumber,
-        entryType: validated.entryType,
         departmentId: validated.departmentId,
-        phoneNumber: validated.phoneNumber || null,
-        email: user.email, // Use email from authenticated User
-        isPending: false, // Not pending since registered via self-registration
+        phoneNumber: validated.phoneNumber,
+        entryType: validated.entryType,
+        status: "PENDING",
+      },
+      update: {
+        name: validated.name,
+        rollNumber,
+        departmentId: validated.departmentId,
+        phoneNumber: validated.phoneNumber,
+        entryType: validated.entryType,
+        status: "PENDING",
+        reviewedById: null,
+        reviewedAt: null,
+        reviewNote: null,
       },
     });
 
-    return {
-      success: true,
-      studentId: student.id,
-    };
+    return { success: true, status: "pending-review" };
   } catch (error) {
     console.error("Student registration error:", error);
-    
+
     if (error instanceof Error) {
       return {
         success: false,
@@ -83,7 +148,7 @@ export async function createStudent(
 
     return {
       success: false,
-      error: "Failed to create student profile. Please try again.",
+      error: "Failed to submit your details. Please try again.",
     };
   }
 }

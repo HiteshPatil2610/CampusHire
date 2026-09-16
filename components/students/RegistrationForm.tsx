@@ -56,10 +56,12 @@ export function RegistrationForm() {
       });
 
       if (result.success) {
-        // Refresh the page to show the dashboard
+        // Either outcome is a re-render of the same route: an approved
+        // student gets the dashboard, one awaiting review gets the waiting
+        // screen. The server decides which, so the client just refreshes.
         router.refresh();
       } else {
-        setError(result.error || "Failed to complete registration");
+        setError(result.error || "Failed to submit your details");
       }
     } catch (err) {
       setError("An unexpected error occurred");
@@ -75,7 +77,9 @@ export function RegistrationForm() {
           Complete Your Profile
         </h1>
         <p className="text-sm text-[var(--text-secondary)] mb-6">
-          Please provide your details to continue
+          Please provide your details to continue. If your college has already
+          added you to its placement roster, you will get access straight away
+          — otherwise your department admin will confirm your request.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -191,7 +195,7 @@ export function RegistrationForm() {
             disabled={loading}
             className="w-full bg-[var(--accent)] text-white py-2.5 rounded-lg font-medium hover:bg-[var(--accent-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? "Completing Registration..." : "Complete Registration"}
+            {loading ? "Submitting..." : "Submit details"}
           </button>
         </form>
       </div>

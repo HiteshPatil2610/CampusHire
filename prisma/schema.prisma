@@ -33,6 +33,14 @@ enum EntryType {
   DIPLOMA
 }
 
+// Outcome of a self-registration request that could not be matched against
+// an admin-imported student record.
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // Apply method enum for drives
 enum ApplyMethod {
   IN_APP
@@ -70,12 +78,14 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  departmentAdmin DepartmentAdmin?
-  student         Student?
-  auditLogs       AuditLog[]
-  notifications   Notification[]
-  createdDrives   Drive[]            @relation("DriveCreatedBy")
-  stageUpdates    DriveApplication[] @relation("ApplicationStageUpdatedBy")
+  departmentAdmin  DepartmentAdmin?
+  student          Student?
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+  createdDrives    Drive[]                @relation("DriveCreatedBy")
+  stageUpdates     DriveApplication[]     @relation("ApplicationStageUpdatedBy")
+  accessRequest    StudentAccessRequest?
+  reviewedRequests StudentAccessRequest[] @relation("AccessRequestReviewedBy")
 
   @@index([clerkId])
   @@index([email])
@@ -91,10 +101,11 @@ model Department {
   updatedAt DateTime @updatedAt
 
   // Relations
-  admins       DepartmentAdmin[]
-  students     Student[]
-  drives       Drive[]
-  driveConfigs DriveDepartmentConfig[]
+  admins         DepartmentAdmin[]
+  students       Student[]
+  drives         Drive[]
+  driveConfigs   DriveDepartmentConfig[]
+  accessRequests StudentAccessRequest[]
 
   @@index([code])
 }
@@ -444,6 +455,47 @@ model DriveApplication {
   @@index([driveId])
   @@index([stage])
   @@index([status])
+}
+
+// ============================================================================
+// 11 — SELF-REGISTRATION ACCESS REQUESTS
+// ============================================================================
+
+// A person who signed up themselves and whose details did NOT match any
+// admin-imported student record.
+//
+// Their details are self-asserted and unverified, so they are deliberately
+// NOT written into `Student` until a department admin approves them —
+// otherwise an unapproved stranger would appear in the roster, in
+// `totalStudents`, and in the placement-rate denominator. A sign-up whose
+// email DOES match a pending imported student never reaches this table; it
+// links to that record directly.
+model StudentAccessRequest {
+  id           String              @id @default(cuid())
+  userId       String              @unique
+  name         String
+  email        String
+  // Optional for the same reason it is on Student: a lateral-entry student
+  // may not have been issued one yet.
+  rollNumber   String?
+  departmentId String
+  phoneNumber  String
+  entryType    EntryType           @default(REGULAR)
+  status       AccessRequestStatus @default(PENDING)
+  // Who decided, and why — a rejection should be explainable to the student.
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?             @db.Text
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  reviewedBy User?      @relation("AccessRequestReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([departmentId])
+  @@index([departmentId, status])
 }
 
 // ============================================================================
