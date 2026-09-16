@@ -12,6 +12,7 @@ config({ path: resolve(process.cwd(), ".env.local") });
 
 import { clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import { retireStudentRecord } from "@/features/admin-accounts/utils/retire-student-record";
 
 async function makeSuperAdmin(email: string) {
   console.log(`\n🔍 Looking for user: ${email}\n`);
@@ -31,6 +32,18 @@ async function makeSuperAdmin(email: string) {
   console.log(`   - Email: ${user.email}`);
   console.log(`   - Current Role: ${user.role}`);
   console.log(`   - Clerk ID: ${user.clerkId}\n`);
+
+  // Retire any leftover student record BEFORE the "already an admin" exit
+  // below, so re-running this script also repairs an account promoted earlier.
+  const retirement = await retireStudentRecord(prisma, user.id);
+  if (retirement.action === "refuse") {
+    console.error(`❌ ${retirement.reason}\n`);
+    process.exit(1);
+  }
+  if (retirement.applied) {
+    console.log(`🧹 ${retirement.reason}`);
+    console.log(`   They no longer appear in the student roster or counts.\n`);
+  }
 
   if (user.role === "SUPER_ADMIN") {
     console.log(`✅ User is already a SUPER_ADMIN`);
