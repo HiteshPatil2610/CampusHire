@@ -109,7 +109,17 @@ enum Role {
 - `rollNumber`: Student roll number (unique per institution)
 - `name`: Full name (sourced from Clerk during registration)
 - `phoneNumber`: Contact number (optional initially, can be added during profile completion)
+- `optedIn`: Whether the student is participating in campus placement (boolean, default true)
+- `optedInLocked`: Set by a department admin to freeze the opt-in choice so the student can no longer change it (boolean, default false)
 - `createdAt`, `updatedAt`: Timestamps
+
+**Placement is NOT a field on this model.** A student counts as placed when they
+hold a `DriveApplication` with `status = SELECTED`. An earlier
+`placementStatus` text column existed but was never written by any code path,
+so every KPI built on it read zero; it was dropped in migration
+`20260916100000_placement_derivation_diploma_entry_opt_in` along with
+`placedCompany` and `placedPackage`. Resolve placement through
+`features/students/utils/placement-status.ts` — do not reintroduce a column.
 
 **Relations**:
 - One-to-one with User (cascade delete)
@@ -154,12 +164,26 @@ Stored in the `Student` model directly:
 **Fields**:
 - `id`: CUID primary key
 - `studentId`: Foreign key to Student (unique)
+- `entryType`: Enum (`REGULAR`, `DIPLOMA`), default `REGULAR` — how the student entered the degree, which decides the pre-college branch below
 - `tenthPercentage`: 10th standard percentage (decimal, e.g., 85.5)
-- `twelfthPercentage`: 12th standard percentage (decimal)
+- `twelfthPercentage`: 12th standard percentage (decimal, **nullable** — null for a DIPLOMA student)
+- `twelfthBoard`, `twelfthYear`, `twelfthMarksheetUrl`: optional 12th record detail
+- `diplomaPercentage`: Diploma percentage (decimal, nullable — null for a REGULAR student)
+- `diplomaBoard`, `diplomaYear`, `diplomaMarksheetUrl`: optional diploma record detail
 - `currentCGPA`: Current CGPA (decimal, e.g., 8.5)
 - `currentSemester`: Current semester (integer, e.g., 6)
 - `activeBacklogs`: Number of active backlogs (integer, default 0)
+- `pastBacklogCount`: Backlogs cleared in the past (integer, default 0)
 - `createdAt`, `updatedAt`: Timestamps
+
+**Entry type branching**: a `REGULAR` student completes 12th and studies
+semesters 1–8. A `DIPLOMA` student completes a diploma instead of 12th, is
+admitted laterally into the second year, and therefore has no 12th record and
+no semester 1 or 2 marks. The branch that does not apply is stored as `NULL` —
+never zero-filled, because a 0% score reads as a real value and fails every
+eligibility comparison. `features/students/utils/entry-type.ts` owns the
+semester range and the "which percentage counts" resolution; read through it
+rather than touching `twelfthPercentage` directly.
 
 **Relations**:
 - One-to-one with Student (cascade delete)
@@ -171,8 +195,12 @@ Stored in the `Student` model directly:
 **Validation Notes** (to be enforced in server actions, not database):
 - Percentages: 0-100 range
 - CGPA: 0-10 range (or institution-specific scale)
-- Semester: positive integer
+- Semester: positive integer; minimum 3 when `entryType = DIPLOMA`
 - Active backlogs: non-negative integer
+- Exactly one pre-college record is required, chosen by `entryType`:
+  `twelfthPercentage` for `REGULAR`, `diplomaPercentage` for `DIPLOMA`.
+  Enforced by `academicInfoSchema.superRefine` in
+  `features/students/schemas/profile.ts`.
 
 ### 5.3 Skills & Links
 

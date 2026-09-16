@@ -100,10 +100,17 @@ Based on current Student schema, the template includes:
 ### Optional Columns
 4. **phoneNumber** - contact number (text, max 15 chars)
 5. **tenthPercentage** - 10th grade marks (number, 0-100)
-6. **twelfthPercentage** - 12th grade marks (number, 0-100)
-7. **currentCGPA** - current CGPA (number, 0-10)
-8. **currentSemester** - current semester (integer, 1-8)
-9. **activeBacklogs** - active backlogs (integer, 0+)
+6. **entryType** - "Regular" or "Diploma" (text, defaults to Regular)
+7. **twelfthPercentage** - 12th grade marks (number, 0-100) — leave blank for a Diploma row
+8. **diplomaPercentage** - diploma marks (number, 0-100) — leave blank for a Regular row
+9. **currentCGPA** - current CGPA (number, 0-10)
+10. **currentSemester** - current semester (integer, 1-8; minimum 3 for a Diploma row)
+11. **activeBacklogs** - active backlogs (integer, 0+)
+
+A lateral-entry (Diploma) student has no 12th record and joins in the second
+year. The import writes `NULL` for the branch that does not apply — never 0,
+which would read as a real 0% score. A Diploma row with `currentSemester` below
+3 is rejected.
 
 ### Notes
 - **Department is NOT in the template** - derived from authenticated admin's department
@@ -150,6 +157,9 @@ Based on current Student schema, the template includes:
   - "Roll Number", "roll_number", "ROLLNUMBER" → rollNumber
   - "10th Percentage", "tenth_percentage" → tenthPercentage
   - "12th Percentage", "twelfth_percentage" → twelfthPercentage
+  - "Diploma Percentage", "diploma_percentage", "Diploma" → diplomaPercentage
+  - "Entry Type", "entry_type", "Admission Type" → entryType
+    (value normalized: anything starting "dip" or "lat" → DIPLOMA, else REGULAR)
   - "CGPA", "cgpa", "Current CGPA" → currentCGPA
   - "Semester", "current_semester" → currentSemester
   - "Backlogs", "active_backlogs" → activeBacklogs

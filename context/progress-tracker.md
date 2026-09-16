@@ -2014,6 +2014,28 @@ except `/404`, which fails with `<Html> should not be imported outside of
 pages/_document`. No source file imports `next/document`; this is the Pages
 Router `_error` fallback and predates this work. Not investigated further.
 
+### Context files updated
+- `architecture.md` — invariant 8 rewritten (a `DriveApplication`'s stage and
+  status are now admin-writable through one action); new invariants 10
+  (placement is never stored) and 11 (an inapplicable field is NULL, never 0);
+  storage-model notes for placement derivation, opt-in and entry type.
+- `code-standards.md` — new "Route Rendering" section recording the
+  `force-dynamic` requirement for session-scoped routes.
+- `specs_architecture/02-database-and-student-foundation.md` — `Student` and
+  `StudentAcademic` field lists corrected, entry-type branching and the
+  "placement is not a field" rule documented.
+- `specs_architecture/07-excel-csv-bulk-import.md` — template columns and
+  header aliases updated for `entryType` / `diplomaPercentage`.
+- `INTEGRATION_GUIDE.md` and `FE-02`, `FE-05`, `FE-07`, `FE-08` — these are
+  delivery records for completed units and are kept as written, but each
+  prescribes `placementStatus` in schema or query snippets, so each now opens
+  with a "SUPERSEDED IN PART" banner pointing at the current source of truth.
+  Following them verbatim would otherwise rebuild the bug this unit removed.
+- `project-overview.md` and `ui-context.md` — no change needed. Nothing here
+  moved a feature in or out of V1 scope, and `ui-context.md` already specified
+  the company avatar as "centered logo or company initials", which the logo
+  upload completes rather than changes.
+
 ### Next step
 `StudentAcademic.pastBacklogCount`, the super-admin Settings panel and the
 student notification preferences are still UI without persistence — the

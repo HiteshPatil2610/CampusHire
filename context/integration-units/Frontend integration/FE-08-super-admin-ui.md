@@ -1,5 +1,26 @@
 # CampusHire — Integration Unit FE-08: Super Admin UI
 
+> **⚠ SUPERSEDED IN PART — read before following any schema or query snippet here.**
+>
+> This document is the delivery record for a completed unit and is kept as
+> written. Migration `20260916100000_placement_derivation_diploma_entry_opt_in`
+> has since changed the data model underneath parts of it:
+>
+> - **`Student.placementStatus`, `placedCompany` and `placedPackage` no longer
+>   exist.** Placement is derived from a `DriveApplication` with
+>   `status = SELECTED`. Any snippet below that writes or filters on
+>   `placementStatus` must not be copied — use
+>   `features/students/utils/placement-status.ts` instead.
+> - **`Student.optedIn` / `optedInLocked`** now record placement participation,
+>   replacing the "opted_out" value the old text column implied.
+> - **`StudentAcademic.entryType`** branches the pre-college record:
+>   `twelfthPercentage` is nullable and a `diplomaPercentage` block exists for
+>   lateral-entry students. See `features/students/utils/entry-type.ts`.
+>
+> `context/architecture.md` and
+> `context/specs_architecture/02-database-and-student-foundation.md` are the
+> current source of truth.
+
 You are continuing the frontend integration of `campushire_frontend (temp)`
 into the existing CampusHire Next.js project.
 
