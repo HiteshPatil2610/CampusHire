@@ -19,6 +19,7 @@ export async function getDepartmentDetail(input: GetDepartmentInput) {
             select: {
               id: true,
               email: true,
+              name: true,
               clerkId: true,
               createdAt: true,
             },

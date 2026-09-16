@@ -181,6 +181,7 @@ describe("Department Security", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),

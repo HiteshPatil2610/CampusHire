@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 type DocumentKind =
   | 'tenth-marksheet'
   | 'twelfth-marksheet'
+  | 'diploma-marksheet'
   | 'grade-card'
   | 'experience-certificate';
 

@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin } from "@/lib/auth";
+import { PLACED_STUDENT_FILTER } from "@/features/students/utils/placement-status";
 
 export interface DepartmentMatrixRow {
   id:              string;
@@ -35,7 +36,7 @@ export async function getDepartmentMatrix(): Promise<DepartmentMatrixRow[]> {
           prisma.student.count({ where: { departmentId: dept.id } }),
           prisma.student.count({ where: { departmentId: dept.id, isPending: false } }),
           prisma.student.count({
-            where: { departmentId: dept.id, placementStatus: 'PLACED' },
+            where: { departmentId: dept.id, ...PLACED_STUDENT_FILTER },
           }),
           prisma.drive.count({
             where: {

@@ -15,6 +15,11 @@ const HEADER_ALIASES: Record<string, string> = {
   '12th percentage': 'twelfthPercentage', '12th': 'twelfthPercentage',
   twelfth: 'twelfthPercentage', twelfth_pct: 'twelfthPercentage',
   '12th_pct': 'twelfthPercentage', '12th_percentage': 'twelfthPercentage', '12th %': 'twelfthPercentage',
+  'diploma percentage': 'diplomaPercentage', diploma: 'diplomaPercentage',
+  diploma_pct: 'diplomaPercentage', 'diploma_percentage': 'diplomaPercentage',
+  'diploma %': 'diplomaPercentage',
+  'entry type': 'entryType', entry_type: 'entryType', entry: 'entryType',
+  'admission type': 'entryType', admission_type: 'entryType',
   'current cgpa': 'currentCGPA', cgpa: 'currentCGPA', current_cgpa: 'currentCGPA',
   cumulative_gpa: 'currentCGPA',
   'current semester': 'currentSemester', semester: 'currentSemester',
@@ -109,9 +114,24 @@ export async function parseImportFile(
         if (canonical) {
           const rawValue = String(rawRow[rawHeader] ?? '').trim();
           // Parse numeric fields
-          if (['tenthPercentage', 'twelfthPercentage', 'currentCGPA'].includes(canonical)) {
+          if (
+            [
+              'tenthPercentage',
+              'twelfthPercentage',
+              'diplomaPercentage',
+              'currentCGPA',
+            ].includes(canonical)
+          ) {
             const n = parseFloat(rawValue);
             mapped[canonical] = isNaN(n) ? undefined : n;
+          } else if (canonical === 'entryType') {
+            // Admins type "Diploma" / "Lateral" / "Regular" in plain text.
+            const normalized = rawValue.toLowerCase();
+            mapped[canonical] = normalized
+              ? normalized.startsWith('dip') || normalized.startsWith('lat')
+                ? 'DIPLOMA'
+                : 'REGULAR'
+              : undefined;
           } else if (['currentSemester', 'activeBacklogs'].includes(canonical)) {
             const n = parseInt(rawValue, 10);
             mapped[canonical] = isNaN(n) ? undefined : n;

@@ -66,6 +66,7 @@ export async function createCentralDrive(
         isCentralDrive: true,
         createdByUserId: superAdmin.id,
         companyName: data.companyName,
+        companyLogoUrl: data.companyLogoUrl ?? null,
         roleName: data.roleName,
         jobDescriptionText: data.jobDescriptionText || null,
         packageOffered: parsePackageFromDisplay(data.packageDisplay),

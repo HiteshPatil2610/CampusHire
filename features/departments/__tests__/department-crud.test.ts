@@ -39,6 +39,7 @@ describe("Department CRUD Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -72,6 +73,7 @@ describe("Department CRUD Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -99,6 +101,7 @@ describe("Department CRUD Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -134,6 +137,7 @@ describe("Department CRUD Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -156,6 +160,7 @@ describe("Department CRUD Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -196,6 +201,7 @@ describe("Department CRUD Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -231,6 +237,7 @@ describe("Department CRUD Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -256,6 +263,7 @@ describe("Department CRUD Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -295,6 +303,7 @@ describe("Department CRUD Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -424,6 +433,7 @@ describe("Department CRUD Operations", () => {
               id: "cl111111111111111111111",
               email: "admin@college.edu",
               clerkId: "clerk-user-1",
+              name: null,
               createdAt: new Date(),
             },
           },

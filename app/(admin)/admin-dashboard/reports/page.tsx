@@ -2,15 +2,26 @@ import { requireDepartmentAdmin } from "@/lib/auth";
 import { getAdminDashboardStats } from "@/features/students/queries/get-admin-dashboard-stats";
 import { prisma } from "@/lib/prisma";
 
+// Every query here is scoped to the signed-in admin's department, so this
+// page can never be prerendered - it has no meaning without a session.
+export const dynamic = 'force-dynamic';
+
+
 export default async function ReportsPage() {
   const { department } = await requireDepartmentAdmin();
 
   // Get dashboard stats
   const stats = await getAdminDashboardStats();
 
-  // Calculate derived stats
-  const unplacedStudents = stats.totalStudents - stats.placedStudents - stats.pendingStudents;
-  const optedOutStudents = 0; // Not tracking opted-out status in V1
+  // Derived stats. "Unplaced" is everyone registered and still seeking:
+  // total, minus those with an offer, minus those not yet registered, minus
+  // those who opted out of placement entirely.
+  const optedOutStudents = stats.optedOutStudents;
+  const unplacedStudents =
+    stats.totalStudents -
+    stats.placedStudents -
+    stats.pendingStudents -
+    optedOutStudents;
 
   // Get total drives
   const totalDrives = await prisma.drive.count({

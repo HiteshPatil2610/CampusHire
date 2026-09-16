@@ -6,6 +6,14 @@ import type { DepartmentStudentsResult } from '@/features/students/queries/get-d
 import { StudentDetailsDialog } from './student-details-dialog';
 import Pagination from '@/components/ui/pagination';
 import { exportToCsv } from '@/lib/csv-export';
+import { PLACEMENT_STATE_BADGES } from '@/features/students/utils/placement-status';
+
+type RosterStatusFilter =
+  | 'all'
+  | 'placed'
+  | 'unplaced'
+  | 'pending'
+  | 'opted-out';
 
 interface StudentRosterClientProps {
   initialData: DepartmentStudentsResult;
@@ -29,7 +37,8 @@ export function StudentRosterClient({
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
 
-  const currentStatus = (searchParams.get('status') as 'all' | 'placed' | 'unplaced' | 'pending') || 'all';
+  const currentStatus =
+    (searchParams.get('status') as RosterStatusFilter) || 'all';
 
   // Handle search with debounce
   function handleSearchChange(value: string) {
@@ -50,7 +59,7 @@ export function StudentRosterClient({
     return () => clearTimeout(timer);
   }
 
-  function handleStatusFilter(status: 'all' | 'placed' | 'unplaced' | 'pending') {
+  function handleStatusFilter(status: RosterStatusFilter) {
     const params = new URLSearchParams(searchParams.toString());
     if (status === 'all') {
       params.delete('status');
@@ -78,13 +87,8 @@ export function StudentRosterClient({
       'Department': s.department.code,
       'CGPA': s.academic?.currentCGPA ?? '—',
       'Backlogs': s.academic?.activeBacklogs ?? 0,
-      'Status': s.isPending
-        ? 'Pending Registration'
-        : s.placementStatus === 'placed'
-        ? 'Placed'
-        : s.placementStatus === 'unplaced'
-        ? 'Eligible'
-        : 'Opted Out',
+      'Status': PLACEMENT_STATE_BADGES[s.placementState].text,
+      'Placed At': s.placedCompanies.join(', ') || '—',
       'Email': s.email,
       'Phone': s.phoneNumber ?? '—',
     }));
@@ -92,18 +96,10 @@ export function StudentRosterClient({
     exportToCsv(`${departmentCode}_students_roster`, csvData);
   }
 
-  // Status badge helper
+  // Placement state is derived server-side in the roster query — this only
+  // maps it to its badge.
   function getStatusBadge(student: typeof initialData.data[0]) {
-    if (student.isPending) {
-      return { text: 'Pending Registration', className: 'badge-amber' };
-    }
-    if (student.placementStatus === 'placed') {
-      return { text: 'Placed', className: 'badge-green' };
-    }
-    if (student.placementStatus === 'unplaced') {
-      return { text: 'Eligible', className: 'badge-purple' };
-    }
-    return { text: 'Opted Out', className: 'badge-gray' };
+    return PLACEMENT_STATE_BADGES[student.placementState];
   }
 
   return (
@@ -140,6 +136,7 @@ export function StudentRosterClient({
             { value: 'placed', label: 'Placed' },
             { value: 'unplaced', label: 'Eligible' },
             { value: 'pending', label: 'Pending' },
+            { value: 'opted-out', label: 'Opted Out' },
           ].map((filter) => (
             <button
               key={filter.value}
@@ -148,7 +145,7 @@ export function StudentRosterClient({
                 currentStatus === filter.value ? 'btn-primary' : 'btn-outline'
               }`}
               style={{ fontSize: 11, padding: '4px 8px' }}
-              onClick={() => handleStatusFilter(filter.value as any)}
+              onClick={() => handleStatusFilter(filter.value as RosterStatusFilter)}
             >
               {filter.label}
             </button>

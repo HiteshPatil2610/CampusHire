@@ -159,6 +159,7 @@ describe("Admin Assignment Security", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -168,6 +169,7 @@ describe("Admin Assignment Security", () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
         id: "super-user",
         clerkId: "clerk-super",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN", // Should not be assigned
         createdAt: new Date(),
@@ -190,6 +192,7 @@ describe("Admin Assignment Security", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -205,6 +208,7 @@ describe("Admin Assignment Security", () => {
         user: {
           id: "super-user",
           clerkId: "clerk-super",
+          name: null,
           email: "super@college.edu",
           role: "SUPER_ADMIN", // Should not be removed
           createdAt: new Date(),
@@ -229,6 +233,7 @@ describe("Admin Assignment Security", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -244,6 +249,7 @@ describe("Admin Assignment Security", () => {
         user: {
           id: "user-1",
           clerkId: "clerk-user-1",
+          name: null,
           email: "admin@college.edu",
           role: "DEPT_ADMIN",
           createdAt: new Date(),
@@ -255,6 +261,7 @@ describe("Admin Assignment Security", () => {
       const updatedUser = {
         id: "user-1",
         clerkId: "clerk-user-1",
+        name: null,
         email: "admin@college.edu",
         role: "STUDENT", // Reverted role
         createdAt: new Date(),

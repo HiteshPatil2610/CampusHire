@@ -37,6 +37,7 @@ export async function createDrive(input: DriveInput): Promise<CreateDriveResult>
         departmentId: department.id, // Always use authenticated admin's department
         companyName: validated.companyName,
         roleName: validated.roleName,
+        companyLogoUrl: validated.companyLogoUrl ?? null,
         jobDescriptionUrl: validated.jobDescriptionUrl || null,
         packageOffered: validated.packageOffered,
         packageDisplay: validated.packageDisplay ?? null,

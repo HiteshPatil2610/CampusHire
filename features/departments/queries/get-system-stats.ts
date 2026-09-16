@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin } from "@/lib/auth";
+import { PLACED_STUDENT_FILTER } from "@/features/students/utils/placement-status";
 
 export interface SystemStats {
   totalStudents:     number;
@@ -12,7 +13,8 @@ export interface SystemStats {
   totalAdmins:       number;
   totalDrives:       number;
   openDrives:        number;  // applicationDeadline > now
-  placedStudents:    number;
+  placedStudents:    number;  // holds at least one SELECTED application
+  optedOutStudents:  number;  // registered but not participating in placement
   overallPlacementRate: number; // percentage 0–100
 }
 
@@ -28,6 +30,7 @@ export async function getSystemStats(): Promise<SystemStats> {
     totalDrives,
     openDrives,
     placedStudents,
+    optedOutStudents,
   ] = await Promise.all([
     prisma.student.count(),
     prisma.student.count({ where: { isPending: false } }),
@@ -36,7 +39,8 @@ export async function getSystemStats(): Promise<SystemStats> {
     prisma.departmentAdmin.count(),
     prisma.drive.count(),
     prisma.drive.count({ where: { applicationDeadline: { gt: new Date() } } }),
-    prisma.student.count({ where: { placementStatus: 'PLACED' } }),
+    prisma.student.count({ where: PLACED_STUDENT_FILTER }),
+    prisma.student.count({ where: { isPending: false, optedIn: false } }),
   ]);
 
   const overallPlacementRate =
@@ -54,6 +58,7 @@ export async function getSystemStats(): Promise<SystemStats> {
     totalDrives,
     openDrives,
     placedStudents,
+    optedOutStudents,
     overallPlacementRate,
   };
 }

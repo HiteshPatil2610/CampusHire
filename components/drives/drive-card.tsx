@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 import type { Drive } from '@prisma/client';
 import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
@@ -67,25 +68,41 @@ export function DriveCard({
     >
       {/* Header */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-        <div
-          className="company-avatar"
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 10,
-            background: 'var(--surface-1)',
-            color: 'var(--text-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-            fontSize: 12,
-            letterSpacing: '0.02em',
-            flexShrink: 0,
-          }}
-        >
-          {logoText}
-        </div>
+        {/* Real logo when the admin uploaded one, else the name tile. */}
+        {drive.companyLogoUrl ? (
+          <Image
+            src={drive.companyLogoUrl}
+            alt=""
+            width={44}
+            height={44}
+            style={{
+              borderRadius: 10,
+              objectFit: 'contain',
+              background: 'var(--surface-1)',
+              flexShrink: 0,
+            }}
+          />
+        ) : (
+          <div
+            className="company-avatar"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 10,
+              background: 'var(--surface-1)',
+              color: 'var(--text-primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: 12,
+              letterSpacing: '0.02em',
+              flexShrink: 0,
+            }}
+          >
+            {logoText}
+          </div>
+        )}
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div

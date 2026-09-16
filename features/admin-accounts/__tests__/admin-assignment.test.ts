@@ -63,6 +63,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -72,6 +73,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
         id: "user-1",
         clerkId: "clerk-user-1",
+        name: null,
         email: "user@college.edu",
         role: "STUDENT",
         createdAt: new Date(),
@@ -93,6 +95,7 @@ describe("Admin Assignment Operations", () => {
         updatedUser: {
           id: "user-1",
           clerkId: "clerk-user-1",
+          name: null,
           email: "user@college.edu",
           role: "DEPT_ADMIN",
           createdAt: new Date(),
@@ -108,6 +111,7 @@ describe("Admin Assignment Operations", () => {
             id: "user-1",
             email: "user@college.edu",
             clerkId: "clerk-user-1",
+            name: null,
             role: "DEPT_ADMIN",
           },
           department: {
@@ -135,6 +139,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -144,6 +149,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
         id: "user-1",
         clerkId: "clerk-user-1",
+        name: null,
         email: "student@college.edu",
         role: "STUDENT", // Currently STUDENT
         createdAt: new Date(),
@@ -165,6 +171,7 @@ describe("Admin Assignment Operations", () => {
         updatedUser: {
           id: "user-1",
           clerkId: "clerk-user-1",
+          name: null,
           email: "student@college.edu",
           role: "DEPT_ADMIN", // Upgraded
           createdAt: new Date(),
@@ -180,6 +187,7 @@ describe("Admin Assignment Operations", () => {
             id: "user-1",
             email: "student@college.edu",
             clerkId: "clerk-user-1",
+            name: null,
             role: "DEPT_ADMIN",
           },
           department: {
@@ -202,6 +210,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -211,6 +220,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
         id: "user-1",
         clerkId: "clerk-user-1",
+        name: null,
         email: "admin@college.edu",
         role: "DEPT_ADMIN",
         createdAt: new Date(),
@@ -240,6 +250,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -249,6 +260,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
         id: "super-user",
         clerkId: "clerk-super",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN", // Cannot be assigned as dept admin
         createdAt: new Date(),
@@ -270,6 +282,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -293,6 +306,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -302,6 +316,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
         id: "user-1",
         clerkId: "clerk-user-1",
+        name: null,
         email: "user@college.edu",
         role: "STUDENT",
         createdAt: new Date(),
@@ -327,6 +342,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -336,6 +352,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
         id: "user-1",
         clerkId: "clerk-user-1",
+        name: null,
         email: "user@college.edu",
         role: "STUDENT",
         createdAt: new Date(),
@@ -370,6 +387,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -379,6 +397,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
         id: "user-1",
         clerkId: "clerk-user-1",
+        name: null,
         email: "user@college.edu",
         role: "STUDENT",
         createdAt: new Date(),
@@ -401,6 +420,7 @@ describe("Admin Assignment Operations", () => {
         updatedUser: {
           id: "user-1",
           clerkId: "clerk-user-1",
+          name: null,
           email: "user@college.edu",
           role: "DEPT_ADMIN",
           createdAt: new Date(),
@@ -416,6 +436,7 @@ describe("Admin Assignment Operations", () => {
             id: "user-1",
             email: "user@college.edu",
             clerkId: "clerk-user-1",
+            name: null,
             role: "DEPT_ADMIN",
           },
           department: {
@@ -441,6 +462,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -456,6 +478,7 @@ describe("Admin Assignment Operations", () => {
         user: {
           id: "user-1",
           clerkId: "clerk-user-1",
+          name: null,
           email: "admin@college.edu",
           role: "DEPT_ADMIN",
           createdAt: new Date(),
@@ -466,6 +489,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.$transaction).mockResolvedValueOnce({
         id: "user-1",
         clerkId: "clerk-user-1",
+        name: null,
         email: "admin@college.edu",
         role: "STUDENT", // Reverted to STUDENT
         createdAt: new Date(),
@@ -484,6 +508,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -499,6 +524,7 @@ describe("Admin Assignment Operations", () => {
         user: {
           id: "user-1",
           clerkId: "clerk-user-1",
+          name: null,
           email: "admin@college.edu",
           role: "DEPT_ADMIN",
           createdAt: new Date(),
@@ -509,6 +535,7 @@ describe("Admin Assignment Operations", () => {
       const updatedUser = {
         id: "user-1",
         clerkId: "clerk-user-1",
+        name: null,
         email: "admin@college.edu",
         role: "STUDENT", // Reverted
         createdAt: new Date(),
@@ -527,6 +554,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -542,6 +570,7 @@ describe("Admin Assignment Operations", () => {
         user: {
           id: "user-1",
           clerkId: "clerk-user-1",
+          name: null,
           email: "admin@college.edu",
           role: "DEPT_ADMIN",
           createdAt: new Date(),
@@ -552,6 +581,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.$transaction).mockResolvedValueOnce({
         id: "user-1",
         clerkId: "clerk-user-1",
+        name: null,
         email: "admin@college.edu",
         role: "STUDENT",
         createdAt: new Date(),
@@ -569,6 +599,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
         id: "super-admin-id",
         clerkId: "clerk-super-admin",
+        name: null,
         email: "super@college.edu",
         role: "SUPER_ADMIN",
         createdAt: new Date(),
@@ -601,6 +632,7 @@ describe("Admin Assignment Operations", () => {
             id: "user-1",
             email: "admin1@college.edu",
             clerkId: "clerk-user-1",
+            name: null,
             role: "DEPT_ADMIN",
             createdAt: new Date(),
           },
@@ -621,6 +653,7 @@ describe("Admin Assignment Operations", () => {
             id: "user-2",
             email: "admin2@college.edu",
             clerkId: "clerk-user-2",
+            name: null,
             role: "DEPT_ADMIN",
             createdAt: new Date(),
           },
@@ -673,6 +706,7 @@ describe("Admin Assignment Operations", () => {
           id: "user-1",
           email: "student1@college.edu",
           clerkId: "clerk-user-1",
+          name: null,
           role: "STUDENT",
           createdAt: new Date(),
         },
@@ -680,6 +714,7 @@ describe("Admin Assignment Operations", () => {
           id: "user-2",
           email: "student2@college.edu",
           clerkId: "clerk-user-2",
+          name: null,
           role: "STUDENT",
           createdAt: new Date(),
         },

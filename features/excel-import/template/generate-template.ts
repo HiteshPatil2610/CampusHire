@@ -12,7 +12,11 @@ export function generateImportTemplate(departmentCode: string): Buffer {
     'College Email',
     'Phone Number',
     '10th Percentage',
+    // Regular / Diploma. A diploma (lateral-entry) student fills the Diploma
+    // column and leaves 12th blank.
+    'Entry Type',
     '12th Percentage',
+    'Diploma Percentage',
     'Current CGPA',
     'Current Semester',
     'Active Backlogs',
@@ -20,9 +24,10 @@ export function generateImportTemplate(departmentCode: string): Buffer {
   ];
 
   const sampleRows = [
-    ['21CS042', 'Aditi Sharma',  'aditi.sharma@college.edu',  '9876543210', '92.4', '89.6', '8.84', '7', '0', departmentCode],
-    ['21CS089', 'Rohan Mehta',   'rohan.mehta@college.edu',   '9876543211', '85.0', '82.5', '7.40', '7', '0', departmentCode],
-    ['21CS104', 'Priya Patel',   'priya.patel@college.edu',   '',           '78.0', '75.0', '6.20', '7', '1', departmentCode],
+    ['21CS042', 'Aditi Sharma',  'aditi.sharma@college.edu',  '9876543210', '92.4', 'Regular', '89.6', '',     '8.84', '7', '0', departmentCode],
+    ['21CS089', 'Rohan Mehta',   'rohan.mehta@college.edu',   '9876543211', '85.0', 'Regular', '82.5', '',     '7.40', '7', '0', departmentCode],
+    // Lateral entry: diploma instead of 12th, and no semester 1-2 marks.
+    ['21CS104', 'Priya Patel',   'priya.patel@college.edu',   '',           '78.0', 'Diploma', '',     '81.2', '6.20', '7', '1', departmentCode],
   ];
 
   const worksheetData = [headers, ...sampleRows];

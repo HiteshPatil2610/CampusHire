@@ -66,6 +66,9 @@ export const createCentralDriveSchema = z
       .array(z.string().min(1))
       .min(1, "At least one eligible department is required")
       .max(50, "Too many departments"),
+    // Blob URL returned by /api/admin/drives/logo. Optional — drive cards
+    // fall back to a text tile built from the company name.
+    companyLogoUrl: z.string().url("Invalid logo URL").nullish(),
     venue: z.string().max(500).optional(),
     reportingTime: z.string().max(100).optional(),
     contactPerson: z.string().max(200).optional(),

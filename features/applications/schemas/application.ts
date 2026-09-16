@@ -32,6 +32,22 @@ export type WithdrawApplicationInput = z.infer<
 >;
 
 /**
+ * Schema for a department admin advancing an application.
+ *
+ * Both `stage` and `status` are admin-owned — no student-facing path writes
+ * either one. The enum values mirror the Prisma enums exactly.
+ */
+export const updateApplicationStageSchema = z.object({
+  applicationId: z.string().cuid("Invalid application ID"),
+  stage: z.enum(["APPLIED", "APTITUDE", "INTERVIEW", "OFFER"]),
+  status: z.enum(["IN_PROGRESS", "SELECTED", "REJECTED", "WITHDRAWN"]),
+});
+
+export type UpdateApplicationStageInput = z.infer<
+  typeof updateApplicationStageSchema
+>;
+
+/**
  * Schema for pagination in application queries
  */
 export const getApplicationsSchema = z.object({

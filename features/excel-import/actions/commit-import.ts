@@ -100,7 +100,6 @@ export async function commitImport(
         name:        row.name,
         email:       row.email,
         phoneNumber: row.phoneNumber ?? null,
-        placementStatus: "UNPLACED" as const,
       };
     });
 
@@ -110,6 +109,7 @@ export async function commitImport(
       .filter(row =>
         row.tenthPercentage !== undefined ||
         row.twelfthPercentage !== undefined ||
+        row.diplomaPercentage !== undefined ||
         row.currentCGPA !== undefined ||
         row.currentSemester !== undefined ||
         row.activeBacklogs !== undefined
@@ -129,18 +129,27 @@ export async function commitImport(
         const hasAcademic =
           row.tenthPercentage !== undefined ||
           row.twelfthPercentage !== undefined ||
+          row.diplomaPercentage !== undefined ||
           row.currentCGPA !== undefined ||
           row.currentSemester !== undefined ||
           row.activeBacklogs !== undefined;
 
         if (hasAcademic) {
+          // A diploma row carries no 12th record, and vice versa. The unused
+          // branch stays null — never 0, which would read as a real 0% score
+          // and fail every eligibility comparison.
+          const entryType = row.entryType ?? "REGULAR";
+          const isDiploma = entryType === "DIPLOMA";
+
           await tx.studentAcademic.create({
             data: {
               studentId:          student.id,
+              entryType,
               tenthPercentage:    row.tenthPercentage ?? 0,
-              twelfthPercentage:  row.twelfthPercentage ?? 0,
+              twelfthPercentage:  isDiploma ? null : row.twelfthPercentage ?? null,
+              diplomaPercentage:  isDiploma ? row.diplomaPercentage ?? null : null,
               currentCGPA:        row.currentCGPA ?? 0,
-              currentSemester:    row.currentSemester ?? 1,
+              currentSemester:    row.currentSemester ?? (isDiploma ? 3 : 1),
               activeBacklogs:     row.activeBacklogs ?? 0,
             },
           });

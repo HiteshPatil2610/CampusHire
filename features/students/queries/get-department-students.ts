@@ -3,20 +3,35 @@
 import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin } from "@/lib/auth";
 import type { Student, StudentAcademic, Department } from "@prisma/client";
+import {
+  PLACED_STUDENT_FILTER,
+  UNPLACED_STUDENT_FILTER,
+  resolvePlacementState,
+  type PlacementState,
+} from "../utils/placement-status";
 
 export type StudentRosterItem = Student & {
   academic: StudentAcademic | null;
   department: Pick<Department, "id" | "name" | "code">;
   _count: { skills: number; projects: number; applications: number };
+  /**
+   * Derived server-side from the student's applications — never a stored
+   * column. See `utils/placement-status.ts`.
+   */
+  placementState: PlacementState;
+  /** Companies that have selected this student, for the roster tooltip. */
+  placedCompanies: string[];
 };
 
 export interface GetDepartmentStudentsParams {
   page?: number;
   pageSize?: number;
   search?: string;
-  // "all" | "placed" | "unplaced" | "pending"
-  // pending = isPending true (bulk-imported, not yet self-registered)
-  status?: "all" | "placed" | "unplaced" | "pending";
+  // "all" | "placed" | "unplaced" | "pending" | "opted-out"
+  // pending  = isPending true (bulk-imported, not yet self-registered)
+  // placed   = holds at least one SELECTED application
+  // unplaced = registered, opted in, no SELECTED application
+  status?: "all" | "placed" | "unplaced" | "pending" | "opted-out";
 }
 
 export interface DepartmentStudentsResult {
@@ -57,12 +72,16 @@ export async function getDepartmentStudents(
   }
 
   if (status === "placed") {
-    where.placementStatus = "placed";
+    Object.assign(where, PLACED_STUDENT_FILTER);
   } else if (status === "unplaced") {
-    where.placementStatus = "unplaced";
+    Object.assign(where, UNPLACED_STUDENT_FILTER);
     where.isPending = false;
+    where.optedIn = true;
   } else if (status === "pending") {
     where.isPending = true;
+  } else if (status === "opted-out") {
+    where.isPending = false;
+    where.optedIn = false;
   }
 
   const totalCount = await prisma.student.count({ where });
@@ -76,8 +95,27 @@ export async function getDepartmentStudents(
       academic: true,
       department: { select: { id: true, name: true, code: true } },
       _count: { select: { skills: true, projects: true, applications: true } },
+      // Only the selected offers, so placement state and the company list
+      // come from one query rather than a per-row follow-up.
+      applications: {
+        where: { status: "SELECTED" },
+        select: { drive: { select: { companyName: true } } },
+      },
     },
   });
 
-  return { data, page, pageSize, totalCount };
+  return {
+    data: data.map(({ applications, ...student }) => ({
+      ...student,
+      placementState: resolvePlacementState({
+        isPending: student.isPending,
+        optedIn: student.optedIn,
+        isPlaced: applications.length > 0,
+      }),
+      placedCompanies: applications.map((a) => a.drive.companyName),
+    })),
+    page,
+    pageSize,
+    totalCount,
+  };
 }

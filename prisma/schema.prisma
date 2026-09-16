@@ -23,6 +23,16 @@ enum SkillType {
   SOFT
 }
 
+// How a student entered the degree programme.
+//
+// REGULAR students complete 12th and start at semester 1. DIPLOMA students
+// complete a diploma instead of 12th and are admitted laterally into the
+// second year, so they have no 12th record and no semester 1/2 marks.
+enum EntryType {
+  REGULAR
+  DIPLOMA
+}
+
 // Apply method enum for drives
 enum ApplyMethod {
   IN_APP
@@ -51,6 +61,10 @@ model User {
   id        String   @id @default(cuid())
   clerkId   String   @unique
   email     String   @unique
+  // Display name mirrored from Clerk. Nullable because a Student's name is
+  // owned by the Student record and a webhook-created user may arrive before
+  // a name is known.
+  name      String?
   role      Role
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -60,7 +74,8 @@ model User {
   student         Student?
   auditLogs       AuditLog[]
   notifications   Notification[]
-  createdDrives   Drive[]          @relation("DriveCreatedBy")
+  createdDrives   Drive[]            @relation("DriveCreatedBy")
+  stageUpdates    DriveApplication[] @relation("ApplicationStageUpdatedBy")
 
   @@index([clerkId])
   @@index([email])
@@ -122,9 +137,14 @@ model Student {
   address         String?   @db.Text
   personalEmail   String?
   batchYear       Int?
-  placementStatus String    @default("unplaced")
-  placedCompany   String?
-  placedPackage   String?
+  // Whether the student is participating in campus placement at all.
+  // A student who has opted out is excluded from placement KPIs and is not
+  // offered drives. Placement itself is never stored here — it is derived
+  // from a DriveApplication with status = SELECTED.
+  optedIn         Boolean   @default(true)
+  // Set by a department admin to freeze the opt-in choice. While locked the
+  // student cannot change `optedIn` themselves; only an admin can.
+  optedInLocked   Boolean   @default(false)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -145,6 +165,7 @@ model Student {
   @@index([rollNumber])
   @@index([email])
   @@index([isPending])
+  @@index([optedIn])
 }
 
 // SemesterMark - per-semester SGPA records for a student
@@ -172,23 +193,33 @@ model SemesterMark {
 
 // StudentAcademic - stores academic information (one-to-one with Student)
 model StudentAcademic {
-  id                  String   @id @default(cuid())
-  studentId           String   @unique
+  id                  String    @id @default(cuid())
+  studentId           String    @unique
+  // Decides which pre-college record is required: REGULAR -> 12th,
+  // DIPLOMA -> diploma. The unused branch is left null rather than zero-filled.
+  entryType           EntryType @default(REGULAR)
   tenthPercentage     Float
   tenthBoard          String?
   tenthYear           Int?
   tenthMarksheetUrl   String?
-  twelfthPercentage   Float
+  // Null for a DIPLOMA student, who has no 12th record.
+  twelfthPercentage   Float?
   twelfthBoard        String?
   twelfthYear         Int?
   twelfthMarksheetUrl String?
+  // Null for a REGULAR student. Board here is the diploma awarding body
+  // (e.g. MSBTE), mirroring the 10th/12th shape.
+  diplomaPercentage   Float?
+  diplomaBoard        String?
+  diplomaYear         Int?
+  diplomaMarksheetUrl String?
   currentCGPA         Float
   currentSemester     Int
-  activeBacklogs      Int      @default(0)
+  activeBacklogs      Int       @default(0)
   // Backlogs cleared in the past, kept separately from active ones
-  pastBacklogCount    Int      @default(0)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  pastBacklogCount    Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -388,17 +419,23 @@ model DriveApplication {
   submittedDetails  String?           @db.Text
   // When the student ticked the accuracy declaration.
   consentAcceptedAt DateTime?
+  // Set every time a department admin advances the stage or sets the outcome.
+  // Null while the application still sits at its APPLIED / IN_PROGRESS default.
+  stageUpdatedAt    DateTime?
+  stageUpdatedById  String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
   // Relations
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  drive   Drive   @relation(fields: [driveId], references: [id], onDelete: Restrict)
+  student      Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  drive        Drive   @relation(fields: [driveId], references: [id], onDelete: Restrict)
+  stageUpdater User?   @relation("ApplicationStageUpdatedBy", fields: [stageUpdatedById], references: [id], onDelete: SetNull)
 
   @@unique([studentId, driveId])
   @@index([studentId])
   @@index([driveId])
   @@index([stage])
+  @@index([status])
 }
 
 // ============================================================================

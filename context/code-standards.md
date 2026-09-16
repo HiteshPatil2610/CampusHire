@@ -36,6 +36,10 @@
 - Wrap multi-row writes (e.g. Excel import) in a single Prisma transaction so partial imports can never occur.
 - Any list endpoint that can return more than a screenful of rows (student rosters, drive lists, the audit log) uses offset pagination — `page` and `pageSize` query params or server-action args, `pageSize` defaulting to 25. Response shape includes `{ data, page, pageSize, totalCount }` so the UI can render page controls without a second query. Do not build an unpaginated list "for now" — paginate from the first implementation.
 
+## Route Rendering
+
+- A route segment whose data is scoped to the signed-in user (anything calling `requireStudent`, `requireDepartmentAdmin`, or `requireSuperAdmin`) declares `export const dynamic = 'force-dynamic'`. Without it Next tries to prerender the page at build time, where there is no session, and the build fails. These pages have no meaning without a session, so there is nothing to cache.
+
 ## Data and Storage
 
 - Metadata and all structured/queryable data belongs in Postgres via Prisma.

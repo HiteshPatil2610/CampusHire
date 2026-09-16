@@ -2,10 +2,15 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin } from "@/lib/auth";
+import {
+  PLACED_STUDENT_FILTER,
+  UNPLACED_STUDENT_FILTER,
+} from "../utils/placement-status";
 
 export interface AdminDashboardStats {
   totalStudents: number;
-  placedStudents: number;
+  placedStudents: number; // holds at least one SELECTED application
+  optedOutStudents: number; // registered but not participating in placement
   pendingStudents: number; // bulk-imported, not yet registered
   openDrivesCount: number; // drives with deadline in the future
   placementRate: number; // percentage (0–100)
@@ -26,11 +31,19 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   const { department } = await requireDepartmentAdmin();
   const deptId = department.id;
 
-  const [totalStudents, placedStudents, pendingStudents, openDrivesCount] =
-    await Promise.all([
+  const [
+    totalStudents,
+    placedStudents,
+    optedOutStudents,
+    pendingStudents,
+    openDrivesCount,
+  ] = await Promise.all([
       prisma.student.count({ where: { departmentId: deptId } }),
       prisma.student.count({
-        where: { departmentId: deptId, placementStatus: "placed" },
+        where: { departmentId: deptId, ...PLACED_STUDENT_FILTER },
+      }),
+      prisma.student.count({
+        where: { departmentId: deptId, isPending: false, optedIn: false },
       }),
       prisma.student.count({
         where: { departmentId: deptId, isPending: true },
@@ -43,12 +56,14 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
       }),
     ]);
 
-  // Students needing attention: active backlogs > 0 AND not yet placed
+  // Students needing attention: still seeking a placement, and carrying
+  // active backlogs. A student who opted out is not "needing attention".
   const needingAttention = await prisma.student.findMany({
     where: {
       departmentId: deptId,
       isPending: false,
-      placementStatus: { not: "placed" },
+      optedIn: true,
+      ...UNPLACED_STUDENT_FILTER,
       academic: { activeBacklogs: { gt: 0 } },
     },
     take: 5,
@@ -64,6 +79,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   return {
     totalStudents,
     placedStudents,
+    optedOutStudents,
     pendingStudents,
     openDrivesCount,
     placementRate,

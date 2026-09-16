@@ -38,6 +38,19 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
       certifications: true,
       preferences: true,
       semesterMarks: true,
+      applications: {
+        where: { status: 'SELECTED' },
+        select: {
+          drive: {
+            select: {
+              id: true,
+              companyName: true,
+              roleName: true,
+              packageDisplay: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -55,6 +68,12 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
     experiences: studentWithProfile.experiences,
     certifications: studentWithProfile.certifications,
     preferences: studentWithProfile.preferences,
+    selectedOffers: studentWithProfile.applications.map((application) => ({
+      driveId: application.drive.id,
+      companyName: application.drive.companyName,
+      roleName: application.drive.roleName,
+      packageDisplay: application.drive.packageDisplay,
+    })),
   });
 
   // Parse search params

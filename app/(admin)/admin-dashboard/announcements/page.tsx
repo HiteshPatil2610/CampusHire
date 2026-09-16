@@ -2,6 +2,11 @@ import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AnnouncementsClient } from "./announcements-client";
 
+// Every query here is scoped to the signed-in admin's department, so this
+// page can never be prerendered - it has no meaning without a session.
+export const dynamic = 'force-dynamic';
+
+
 export default async function AnnouncementsPage() {
   const { department } = await requireDepartmentAdmin();
 

@@ -9,6 +9,11 @@ import { updateAcademicInfo } from '@/features/students/actions/profile-academic
 import { updateSemesterMarks } from '@/features/students/actions/profile-semester-marks';
 import { useRegisterProfileSave } from './profile-save-context';
 import type { CompleteProfile } from '@/features/students/queries/profile-completion';
+import type { EntryType } from '@prisma/client';
+import {
+  ENTRY_TYPE_LABELS,
+  firstSemesterFor,
+} from '@/features/students/utils/entry-type';
 
 export interface TabAcademicInfoProps {
   profile: CompleteProfile;
@@ -22,6 +27,8 @@ interface SemesterRow {
 }
 
 const SEMESTER_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+const ENTRY_TYPE_OPTIONS: EntryType[] = ['REGULAR', 'DIPLOMA'];
 
 const BACKLOG_OPTIONS = [
   { value: 0, label: 'No (0 Active Backlogs)' },
@@ -50,6 +57,7 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
   const [isPending, startTransition] = useTransition();
 
   const [form, setForm] = useState({
+    entryType: (profile.academic?.entryType ?? 'REGULAR') as EntryType,
     tenthPercentage: profile.academic?.tenthPercentage ?? ('' as number | ''),
     tenthBoard: profile.academic?.tenthBoard ?? '',
     tenthYear: profile.academic?.tenthYear ?? ('' as number | ''),
@@ -59,6 +67,11 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
     twelfthBoard: profile.academic?.twelfthBoard ?? '',
     twelfthYear: profile.academic?.twelfthYear ?? ('' as number | ''),
     twelfthMarksheetUrl: profile.academic?.twelfthMarksheetUrl ?? null,
+    diplomaPercentage:
+      profile.academic?.diplomaPercentage ?? ('' as number | ''),
+    diplomaBoard: profile.academic?.diplomaBoard ?? '',
+    diplomaYear: profile.academic?.diplomaYear ?? ('' as number | ''),
+    diplomaMarksheetUrl: profile.academic?.diplomaMarksheetUrl ?? null,
     currentCGPA: profile.academic?.currentCGPA ?? ('' as number | ''),
     currentSemester: profile.academic?.currentSemester ?? 1,
     activeBacklogs: profile.academic?.activeBacklogs ?? 0,
@@ -77,10 +90,18 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
       }))
   );
 
+  const isDiploma = form.entryType === 'DIPLOMA';
+  // A lateral-entry student joins in the second year, so their record starts
+  // at semester 3 — semesters 1 and 2 never existed for them.
+  const firstSemester = firstSemesterFor(form.entryType);
+
   // Results can only be recorded for semesters already completed, i.e. one
   // below the semester the student is currently in.
   const maxAllowedSem = Math.max(0, form.currentSemester - 1);
-  const atLimit = semesterRows.length >= maxAllowedSem;
+  const selectableSemesters = SEMESTER_OPTIONS.filter(
+    (sem) => sem >= firstSemester && sem <= maxAllowedSem
+  );
+  const atLimit = semesterRows.length >= selectableSemesters.length;
 
   function updateSemester(index: number, patch: Partial<SemesterRow>) {
     setSemesterRows((rows) =>
@@ -92,9 +113,7 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
     if (atLimit) return;
 
     const used = new Set(semesterRows.map((row) => row.semester));
-    const nextSemester = SEMESTER_OPTIONS.find(
-      (sem) => sem <= maxAllowedSem && !used.has(sem)
-    );
+    const nextSemester = selectableSemesters.find((sem) => !used.has(sem));
     if (!nextSemester) return;
 
     setSemesterRows([
@@ -112,16 +131,37 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
     setSemesterRows((rows) => rows.filter((_, i) => i !== index));
   }
 
+  /**
+   * Switching to lateral entry drops the semester rows that entry type cannot
+   * have, and lifts the current semester to the first one it can — otherwise
+   * the form would submit a shape the server rejects.
+   */
+  function handleEntryTypeChange(entryType: EntryType) {
+    const nextFirst = firstSemesterFor(entryType);
+
+    setForm((prev) => ({
+      ...prev,
+      entryType,
+      currentSemester: Math.max(prev.currentSemester, nextFirst),
+    }));
+    setSemesterRows((rows) => rows.filter((row) => row.semester >= nextFirst));
+  }
+
   function handleSave() {
+    const preCollegeMissing = isDiploma
+      ? form.diplomaPercentage === ''
+      : form.twelfthPercentage === '';
+
     if (
       form.tenthPercentage === '' ||
-      form.twelfthPercentage === '' ||
+      preCollegeMissing ||
       form.currentCGPA === ''
     ) {
       toast({
         title: 'Validation error',
-        description:
-          'Percentage for 10th and 12th and your current CGPA are required.',
+        description: isDiploma
+          ? 'Percentage for 10th and your diploma, and your current CGPA, are required.'
+          : 'Percentage for 10th and 12th and your current CGPA are required.',
         variant: 'destructive',
       });
       return;
@@ -133,11 +173,27 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
         tenthBoard: form.tenthBoard.trim() || undefined,
         tenthYear: form.tenthYear === '' ? undefined : Number(form.tenthYear),
         tenthMarksheetUrl: form.tenthMarksheetUrl,
-        twelfthPercentage: Number(form.twelfthPercentage),
-        twelfthBoard: form.twelfthBoard.trim() || undefined,
+        entryType: form.entryType,
+        // Only the branch matching the entry type is sent; the server clears
+        // the other one.
+        twelfthPercentage: isDiploma ? null : Number(form.twelfthPercentage),
+        twelfthBoard: isDiploma
+          ? undefined
+          : form.twelfthBoard.trim() || undefined,
         twelfthYear:
-          form.twelfthYear === '' ? undefined : Number(form.twelfthYear),
-        twelfthMarksheetUrl: form.twelfthMarksheetUrl,
+          isDiploma || form.twelfthYear === ''
+            ? undefined
+            : Number(form.twelfthYear),
+        twelfthMarksheetUrl: isDiploma ? null : form.twelfthMarksheetUrl,
+        diplomaPercentage: isDiploma ? Number(form.diplomaPercentage) : null,
+        diplomaBoard: isDiploma
+          ? form.diplomaBoard.trim() || undefined
+          : undefined,
+        diplomaYear:
+          !isDiploma || form.diplomaYear === ''
+            ? undefined
+            : Number(form.diplomaYear),
+        diplomaMarksheetUrl: isDiploma ? form.diplomaMarksheetUrl : null,
         currentCGPA: Number(form.currentCGPA),
         currentSemester: form.currentSemester,
         activeBacklogs: form.activeBacklogs,
@@ -154,6 +210,7 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
       }
 
       const semesterResult = await updateSemesterMarks({
+        entryType: form.entryType,
         marks: semesterRows
           .filter((row) => row.sgpa !== '')
           .map((row) => ({
@@ -185,6 +242,32 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
       <h3 className="section-title" style={{ marginBottom: 18 }}>
         Academic Credentials
       </h3>
+
+      {/*
+        Entry type decides which pre-college record is asked for and which
+        semesters exist. Changing it rewrites both below.
+      */}
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>How did you enter this degree? *</label>
+          <select
+            value={form.entryType}
+            onChange={(e) => handleEntryTypeChange(e.target.value as EntryType)}
+          >
+            {ENTRY_TYPE_OPTIONS.map((value) => (
+              <option key={value} value={value}>
+                {ENTRY_TYPE_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          <p className="panel-hint" style={{ marginTop: 8 }}>
+            <Info size={12} aria-hidden />
+            {isDiploma
+              ? 'Lateral entry: submit your diploma instead of 12th, and record marks from semester 3 onwards.'
+              : 'Regular entry: submit your 12th record and record marks from semester 1 onwards.'}
+          </p>
+        </div>
+      </div>
 
       {/* 10th / 12th */}
       <div className="field-row" style={{ marginBottom: 18 }}>
@@ -249,68 +332,134 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
           />
         </div>
 
-        <div className="panel">
-          <div className="panel-head">
-            <strong className="panel-title">
-              12th Higher Secondary / Diploma
-            </strong>
-            <span className="required-tag">* Required</span>
-          </div>
+        {/*
+          A student submits one pre-college record or the other, never both:
+          a lateral-entry student has no 12th, and a regular student has no
+          diploma. Only the applicable panel is rendered.
+        */}
+        {isDiploma ? (
+          <div className="panel">
+            <div className="panel-head">
+              <strong className="panel-title">Diploma</strong>
+              <span className="required-tag">* Required</span>
+            </div>
 
-          <div className="field">
-            <label>Percentage / CGPA *</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step="0.01"
-              value={form.twelfthPercentage}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  twelfthPercentage:
-                    e.target.value === '' ? '' : Number(e.target.value),
-                })
-              }
-            />
-          </div>
-
-          <div className="field">
-            <label>Board &amp; Year *</label>
-            <div className="field-row" style={{ gap: 10 }}>
-              <input
-                value={form.twelfthBoard}
-                placeholder="CBSE"
-                onChange={(e) =>
-                  setForm({ ...form, twelfthBoard: e.target.value })
-                }
-              />
+            <div className="field">
+              <label>Percentage / CGPA *</label>
               <input
                 type="number"
-                min={1950}
-                max={2100}
-                placeholder="2021"
-                value={form.twelfthYear}
+                min={0}
+                max={100}
+                step="0.01"
+                value={form.diplomaPercentage}
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    twelfthYear:
+                    diplomaPercentage:
                       e.target.value === '' ? '' : Number(e.target.value),
                   })
                 }
               />
             </div>
-          </div>
 
-          <FileAttachField
-            kind="twelfth-marksheet"
-            value={form.twelfthMarksheetUrl}
-            onChange={(twelfthMarksheetUrl) =>
-              setForm({ ...form, twelfthMarksheetUrl })
-            }
-            placeholder="Attach 12th marksheet"
-          />
-        </div>
+            <div className="field">
+              <label>Board &amp; Year *</label>
+              <div className="field-row" style={{ gap: 10 }}>
+                <input
+                  value={form.diplomaBoard}
+                  placeholder="MSBTE"
+                  onChange={(e) =>
+                    setForm({ ...form, diplomaBoard: e.target.value })
+                  }
+                />
+                <input
+                  type="number"
+                  min={1950}
+                  max={2100}
+                  placeholder="2023"
+                  value={form.diplomaYear}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      diplomaYear:
+                        e.target.value === '' ? '' : Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <FileAttachField
+              kind="diploma-marksheet"
+              value={form.diplomaMarksheetUrl}
+              onChange={(diplomaMarksheetUrl) =>
+                setForm({ ...form, diplomaMarksheetUrl })
+              }
+              placeholder="Attach diploma marksheet"
+            />
+          </div>
+        ) : (
+          <div className="panel">
+            <div className="panel-head">
+              <strong className="panel-title">12th Higher Secondary</strong>
+              <span className="required-tag">* Required</span>
+            </div>
+
+            <div className="field">
+              <label>Percentage / CGPA *</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={form.twelfthPercentage}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    twelfthPercentage:
+                      e.target.value === '' ? '' : Number(e.target.value),
+                  })
+                }
+              />
+            </div>
+
+            <div className="field">
+              <label>Board &amp; Year *</label>
+              <div className="field-row" style={{ gap: 10 }}>
+                <input
+                  value={form.twelfthBoard}
+                  placeholder="CBSE"
+                  onChange={(e) =>
+                    setForm({ ...form, twelfthBoard: e.target.value })
+                  }
+                />
+                <input
+                  type="number"
+                  min={1950}
+                  max={2100}
+                  placeholder="2021"
+                  value={form.twelfthYear}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      twelfthYear:
+                        e.target.value === '' ? '' : Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <FileAttachField
+              kind="twelfth-marksheet"
+              value={form.twelfthMarksheetUrl}
+              onChange={(twelfthMarksheetUrl) =>
+                setForm({ ...form, twelfthMarksheetUrl })
+              }
+              placeholder="Attach 12th marksheet"
+            />
+          </div>
+        )}
       </div>
 
       {/* Current standing */}
@@ -341,11 +490,13 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
                 setForm({ ...form, currentSemester: Number(e.target.value) })
               }
             >
-              {SEMESTER_OPTIONS.map((sem) => (
-                <option key={sem} value={sem}>
-                  {ordinalSemester(sem)}
-                </option>
-              ))}
+              {SEMESTER_OPTIONS.filter((sem) => sem >= firstSemester).map(
+                (sem) => (
+                  <option key={sem} value={sem}>
+                    {ordinalSemester(sem)}
+                  </option>
+                )
+              )}
             </select>
           </div>
         </div>
@@ -356,14 +507,17 @@ export default function TabAcademicInfo({ profile }: TabAcademicInfoProps) {
         <div className="panel-head">
           <strong className="panel-title">Semester Grade Breakdown</strong>
           <span className="badge badge-accent">
-            {semesterRows.length} of {maxAllowedSem} allowed recorded
+            {semesterRows.length} of {selectableSemesters.length} allowed
+            recorded
           </span>
         </div>
 
         <p className="panel-hint">
           <Info size={12} aria-hidden />
-          You can add results up to Semester {maxAllowedSem} (one below your
-          current semester: {ordinal(form.currentSemester)}).
+          You can add results for Semester {firstSemester} to {maxAllowedSem}{' '}
+          (one below your current semester: {ordinal(form.currentSemester)}).
+          {isDiploma &&
+            ' Semesters 1 and 2 do not apply to a lateral-entry student.'}
         </p>
 
         {semesterRows.length > 0 && (

@@ -184,6 +184,8 @@ const MAX_DOCUMENT_SIZE = 5 * 1024 * 1024;
 export const DOCUMENT_KINDS = [
   "tenth-marksheet",
   "twelfth-marksheet",
+  // Lateral-entry students submit a diploma in place of a 12th marksheet.
+  "diploma-marksheet",
   "grade-card",
   "experience-certificate",
 ] as const;
@@ -247,5 +249,78 @@ export async function uploadStudentDocument(
   } catch (error) {
     console.error("Student document upload error:", error);
     return { success: false, error: "Failed to upload file. Please try again." };
+  }
+}
+
+/**
+ * Maximum size for a company logo (2MB). Logos render at ~48px, so anything
+ * larger is a source image nobody trimmed.
+ */
+const MAX_LOGO_SIZE = 2 * 1024 * 1024;
+
+/** Logos are displayed inline, so SVG is excluded — it can carry script. */
+const ALLOWED_LOGO_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+export function validateCompanyLogo(
+  file: File
+): { valid: boolean; error?: string } {
+  if (file.size > MAX_LOGO_SIZE) {
+    return {
+      valid: false,
+      error: `Logo must be smaller than ${MAX_LOGO_SIZE / (1024 * 1024)}MB`,
+    };
+  }
+
+  if (
+    !ALLOWED_LOGO_TYPES.includes(
+      file.type as (typeof ALLOWED_LOGO_TYPES)[number]
+    )
+  ) {
+    return { valid: false, error: "Logo must be a JPEG, PNG, or WebP image" };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Upload a recruiting company's logo to Vercel Blob.
+ *
+ * The filename is derived server-side from the uploading admin's id, so a
+ * caller cannot choose where the file lands. The returned URL is what gets
+ * stored in `Drive.companyLogoUrl`.
+ */
+export async function uploadCompanyLogo(
+  file: File,
+  adminUserId: string
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    if (!env.BLOB_READ_WRITE_TOKEN) {
+      return {
+        success: false,
+        error: "File upload is not configured. Please contact administrator.",
+      };
+    }
+
+    const validation = validateCompanyLogo(file);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
+    const extension = file.name.split(".").pop()?.toLowerCase() || "png";
+    const filename = `company-logos/${adminUserId}-${Date.now()}.${extension}`;
+
+    const blob = await put(filename, file, {
+      access: "public",
+      token: env.BLOB_READ_WRITE_TOKEN,
+    });
+
+    return { success: true, url: blob.url };
+  } catch (error) {
+    console.error("Company logo upload error:", error);
+    return { success: false, error: "Failed to upload logo. Please try again." };
   }
 }

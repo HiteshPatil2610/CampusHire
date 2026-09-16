@@ -29,7 +29,9 @@ export default async function AdminStudentsPage({
   // Parse search params
   const params = await searchParams;
   const search = params.search;
-  const status = (params.status as 'all' | 'placed' | 'unplaced' | 'pending') || 'all';
+  const status =
+    (params.status as 'all' | 'placed' | 'unplaced' | 'pending' | 'opted-out') ||
+    'all';
   const page = params.page ? parseInt(params.page, 10) : 1;
 
   // Fetch students

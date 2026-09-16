@@ -1897,3 +1897,125 @@ table.
 "Post Department Drive" still links to the existing `/admin-dashboard/drives/new`
 form. The department's own drives table (`drives-list-client.tsx`, unused by the
 page for now) is the starting point for that second view.
+
+---
+
+## Data Model Corrections — COMPLETE ✅
+
+Migration `20260916100000_placement_derivation_diploma_entry_opt_in`. Six
+schema-level defects where the UI displayed something the database could never
+supply.
+
+### 1. `Student.placementStatus` removed — placement is derived
+
+The column was written by nothing. The only writer that existed (Excel import)
+set `"UNPLACED"`; readers compared against `'placed'`, `'unplaced'`, `'PLACED'`
+and `'UNPLACED'` across four files. No code path ever wrote a placed value, so
+every "Placed" KPI on the super-admin Global Reports and Department Matrix was
+structurally always zero.
+
+`placementStatus`, `placedCompany` and `placedPackage` are dropped. A student is
+placed when they hold a `DriveApplication` with `status = SELECTED`, resolved
+through `features/students/utils/placement-status.ts`:
+- `PLACED_STUDENT_FILTER` / `UNPLACED_STUDENT_FILTER` — Prisma `where` fragments
+- `resolvePlacementState` — PENDING → PLACED → OPTED_OUT → ELIGIBLE, in that
+  precedence; a placed student stays placed even after opting out
+- `PLACEMENT_STATE_BADGES` — one label and badge class per state
+
+Company and package now come from the linked drive, so the roster and the
+student-details dialog show the actual offers rather than a free-text column
+nobody filled.
+
+### 2. `DriveApplication.stage` / `.status` — now advanced by the admin
+
+`updateApplicationStage` (`features/applications/actions/`) is the only write
+path for either column. Department admin only, scoped both to a drive they run
+and to an applicant from their own department, so a central drive shared across
+departments still cannot leak. Writes `stageUpdatedAt` / `stageUpdatedById`,
+audit-logs the transition, and notifies the student.
+
+Transition rules live in `utils/application-progress.ts` as a pure function
+(`validateStageTransition`), unit-tested: an admin cannot withdraw on a
+student's behalf, cannot touch a withdrawn application, and a SELECTED
+candidate must sit at the OFFER stage. Admins may correct a stage backwards.
+
+UI: a stage + status control per row on
+`/admin-dashboard/drives/[id]/applications`. The student's `StageTrack` now
+also renders the outcome, and withdrawal is blocked once the admin has closed
+the application.
+
+### 3. Diploma / lateral-entry students
+
+`StudentAcademic.entryType` (`REGULAR` | `DIPLOMA`). A diploma student is
+admitted into the second year, so:
+- `twelfthPercentage` is now nullable, and a parallel
+  `diplomaPercentage` / `diplomaBoard` / `diplomaYear` / `diplomaMarksheetUrl`
+  block was added
+- semester marks start at 3 — semesters 1 and 2 never existed for them
+
+The unused branch is stored as `NULL`, never `0`: a zero-filled 12th score reads
+as a real 0% and fails every eligibility comparison. `academicInfoSchema`
+enforces the right branch with `superRefine`; the academic tab renders one panel
+or the other; switching to lateral entry drops the now-impossible semester rows
+in the same transaction. `features/students/utils/entry-type.ts` owns the
+semester range and the "which percentage counts" resolution, and profile
+completion and the application review card both read through it.
+
+The Excel template gained `Entry Type` and `Diploma Percentage` columns, with
+the parser accepting "Diploma" / "Lateral" / "Regular" in plain text.
+
+### 4. `User.name`
+
+The create-admin form collected a name, split it for Clerk, and dropped it —
+`User` had no name column, so the admin roster displayed email everywhere.
+`User.name` added (nullable), written by `createAdminAccount` and mirrored from
+Clerk by the `user.created` / `user.updated` webhooks. Both admin rosters now
+show name over email. A blank from Clerk never overwrites a stored name.
+
+### 5. Opted-out KPI
+
+Was `const optedOutStudents = 0 // Not tracking opted-out status in V1`.
+`Student.optedIn` (default true) and `Student.optedInLocked` (default false)
+added. Both the student (Settings → Campus Placement Participation) and the
+department admin (student details dialog) can set participation; only the admin
+can lock it, and the server re-reads the lock before accepting a student's
+change. The KPI, the roster's Opted Out filter, and the dept/super-admin stats
+all read the real column. "Unplaced" now excludes opted-out students rather
+than counting them as seeking placement.
+
+### 6. Dead ends
+
+- `student-identity-card.tsx` deleted — never imported anywhere, and the
+  `readinessScore` / `resumeScore` props it took have no columns behind them
+  (readiness score is explicitly out of V1 scope).
+- `Drive.companyLogoUrl` is now reachable: `CompanyLogoField`
+  (`components/shared/`) uploads to Vercel Blob through
+  `/api/admin/drives/logo` and stores only the URL. Wired into both the central
+  drive modal and the department drive form. Both drive cards render the logo
+  with `next/image`, falling back to the existing four-letter text tile.
+  `next.config.ts` gained the Blob `remotePatterns` entry this needs.
+
+### Also fixed in passing
+`announcements`, `drives` and `reports` under `(admin)` called
+`requireDepartmentAdmin()` without `export const dynamic = 'force-dynamic'`, so
+the build tried to prerender them without a session and failed. Convention
+recorded in `code-standards.md`.
+
+### Tests
+36 new unit tests across `application-progress.test.ts`, `entry-type.test.ts`
+and `placement-status.test.ts`. Existing fixtures updated for the schema change.
+No new failures: the suite fails on exactly the same 30 pre-existing tests as
+before this work (admin-assignment, admin-security, department-crud,
+excel-import, notification-authorization).
+
+### Known issue, pre-existing and unrelated
+`npm run build` compiles and typechecks clean, and every page now prerenders
+except `/404`, which fails with `<Html> should not be imported outside of
+pages/_document`. No source file imports `next/document`; this is the Pages
+Router `_error` fallback and predates this work. Not investigated further.
+
+### Next step
+`StudentAcademic.pastBacklogCount`, the super-admin Settings panel and the
+student notification preferences are still UI without persistence — the
+settings panels are the next candidates now that the pattern for a
+student-and-admin-writable field exists.

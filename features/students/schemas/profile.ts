@@ -59,40 +59,90 @@ const documentUrl = z
   .optional()
   .nullable();
 
-export const academicInfoSchema = z.object({
-  tenthPercentage: z
+const percentage = (label: string) =>
+  z
     .number()
-    .min(0, "10th percentage must be at least 0")
-    .max(100, "10th percentage cannot exceed 100"),
-  tenthBoard: z.string().trim().max(120).optional(),
-  tenthYear: boardYear,
-  tenthMarksheetUrl: documentUrl,
-  twelfthPercentage: z
-    .number()
-    .min(0, "12th percentage must be at least 0")
-    .max(100, "12th percentage cannot exceed 100"),
-  twelfthBoard: z.string().trim().max(120).optional(),
-  twelfthYear: boardYear,
-  twelfthMarksheetUrl: documentUrl,
-  currentCGPA: z
-    .number()
-    .min(0, "CGPA must be at least 0")
-    .max(10, "CGPA cannot exceed 10"),
-  currentSemester: z
-    .number()
-    .int("Semester must be a whole number")
-    .min(1, "Semester must be at least 1")
-    .max(10, "Semester cannot exceed 10"),
-  activeBacklogs: z
-    .number()
-    .int("Backlogs must be a whole number")
-    .min(0, "Backlogs cannot be negative"),
-  pastBacklogCount: z
-    .number()
-    .int("Past backlog count must be a whole number")
-    .min(0, "Past backlog count cannot be negative")
-    .default(0),
-});
+    .min(0, `${label} must be at least 0`)
+    .max(100, `${label} cannot exceed 100`);
+
+/**
+ * Academic info, branching on how the student entered the degree.
+ *
+ * A REGULAR student submits a 12th record. A DIPLOMA (lateral-entry) student
+ * has no 12th at all and submits a diploma record instead. Both branches are
+ * optional at the field level and required by `superRefine`, so the unused
+ * branch stays null rather than being zero-filled.
+ */
+export const academicInfoSchema = z
+  .object({
+    entryType: z.enum(["REGULAR", "DIPLOMA"]).default("REGULAR"),
+    tenthPercentage: percentage("10th percentage"),
+    tenthBoard: z.string().trim().max(120).optional(),
+    tenthYear: boardYear,
+    tenthMarksheetUrl: documentUrl,
+    twelfthPercentage: percentage("12th percentage").optional().nullable(),
+    twelfthBoard: z.string().trim().max(120).optional(),
+    twelfthYear: boardYear,
+    twelfthMarksheetUrl: documentUrl,
+    diplomaPercentage: percentage("Diploma percentage").optional().nullable(),
+    diplomaBoard: z.string().trim().max(120).optional(),
+    diplomaYear: boardYear,
+    diplomaMarksheetUrl: documentUrl,
+    currentCGPA: z
+      .number()
+      .min(0, "CGPA must be at least 0")
+      .max(10, "CGPA cannot exceed 10"),
+    currentSemester: z
+      .number()
+      .int("Semester must be a whole number")
+      .min(1, "Semester must be at least 1")
+      .max(10, "Semester cannot exceed 10"),
+    activeBacklogs: z
+      .number()
+      .int("Backlogs must be a whole number")
+      .min(0, "Backlogs cannot be negative"),
+    pastBacklogCount: z
+      .number()
+      .int("Past backlog count must be a whole number")
+      .min(0, "Past backlog count cannot be negative")
+      .default(0),
+  })
+  .superRefine((data, ctx) => {
+    if (data.entryType === "DIPLOMA") {
+      if (
+        data.diplomaPercentage === null ||
+        data.diplomaPercentage === undefined
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["diplomaPercentage"],
+          message: "Diploma percentage is required for a lateral-entry student",
+        });
+      }
+
+      // A lateral-entry student joins in the second year.
+      if (data.currentSemester < 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["currentSemester"],
+          message:
+            "A lateral-entry student starts at semester 3 — semesters 1 and 2 do not apply",
+        });
+      }
+      return;
+    }
+
+    if (
+      data.twelfthPercentage === null ||
+      data.twelfthPercentage === undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["twelfthPercentage"],
+        message: "12th percentage is required",
+      });
+    }
+  });
 
 export type AcademicInfoInput = z.infer<typeof academicInfoSchema>;
 
@@ -201,14 +251,35 @@ export type ProfilePhotoInput = z.infer<typeof profilePhotoSchema>;
 /**
  * Semester Marks Schema
  */
-export const semesterMarksSchema = z.object({
-  marks: z.array(
-    z.object({
-      semester: z.number().int().min(1).max(8),
-      sgpa: z.number().min(0).max(10),
-      gradeCardUrl: documentUrl,
-    })
-  ),
-});
+export const semesterMarksSchema = z
+  .object({
+    /**
+     * Sent by the client so the server can reject semesters the student never
+     * studied. It is re-checked against the stored academic record in the
+     * action — this is a usability guard, not the authority.
+     */
+    entryType: z.enum(["REGULAR", "DIPLOMA"]).default("REGULAR"),
+    marks: z.array(
+      z.object({
+        semester: z.number().int().min(1).max(8),
+        sgpa: z.number().min(0).max(10),
+        gradeCardUrl: documentUrl,
+      })
+    ),
+  })
+  .superRefine((data, ctx) => {
+    if (data.entryType !== "DIPLOMA") return;
+
+    data.marks.forEach((mark, index) => {
+      if (mark.semester < 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["marks", index, "semester"],
+          message:
+            "A lateral-entry student has no semester 1 or 2 marks at this college",
+        });
+      }
+    });
+  });
 
 export type SemesterMarksInput = z.infer<typeof semesterMarksSchema>;

@@ -1,4 +1,5 @@
 import type { Student, StudentAcademic, StudentSkill, StudentProject, StudentExperience, StudentCertification, StudentPreferences, Department, SemesterMark } from "@prisma/client";
+import { preCollegePercentage } from "../utils/entry-type";
 
 /**
  * Complete profile data structure
@@ -9,11 +10,24 @@ export interface CompleteProfile {
   };
   academic: StudentAcademic | null;
   semesterMarks: SemesterMark[];
+  /**
+   * Offers the student holds — applications a department admin marked
+   * SELECTED. Placement is derived from this, never from a stored column.
+   */
+  selectedOffers: SelectedOffer[];
   skills: StudentSkill[];
   projects: StudentProject[];
   experiences: StudentExperience[];
   certifications: StudentCertification[];
   preferences: StudentPreferences | null;
+}
+
+/** One drive the student was selected for. */
+export interface SelectedOffer {
+  driveId: string;
+  companyName: string;
+  roleName: string;
+  packageDisplay: string | null;
 }
 
 /**
@@ -48,7 +62,8 @@ export interface ProfileCompletion {
  * 
  * Academic (5 required):
  *  - tenthPercentage
- *  - twelfthPercentage
+ *  - the pre-college record matching the student's entry type:
+ *    twelfthPercentage for REGULAR, diplomaPercentage for DIPLOMA
  *  - currentCGPA
  *  - currentSemester
  *  - activeBacklogs (defaults to 0, counts as filled)
@@ -104,10 +119,16 @@ export function calculateProfileCompletion(profile: CompleteProfile): ProfileCom
       missingFields.push("10th Percentage");
     }
     
-    if (profile.academic.twelfthPercentage !== null && profile.academic.twelfthPercentage !== undefined) {
+    // A diploma (lateral-entry) student has no 12th record — their diploma
+    // percentage is the field that counts instead.
+    if (preCollegePercentage(profile.academic) !== null) {
       academicFieldsFilled++;
     } else {
-      missingFields.push("12th Percentage");
+      missingFields.push(
+        profile.academic.entryType === "DIPLOMA"
+          ? "Diploma Percentage"
+          : "12th Percentage"
+      );
     }
     
     if (profile.academic.currentCGPA !== null && profile.academic.currentCGPA !== undefined) {

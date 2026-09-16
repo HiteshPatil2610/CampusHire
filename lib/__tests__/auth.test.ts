@@ -85,6 +85,7 @@ describe('Authentication Helpers', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'student@college.edu',
         role: 'STUDENT',
         createdAt: new Date(),
@@ -135,6 +136,7 @@ describe('Role Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'student@college.edu',
         role: 'STUDENT',
         createdAt: new Date(),
@@ -152,6 +154,7 @@ describe('Role Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'student@college.edu',
         role: 'STUDENT',
         createdAt: new Date(),
@@ -177,6 +180,7 @@ describe('Role Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'admin@college.edu',
         role: 'DEPT_ADMIN',
         createdAt: new Date(),
@@ -194,6 +198,7 @@ describe('Role Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'student@college.edu',
         role: 'STUDENT',
         createdAt: new Date(),
@@ -214,6 +219,7 @@ describe('Role Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'student@college.edu',
         role: 'STUDENT',
         createdAt: new Date(),
@@ -231,6 +237,7 @@ describe('Role Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'student@college.edu',
         role: 'STUDENT',
         createdAt: new Date(),
@@ -257,6 +264,7 @@ describe('Role Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'admin@college.edu',
         role: 'DEPT_ADMIN',
         createdAt: new Date(),
@@ -274,6 +282,7 @@ describe('Role Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'student@college.edu',
         role: 'STUDENT',
         createdAt: new Date(),
@@ -299,6 +308,7 @@ describe('Department Scope Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'superadmin@college.edu',
         role: 'SUPER_ADMIN',
         createdAt: new Date(),
@@ -316,6 +326,7 @@ describe('Department Scope Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'admin@college.edu',
         role: 'DEPT_ADMIN',
         createdAt: new Date(),
@@ -342,6 +353,7 @@ describe('Department Scope Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'admin@college.edu',
         role: 'DEPT_ADMIN',
         createdAt: new Date(),
@@ -368,6 +380,7 @@ describe('Department Scope Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'student@college.edu',
         role: 'STUDENT',
         createdAt: new Date(),
@@ -383,6 +396,8 @@ describe('Department Scope Authorization', () => {
         email: 'john@college.edu',
         phoneNumber: null,
         isPending: false,
+        optedIn: true,
+        optedInLocked: false,
         profilePhotoUrl: null,
         linkedinUrl: null,
         githubUrl: null,
@@ -392,9 +407,6 @@ describe('Department Scope Authorization', () => {
         address: null,
         personalEmail: null,
         batchYear: 2025,
-        placementStatus: 'UNPLACED' as const,
-        placedCompany: null,
-        placedPackage: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -411,6 +423,7 @@ describe('Department Scope Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'student@college.edu',
         role: 'STUDENT',
         createdAt: new Date(),
@@ -426,6 +439,8 @@ describe('Department Scope Authorization', () => {
         email: 'john@college.edu',
         phoneNumber: null,
         isPending: false,
+        optedIn: true,
+        optedInLocked: false,
         profilePhotoUrl: null,
         linkedinUrl: null,
         githubUrl: null,
@@ -435,9 +450,6 @@ describe('Department Scope Authorization', () => {
         address: null,
         personalEmail: null,
         batchYear: 2025,
-        placementStatus: 'UNPLACED' as const,
-        placedCompany: null,
-        placedPackage: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -463,6 +475,7 @@ describe('Department Scope Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'superadmin@college.edu',
         role: 'SUPER_ADMIN',
         createdAt: new Date(),
@@ -479,6 +492,7 @@ describe('Department Scope Authorization', () => {
       const mockUser: User = {
         id: 'user_123',
         clerkId: 'clerk_user_123',
+        name: null,
         email: 'admin@college.edu',
         role: 'DEPT_ADMIN',
         createdAt: new Date(),

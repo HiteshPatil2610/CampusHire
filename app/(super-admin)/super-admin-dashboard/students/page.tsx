@@ -2,6 +2,11 @@ import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getDepartments } from "@/features/departments/queries/get-departments";
 import { SuperAdminStudentsClient } from "./super-admin-students-client";
+import {
+  PLACED_STUDENT_FILTER,
+  UNPLACED_STUDENT_FILTER,
+  resolvePlacementState,
+} from "@/features/students/utils/placement-status";
 
 interface SearchParams {
   deptId?: string;
@@ -31,15 +36,21 @@ export default async function SuperAdminStudentsPage({
     where.departmentId = deptId;
   }
 
+  // Placement is derived from applications, not stored on Student.
   if (status === 'placed') {
-    where.placementStatus = 'PLACED';
+    Object.assign(where, PLACED_STUDENT_FILTER);
   } else if (status === 'eligible') {
-    where.placementStatus = 'UNPLACED';
+    Object.assign(where, UNPLACED_STUDENT_FILTER);
     where.isPending = false;
+    where.optedIn = true;
   } else if (status === 'pending') {
     where.isPending = true;
+  } else if (status === 'opted-out') {
+    where.isPending = false;
+    where.optedIn = false;
   } else if (status === 'attention') {
-    where.placementStatus = 'UNPLACED';
+    Object.assign(where, UNPLACED_STUDENT_FILTER);
+    where.optedIn = true;
     where.academic = { activeBacklogs: { gt: 0 } };
   }
 
@@ -60,6 +71,10 @@ export default async function SuperAdminStudentsPage({
       include: {
         department: true,
         academic: true,
+        applications: {
+          where: { status: 'SELECTED' },
+          select: { drive: { select: { companyName: true } } },
+        },
       },
     }),
     prisma.student.count({ where }),
@@ -68,6 +83,16 @@ export default async function SuperAdminStudentsPage({
 
   const totalPages = Math.ceil(totalCount / pageSize);
 
+  const studentRows = students.map(({ applications, ...student }) => ({
+    ...student,
+    placementState: resolvePlacementState({
+      isPending: student.isPending,
+      optedIn: student.optedIn,
+      isPlaced: applications.length > 0,
+    }),
+    placedCompanies: applications.map((a) => a.drive.companyName),
+  }));
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -75,7 +100,7 @@ export default async function SuperAdminStudentsPage({
       </div>
 
       <SuperAdminStudentsClient
-        students={students}
+        students={studentRows}
         currentPage={page}
         totalPages={totalPages}
         totalCount={totalCount}

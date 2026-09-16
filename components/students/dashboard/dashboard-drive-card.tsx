@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -15,7 +16,7 @@ import {
   MapPin,
   Undo2,
 } from 'lucide-react';
-import type { ApplicationStage, Drive } from '@prisma/client';
+import type { ApplicationStage, ApplicationStatus, Drive } from '@prisma/client';
 import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
 import { withdrawApplication } from '@/features/applications/actions/withdraw-application';
 import ApplicationReviewModal from '@/components/drives/application-review-modal';
@@ -37,6 +38,8 @@ import {
 export interface DashboardDriveCardProps {
   drive: Drive;
   stage: ApplicationStage | null;
+  /** Outcome set by the department admin; null when not applied. */
+  applicationStatus?: ApplicationStatus | null;
   applicantCount: number;
   departmentCodes: string[];
   /** Fields the submission card shows, resolved from the drive's config. */
@@ -53,6 +56,7 @@ export interface DashboardDriveCardProps {
 export default function DashboardDriveCard({
   drive,
   stage,
+  applicationStatus = null,
   applicantCount,
   departmentCodes,
   reviewFields,
@@ -73,8 +77,13 @@ export default function DashboardDriveCard({
   const isApplied = stage !== null;
   const isOpen = status === 'open';
   // Withdrawal mirrors the server rule: only while the window is open and
-  // before the application has advanced past the first stage.
-  const canWithdraw = isApplied && isOpen && stage === 'APPLIED';
+  // before the application has advanced past the first stage. An application
+  // the admin has already closed is never withdrawable.
+  const canWithdraw =
+    isApplied &&
+    isOpen &&
+    stage === 'APPLIED' &&
+    applicationStatus === 'IN_PROGRESS';
 
   const logoText = drive.companyName.slice(0, 4).toUpperCase();
   const packageText = drive.packageDisplay || `${drive.packageOffered} LPA`;
@@ -110,9 +119,21 @@ export default function DashboardDriveCard({
     <div className="drive-card">
       {/* Header */}
       <div className="drive-card-head" style={{ gap: 12 }}>
-        <div className="company-avatar" style={{ fontSize: 12 }}>
-          {logoText}
-        </div>
+        {/* Real logo when the admin uploaded one, else the name tile. */}
+        {drive.companyLogoUrl ? (
+          <Image
+            src={drive.companyLogoUrl}
+            alt=""
+            width={44}
+            height={44}
+            className="company-avatar"
+            style={{ objectFit: 'contain' }}
+          />
+        ) : (
+          <div className="company-avatar" style={{ fontSize: 12 }}>
+            {logoText}
+          </div>
+        )}
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
@@ -229,6 +250,7 @@ export default function DashboardDriveCard({
       {/* Selection tracker */}
       <StageTrack
         stage={stage}
+        status={applicationStatus}
         pendingLabels={['Apply', 'Online Test', 'Interview', 'Offer']}
       />
 

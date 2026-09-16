@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,11 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { getStudentDetailForAdmin } from '@/features/students/actions/get-student-detail-for-admin';
 import { calculateProfileCompletion, type CompleteProfile } from '@/features/students/queries/profile-completion';
+import { setStudentPlacementOptIn } from '@/features/students/actions/set-placement-opt-in';
+import {
+  PLACEMENT_STATE_BADGES,
+  resolvePlacementState,
+} from '@/features/students/utils/placement-status';
 
 interface StudentDetailsDialogProps {
   studentId: string | null; // null = closed
@@ -26,6 +31,10 @@ interface StudentDetailsDialogProps {
  * - Removed readiness and resume score KPIs (out of scope)
  * - Added profile completion % instead
  * - Maps temp frontend field names to Prisma schema
+ *
+ * Placement state is derived from the student's SELECTED applications — there
+ * is no stored placement column. The admin can set and lock the student's
+ * placement participation from here.
  */
 export function StudentDetailsDialog({
   studentId,
@@ -33,6 +42,7 @@ export function StudentDetailsDialog({
 }: StudentDetailsDialogProps) {
   const [profile, setProfile] = useState<CompleteProfile | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isSavingOptIn, startOptInTransition] = useTransition();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -70,20 +80,68 @@ export function StudentDetailsDialog({
     ? calculateProfileCompletion(profile)
     : { percentage: 0, completedSections: [], missingSections: [] };
 
-  // Determine status
-  const isPlaced = student?.placementStatus === 'placed';
+  // Placement is derived from the offers the student holds, never stored.
+  const offers = profile?.selectedOffers ?? [];
+  const isPlaced = offers.length > 0;
   const isPending = student?.isPending === true;
+  const optedIn = student?.optedIn ?? true;
+  const optedInLocked = student?.optedInLocked ?? false;
   const needsAttention =
-    !isPlaced && !isPending && (academic?.activeBacklogs ?? 0) > 0;
+    !isPlaced && !isPending && optedIn && (academic?.activeBacklogs ?? 0) > 0;
 
-  // Status badge
-  let statusBadge = { text: 'Eligible for Drives', className: 'badge-purple' };
-  if (isPending) {
-    statusBadge = { text: 'Pending Registration', className: 'badge-amber' };
-  } else if (isPlaced) {
-    statusBadge = { text: 'Placed', className: 'badge-green' };
-  } else if (needsAttention) {
-    statusBadge = { text: 'Needs Attention', className: 'badge-red' };
+  const placementState = resolvePlacementState({
+    isPending,
+    optedIn,
+    isPlaced,
+  });
+
+  // Needs Attention outranks the plain Eligible badge, but never overrides a
+  // real outcome (placed / pending / opted out).
+  const statusBadge =
+    placementState === 'ELIGIBLE' && needsAttention
+      ? { text: 'Needs Attention', className: 'badge-red' }
+      : PLACEMENT_STATE_BADGES[placementState];
+
+  function handleOptInChange(nextOptedIn: boolean, nextLocked: boolean) {
+    if (!studentId) return;
+
+    startOptInTransition(async () => {
+      const result = await setStudentPlacementOptIn({
+        studentId,
+        optedIn: nextOptedIn,
+        locked: nextLocked,
+      });
+
+      if (!result.success) {
+        toast({
+          title: 'Error',
+          description: result.error,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Keep the open dialog consistent with what was just saved.
+      setProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              student: {
+                ...prev.student,
+                optedIn: nextOptedIn,
+                optedInLocked: nextLocked,
+              },
+            }
+          : prev
+      );
+
+      toast({
+        title: 'Updated',
+        description: nextOptedIn
+          ? 'Student is participating in placement.'
+          : 'Student is marked as opted out of placement.',
+      });
+    });
   }
 
   // Generate initials
@@ -171,6 +229,103 @@ export function StudentDetailsDialog({
                 <span className={`badge ${statusBadge.className}`}>
                   {statusBadge.text}
                 </span>
+              </div>
+            </div>
+
+            {/* Offers held — the source of the Placed state */}
+            {isPlaced && (
+              <div
+                className="card"
+                style={{ padding: '10px 12px', display: 'grid', gap: 6 }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  Offers
+                </div>
+                {offers.map((offer) => (
+                  <div key={offer.driveId} style={{ fontSize: 13 }}>
+                    <strong>{offer.companyName}</strong> — {offer.roleName}
+                    {offer.packageDisplay && (
+                      <span className="text-muted">
+                        {' '}
+                        · {offer.packageDisplay}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Placement participation — admin-controlled, lockable */}
+            <div
+              className="card"
+              style={{
+                padding: '10px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  Placement participation
+                </div>
+                <div
+                  className="text-muted"
+                  style={{ fontSize: 11, marginTop: 2 }}
+                >
+                  {optedInLocked
+                    ? 'Locked — the student cannot change this themselves.'
+                    : 'The student can also change this from their settings.'}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${
+                    optedIn ? 'btn-primary' : 'btn-outline'
+                  }`}
+                  disabled={isSavingOptIn}
+                  onClick={() => handleOptInChange(true, optedInLocked)}
+                >
+                  Participating
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${
+                    !optedIn ? 'btn-primary' : 'btn-outline'
+                  }`}
+                  disabled={isSavingOptIn}
+                  onClick={() => handleOptInChange(false, optedInLocked)}
+                >
+                  Opted Out
+                </button>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 12,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={optedInLocked}
+                    disabled={isSavingOptIn}
+                    onChange={(e) =>
+                      handleOptInChange(optedIn, e.target.checked)
+                    }
+                  />
+                  Lock
+                </label>
               </div>
             </div>
 

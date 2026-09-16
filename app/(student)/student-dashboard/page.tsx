@@ -177,6 +177,7 @@ export default async function StudentDashboardPage() {
                   key={item.drive.id}
                   drive={item.drive}
                   stage={item.application?.stage ?? null}
+                  applicationStatus={item.application?.status ?? null}
                   applicantCount={item.applicantCount}
                   departmentCodes={item.departmentCodes}
                   reviewFields={buildApplicationReviewData(

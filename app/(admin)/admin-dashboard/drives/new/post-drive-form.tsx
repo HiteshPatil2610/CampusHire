@@ -11,6 +11,7 @@ import {
 import { AdminDrivePreviewCard } from "@/components/admin/drives/admin-drive-preview-card";
 import DatePicker from "@/components/ui/date-picker";
 import UrlField from "@/components/ui/url-field";
+import CompanyLogoField from "@/components/shared/company-logo-field";
 import { useToast } from "@/hooks/use-toast";
 
 interface Department {
@@ -38,6 +39,7 @@ export function PostDriveForm({
 
   const [form, setForm] = useState({
     companyName: "",
+    companyLogoUrl: null as string | null,
     roleName: "",
     packageOffered: "",
     packageDisplay: "",
@@ -223,6 +225,7 @@ export function PostDriveForm({
     startTransition(async () => {
       const result = await createDrive({
         companyName: form.companyName.trim(),
+        companyLogoUrl: form.companyLogoUrl,
         roleName: form.roleName.trim(),
         packageOffered: packageNum,
         packageDisplay: form.packageDisplay.trim() || undefined,
@@ -285,6 +288,12 @@ export function PostDriveForm({
             />
           </div>
         </div>
+
+        <CompanyLogoField
+          value={form.companyLogoUrl}
+          onChange={(companyLogoUrl) => setForm({ ...form, companyLogoUrl })}
+          disabled={isPending}
+        />
 
         <div className="field-row">
           <div className="field">

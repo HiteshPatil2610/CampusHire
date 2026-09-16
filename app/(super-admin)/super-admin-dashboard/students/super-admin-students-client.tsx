@@ -6,11 +6,29 @@ import StatusBadge from "@/components/ui/status-badge";
 import Pagination from "@/components/ui/pagination";
 import { exportToCsv } from "@/lib/csv-export";
 import type { Student, Department, StudentAcademic } from "@prisma/client";
+import {
+  PLACEMENT_STATE_BADGES,
+  type PlacementState,
+} from "@/features/students/utils/placement-status";
 
 interface StudentWithRelations extends Student {
   department: Department;
   academic: StudentAcademic | null;
+  /** Derived server-side from the student's applications. */
+  placementState: PlacementState;
+  placedCompanies: string[];
 }
+
+/** StatusBadge variant for each derived placement state. */
+const PLACEMENT_BADGE_VARIANTS: Record<
+  PlacementState,
+  'amber' | 'teal' | 'purple' | 'gray'
+> = {
+  PENDING: 'amber',
+  PLACED: 'teal',
+  OPTED_OUT: 'gray',
+  ELIGIBLE: 'purple',
+};
 
 interface Props {
   students: StudentWithRelations[];
@@ -71,7 +89,8 @@ export function SuperAdminStudentsClient({
       'Phone': student.phoneNumber || '',
       'CGPA': student.academic?.currentCGPA?.toString() || '',
       'Backlogs': student.academic?.activeBacklogs?.toString() || '0',
-      'Status': student.isPending ? 'Pending' : student.placementStatus === 'PLACED' ? 'Placed' : 'Eligible',
+      'Status': PLACEMENT_STATE_BADGES[student.placementState].text,
+      'Placed At': student.placedCompanies.join(', ') || '',
     }));
 
     const deptFilter = filters.deptId
@@ -112,6 +131,7 @@ export function SuperAdminStudentsClient({
             { value: 'all', label: 'All' },
             { value: 'placed', label: 'Placed' },
             { value: 'eligible', label: 'Eligible' },
+            { value: 'opted-out', label: 'Opted Out' },
             { value: 'attention', label: 'Needs Attention' },
             { value: 'pending', label: 'Pending' },
           ].map((st) => (
@@ -202,12 +222,18 @@ export function SuperAdminStudentsClient({
                     )}
                   </td>
                   <td>
-                    {student.isPending ? (
-                      <StatusBadge variant="amber">Pending</StatusBadge>
-                    ) : student.placementStatus === 'PLACED' ? (
-                      <StatusBadge variant="teal">Placed</StatusBadge>
-                    ) : (
-                      <StatusBadge variant="purple">Eligible</StatusBadge>
+                    <StatusBadge
+                      variant={PLACEMENT_BADGE_VARIANTS[student.placementState]}
+                    >
+                      {PLACEMENT_STATE_BADGES[student.placementState].text}
+                    </StatusBadge>
+                    {student.placedCompanies.length > 0 && (
+                      <div
+                        className="text-muted"
+                        style={{ fontSize: 11, marginTop: 2 }}
+                      >
+                        {student.placedCompanies.join(', ')}
+                      </div>
                     )}
                   </td>
                 </tr>

@@ -17,6 +17,8 @@ interface Admin {
   user: {
     id: string;
     email: string;
+    /** Captured when the account was created; null for older accounts. */
+    name: string | null;
     clerkId: string;
     role: string;
     createdAt: Date;
@@ -369,7 +371,7 @@ export function AdminAccountsClient({
         <table>
           <thead>
             <tr>
-              <th>Email</th>
+              <th>Admin</th>
               <th>Department</th>
               <th>Assigned</th>
               <th style={{ width: 120 }}>Actions</th>
@@ -385,7 +387,22 @@ export function AdminAccountsClient({
             ) : (
               admins.map((admin) => (
                 <tr key={admin.id}>
-                  <td>{admin.user.email}</td>
+                  <td>
+                    {/*
+                      The name captured when the account was created is now
+                      stored on User — it used to be sent to Clerk and dropped.
+                    */}
+                    {admin.user.name ? (
+                      <>
+                        <div style={{ fontWeight: 600 }}>{admin.user.name}</div>
+                        <div className="text-muted" style={{ fontSize: 11 }}>
+                          {admin.user.email}
+                        </div>
+                      </>
+                    ) : (
+                      admin.user.email
+                    )}
+                  </td>
                   <td>
                     {admin.department.name}
                     <div className="text-muted" style={{ fontSize: 11 }}>

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import DatePicker from "@/components/ui/date-picker";
 import UrlField from "@/components/ui/url-field";
+import CompanyLogoField from "@/components/shared/company-logo-field";
 import { createCentralDrive } from "../actions/create-central-drive";
 
 interface PostCentralDriveModalProps {
@@ -23,6 +24,7 @@ interface PostCentralDriveModalProps {
 
 const EMPTY_FORM = {
   companyName: "",
+  companyLogoUrl: null as string | null,
   roleName: "",
   packageDisplay: "",
   minCGPA: "",
@@ -79,6 +81,7 @@ export function PostCentralDriveModal({
     startTransition(async () => {
       const result = await createCentralDrive({
         companyName: form.companyName.trim(),
+        companyLogoUrl: form.companyLogoUrl,
         roleName: form.roleName.trim(),
         packageDisplay: form.packageDisplay.trim(),
         minCGPA,
@@ -188,6 +191,14 @@ export function PostCentralDriveModal({
               disabled={isPending}
             />
           </div>
+
+          <CompanyLogoField
+            value={form.companyLogoUrl}
+            onChange={(companyLogoUrl) =>
+              setField("companyLogoUrl", companyLogoUrl)
+            }
+            disabled={isPending}
+          />
 
           <div className="field">
             <label>Company Portal / Registration URL (Optional)</label>

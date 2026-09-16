@@ -9,10 +9,26 @@ export const studentRowSchema = z.object({
   email: z.string().trim().email("Invalid email format").max(200, "Email too long"),
   phoneNumber: z.string().trim().max(15, "Phone number too long").optional(),
   tenthPercentage: z.number().min(0, "Must be >= 0").max(100, "Must be <= 100").optional(),
+  /**
+   * "Regular" (default) or "Diploma". A diploma row carries a diploma
+   * percentage instead of a 12th percentage — the two are never both filled.
+   */
+  entryType: z.enum(["REGULAR", "DIPLOMA"]).optional(),
   twelfthPercentage: z.number().min(0, "Must be >= 0").max(100, "Must be <= 100").optional(),
+  diplomaPercentage: z.number().min(0, "Must be >= 0").max(100, "Must be <= 100").optional(),
   currentCGPA: z.number().min(0, "Must be >= 0").max(10, "Must be <= 10").optional(),
   currentSemester: z.number().int("Must be an integer").min(1, "Must be >= 1").max(8, "Must be <= 8").optional(),
   activeBacklogs: z.number().int("Must be an integer").min(0, "Must be >= 0").optional(),
+}).superRefine((row, ctx) => {
+  if (row.entryType !== "DIPLOMA") return;
+
+  if (row.currentSemester !== undefined && row.currentSemester < 3) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["currentSemester"],
+      message: "A diploma (lateral-entry) student starts at semester 3",
+    });
+  }
 });
 
 export type StudentRow = z.infer<typeof studentRowSchema>;

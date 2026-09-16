@@ -1,6 +1,7 @@
 import { buildApplicationFieldRows } from "@/features/drives/utils/application-fields";
 import { parseJsonArray } from "@/lib/parse-json-array";
 import type { CompleteProfile } from "@/features/students/queries/profile-completion";
+import { preCollegePercentage } from "@/features/students/utils/entry-type";
 
 /**
  * Field keys the registrar owns. These are shown in the locked
@@ -79,6 +80,11 @@ export function buildApplicationReviewData(
     .filter((skill) => skill.skillType === "SOFT")
     .map((skill) => skill.skillName);
 
+  // A lateral-entry student has no 12th record — their diploma percentage is
+  // what fills the catalog's "12th / Diploma Percentage" row.
+  const preCollege = academic ? preCollegePercentage(academic) : null;
+  const preCollegeValue = preCollege === null ? "" : `${preCollege}%`;
+
   const valueByKey: Record<string, string> = {
     name: student.name,
     rollNo: student.rollNumber,
@@ -93,7 +99,9 @@ export function buildApplicationReviewData(
       : "",
     department: student.department.code,
     tenthPct: academic ? `${academic.tenthPercentage}%` : "",
-    twelfthPct: academic ? `${academic.twelfthPercentage}%` : "",
+    // The catalog field is "12th / Diploma Percentage" — resolve whichever
+    // branch this student's entry type actually filled.
+    twelfthPct: preCollegeValue,
     skills: technicalSkills.join(", "),
     softSkills: softSkills.join(", "),
     github: student.githubUrl ?? "",

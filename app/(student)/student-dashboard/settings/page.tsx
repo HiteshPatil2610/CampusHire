@@ -12,5 +12,10 @@ export default async function StudentSettingsPage() {
   const profile = await getStudentProfileByUserId(user.id);
   if (!profile) redirect('/student-dashboard');
 
-  return <SettingsClient />;
+  return (
+    <SettingsClient
+      optedIn={profile.student.optedIn}
+      optedInLocked={profile.student.optedInLocked}
+    />
+  );
 }

@@ -26,6 +26,20 @@ export async function getStudentProfile(studentId: string): Promise<CompleteProf
       semesterMarks: {
         orderBy: { semester: "asc" },
       },
+      applications: {
+        where: { status: "SELECTED" },
+        orderBy: { appliedAt: "desc" },
+        select: {
+          drive: {
+            select: {
+              id: true,
+              companyName: true,
+              roleName: true,
+              packageDisplay: true,
+            },
+          },
+        },
+      },
       department: {
         select: {
           id: true,
@@ -49,6 +63,12 @@ export async function getStudentProfile(studentId: string): Promise<CompleteProf
     experiences: student.experiences,
     certifications: student.certifications,
     preferences: student.preferences,
+    selectedOffers: student.applications.map((a) => ({
+      driveId: a.drive.id,
+      companyName: a.drive.companyName,
+      roleName: a.drive.roleName,
+      packageDisplay: a.drive.packageDisplay,
+    })),
   };
 }
 
@@ -77,6 +97,20 @@ export async function getStudentProfileByUserId(userId: string): Promise<Complet
       semesterMarks: {
         orderBy: { semester: "asc" },
       },
+      applications: {
+        where: { status: "SELECTED" },
+        orderBy: { appliedAt: "desc" },
+        select: {
+          drive: {
+            select: {
+              id: true,
+              companyName: true,
+              roleName: true,
+              packageDisplay: true,
+            },
+          },
+        },
+      },
       department: {
         select: {
           id: true,
@@ -100,5 +134,11 @@ export async function getStudentProfileByUserId(userId: string): Promise<Complet
     experiences: student.experiences,
     certifications: student.certifications,
     preferences: student.preferences,
+    selectedOffers: student.applications.map((a) => ({
+      driveId: a.drive.id,
+      companyName: a.drive.companyName,
+      roleName: a.drive.roleName,
+      packageDisplay: a.drive.packageDisplay,
+    })),
   };
 }

@@ -75,14 +75,27 @@ export default async function DepartmentDetailPage({ params }: Props) {
             <table>
               <thead>
                 <tr>
-                  <th>Email</th>
+                  <th>Admin</th>
                   <th>Assigned Date</th>
                 </tr>
               </thead>
               <tbody>
                 {department.admins.map((admin) => (
                   <tr key={admin.id}>
-                    <td>{admin.user.email}</td>
+                    <td>
+                      {admin.user.name ? (
+                        <>
+                          <div style={{ fontWeight: 600 }}>
+                            {admin.user.name}
+                          </div>
+                          <div className="text-muted" style={{ fontSize: 11 }}>
+                            {admin.user.email}
+                          </div>
+                        </>
+                      ) : (
+                        admin.user.email
+                      )}
+                    </td>
                     <td>
                       {new Date(admin.assignedAt).toLocaleDateString('en-US', {
                         year: 'numeric',

@@ -3,6 +3,11 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { exportToCsv } from "@/lib/csv-export";
 import type { DriveApplicationItem } from "@/features/applications/queries/get-drive-applications";
+import {
+  STAGE_LABELS,
+  STATUS_LABELS,
+} from "@/features/applications/utils/application-progress";
+import { ApplicationStageControl } from "./application-stage-control";
 
 interface ApplicationsTableClientProps {
   applications: DriveApplicationItem[];
@@ -35,6 +40,8 @@ export function ApplicationsTableClient({
       "CGPA (at application)": app.snapshotCgpa ?? "N/A",
       "Backlogs (at application)": app.snapshotBacklogs ?? "N/A",
       "Applied Date": new Date(app.appliedAt).toLocaleDateString(),
+      Stage: STAGE_LABELS[app.stage],
+      Status: STATUS_LABELS[app.status],
     }));
 
     exportToCsv(
@@ -75,6 +82,7 @@ export function ApplicationsTableClient({
                   <th>CGPA</th>
                   <th>Backlogs</th>
                   <th>Applied On</th>
+                  <th>Selection Progress</th>
                 </tr>
               </thead>
               <tbody>
@@ -99,6 +107,13 @@ export function ApplicationsTableClient({
                         day: "numeric",
                         year: "numeric",
                       })}
+                    </td>
+                    <td>
+                      <ApplicationStageControl
+                        applicationId={app.id}
+                        stage={app.stage}
+                        status={app.status}
+                      />
                     </td>
                   </tr>
                 ))}

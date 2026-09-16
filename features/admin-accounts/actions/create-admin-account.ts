@@ -30,7 +30,7 @@ export type CreateAdminAccountResult =
  * 3. Verify department exists + is active
  * 4. Create Clerk user (skipPasswordRequirement = true, emailAddressVerified = true)
  * 5. Set Clerk publicMetadata.role = 'DEPT_ADMIN'
- * 6. Upsert CampusHire User record (clerkId, email, role=DEPT_ADMIN)
+ * 6. Upsert CampusHire User record (clerkId, email, name, role=DEPT_ADMIN)
  * 7. Create DepartmentAdmin record
  * 8. Audit log
  *
@@ -92,11 +92,13 @@ export async function createAdminAccount(
         create: {
           clerkId: clerkUser.id,
           email,
+          name,
           role: 'DEPT_ADMIN',
         },
         update: {
           role:  'DEPT_ADMIN',
           email,
+          name,
         },
       });
 

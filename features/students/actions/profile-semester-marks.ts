@@ -6,6 +6,7 @@ import {
   semesterMarksSchema,
   type SemesterMarksInput,
 } from "../schemas/profile";
+import { firstSemesterFor } from "../utils/entry-type";
 
 export interface ActionResult {
   success: boolean;
@@ -13,7 +14,12 @@ export interface ActionResult {
 }
 
 /**
- * Upsert semester SGPA marks for the authenticated student
+ * Upsert semester SGPA marks for the authenticated student.
+ *
+ * The set of semesters a student may submit depends on how they entered the
+ * degree: a lateral-entry (diploma) student joins in the second year and has
+ * no semester 1 or 2 marks. The entry type is re-read from the stored
+ * academic record here — the client's copy is never the authority.
  */
 export async function updateSemesterMarks(
   input: SemesterMarksInput
@@ -21,6 +27,23 @@ export async function updateSemesterMarks(
   try {
     const { student } = await requireStudent();
     const validated = semesterMarksSchema.parse(input);
+
+    const academic = await prisma.studentAcademic.findUnique({
+      where: { studentId: student.id },
+      select: { entryType: true },
+    });
+
+    const firstSemester = firstSemesterFor(academic?.entryType ?? "REGULAR");
+    const outOfRange = validated.marks.find(
+      (mark) => mark.semester < firstSemester
+    );
+
+    if (outOfRange) {
+      return {
+        success: false,
+        error: `Semester ${outOfRange.semester} does not apply to a lateral-entry student. Start from semester ${firstSemester}.`,
+      };
+    }
 
     const submittedSemesters = validated.marks.map((mark) => mark.semester);
 

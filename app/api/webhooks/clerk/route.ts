@@ -92,7 +92,13 @@ export async function POST(req: Request) {
 async function handleUserCreated(evt: WebhookEvent) {
   if (evt.type !== "user.created") return;
 
-  const { id: clerkId, email_addresses, primary_email_address_id } = evt.data;
+  const {
+    id: clerkId,
+    email_addresses,
+    primary_email_address_id,
+    first_name,
+    last_name,
+  } = evt.data;
 
   // Get primary email
   const primaryEmail = email_addresses.find(
@@ -105,6 +111,7 @@ async function handleUserCreated(evt: WebhookEvent) {
   }
 
   const email = primaryEmail.email_address;
+  const name = buildName(first_name, last_name);
 
   // Create User record with STUDENT role (default for self-registration)
   // Use upsert for idempotency (handles duplicate webhook events)
@@ -112,10 +119,14 @@ async function handleUserCreated(evt: WebhookEvent) {
     where: { clerkId },
     update: {
       email, // Update email if user already exists
+      // Never overwrite a stored name with nothing — an admin account is
+      // created with its name before any webhook arrives.
+      ...(name ? { name } : {}),
     },
     create: {
       clerkId,
       email,
+      name,
       role: "STUDENT", // Default role for self-registration
     },
   });
@@ -149,7 +160,13 @@ async function handleUserCreated(evt: WebhookEvent) {
 async function handleUserUpdated(evt: WebhookEvent) {
   if (evt.type !== "user.updated") return;
 
-  const { id: clerkId, email_addresses, primary_email_address_id } = evt.data;
+  const {
+    id: clerkId,
+    email_addresses,
+    primary_email_address_id,
+    first_name,
+    last_name,
+  } = evt.data;
 
   // Get primary email
   const primaryEmail = email_addresses.find(
@@ -162,11 +179,12 @@ async function handleUserUpdated(evt: WebhookEvent) {
   }
 
   const email = primaryEmail.email_address;
+  const name = buildName(first_name, last_name);
 
-  // Update user email in database
+  // Update user email (and name, when Clerk has one) in database
   const user = await prisma.user.update({
     where: { clerkId },
-    data: { email },
+    data: { email, ...(name ? { name } : {}) },
   });
 
   console.log(`User email updated in database:`, {
@@ -174,6 +192,18 @@ async function handleUserUpdated(evt: WebhookEvent) {
     clerkId: user.clerkId,
     email: user.email,
   });
+}
+
+/**
+ * Join Clerk's split name fields into the single display name the app stores.
+ * Returns null when Clerk has neither, so a blank never overwrites a real name.
+ */
+function buildName(
+  firstName: string | null,
+  lastName: string | null
+): string | null {
+  const name = [firstName, lastName].filter(Boolean).join(" ").trim();
+  return name || null;
 }
 
 /**
