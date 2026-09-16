@@ -2,7 +2,6 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin } from "@/lib/auth";
-import { PLACED_STUDENT_FILTER } from "@/features/students/utils/placement-status";
 
 export interface DepartmentMatrixRow {
   id:              string;
@@ -17,54 +16,89 @@ export interface DepartmentMatrixRow {
   openDrives:      number;
 }
 
+/**
+ * One row per department, resolved in a single statement.
+ *
+ * This previously issued four COUNT queries *per department* on top of the
+ * department list — 4N + 1 round trips, so the page got linearly slower with
+ * every department added. The counts are now lateral aggregates over the same
+ * scan, which is one round trip no matter how many departments exist.
+ *
+ * `placedStudents` mirrors PLACED_STUDENT_FILTER: at least one SELECTED
+ * application. Placement is derived, never stored, and this is one of the two
+ * places it is expressed as raw SQL — keep it in step with that filter.
+ */
 export async function getDepartmentMatrix(): Promise<DepartmentMatrixRow[]> {
   await requireSuperAdmin();
 
-  const departments = await prisma.department.findMany({
-    orderBy: { code: 'asc' },
-    include: {
-      _count: {
-        select: { admins: true },
-      },
-    },
-  });
+  const rows = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      name: string;
+      code: string;
+      isActive: boolean;
+      totalStudents: bigint;
+      registeredStudents: bigint;
+      placedStudents: bigint;
+      adminCount: bigint;
+      openDrives: bigint;
+    }>
+  >`
+    SELECT
+      d."id",
+      d."name",
+      d."code",
+      d."isActive",
+      COALESCE(s."totalStudents", 0)      AS "totalStudents",
+      COALESCE(s."registeredStudents", 0) AS "registeredStudents",
+      COALESCE(s."placedStudents", 0)     AS "placedStudents",
+      COALESCE(a."adminCount", 0)         AS "adminCount",
+      COALESCE(v."openDrives", 0)         AS "openDrives"
+    FROM "Department" d
+    LEFT JOIN (
+      SELECT
+        st."departmentId" AS did,
+        COUNT(*)                                            AS "totalStudents",
+        COUNT(*) FILTER (WHERE st."isPending" = false)      AS "registeredStudents",
+        COUNT(*) FILTER (WHERE EXISTS (
+          SELECT 1 FROM "DriveApplication" da
+          WHERE da."studentId" = st."id" AND da."status" = 'SELECTED'
+        ))                                                  AS "placedStudents"
+      FROM "Student" st
+      GROUP BY st."departmentId"
+    ) s ON s.did = d."id"
+    LEFT JOIN (
+      SELECT "departmentId" AS did, COUNT(*) AS "adminCount"
+      FROM "DepartmentAdmin"
+      GROUP BY "departmentId"
+    ) a ON a.did = d."id"
+    LEFT JOIN (
+      SELECT "departmentId" AS did, COUNT(*) AS "openDrives"
+      FROM "Drive"
+      WHERE "applicationDeadline" > NOW()
+      GROUP BY "departmentId"
+    ) v ON v.did = d."id"
+    ORDER BY d."code" ASC
+  `;
 
-  const rows = await Promise.all(
-    departments.map(async (dept) => {
-      const [totalStudents, registeredStudents, placedStudents, openDrives] =
-        await Promise.all([
-          prisma.student.count({ where: { departmentId: dept.id } }),
-          prisma.student.count({ where: { departmentId: dept.id, isPending: false } }),
-          prisma.student.count({
-            where: { departmentId: dept.id, ...PLACED_STUDENT_FILTER },
-          }),
-          prisma.drive.count({
-            where: {
-              departmentId: dept.id,
-              applicationDeadline: { gt: new Date() },
-            },
-          }),
-        ]);
+  return rows.map((row) => {
+    const registeredStudents = Number(row.registeredStudents);
+    const placedStudents = Number(row.placedStudents);
 
-      const placementRate =
+    return {
+      id: row.id,
+      name: row.name,
+      code: row.code,
+      isActive: row.isActive,
+      totalStudents: Number(row.totalStudents),
+      registeredStudents,
+      placedStudents,
+      placementRate:
         registeredStudents > 0
           ? Math.round((placedStudents / registeredStudents) * 100)
-          : 0;
-
-      return {
-        id:                dept.id,
-        name:              dept.name,
-        code:              dept.code,
-        isActive:          dept.isActive,
-        totalStudents,
-        registeredStudents,
-        placedStudents,
-        placementRate,
-        adminCount:        dept._count.admins,
-        openDrives,
-      };
-    })
-  );
-
-  return rows;
+          : 0,
+      adminCount: Number(row.adminCount),
+      openDrives: Number(row.openDrives),
+    };
+  });
 }

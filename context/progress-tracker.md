@@ -2273,6 +2273,41 @@ What changed:
 Pre-existing test failures were verified unchanged: 27 failed / 255 passed,
 identical before and after, confirmed by stashing the changes and re-running.
 
+### Global reports: 38 queries -> 2
+
+A second pass on the super-admin reports page, which the dev log showed at
+~1.4s warm. `getDepartmentMatrix` was a straight N+1 — four COUNT queries per
+department on top of the department list, so the page got linearly slower with
+every department added. `getSystemStats` issued nine separate counts which,
+under `connection_limit=5`, ran as two serial batches rather than in parallel.
+
+Both are now one statement each, using `COUNT(*) FILTER` aggregates and grouped
+LEFT JOINs: **2,014ms / 38 queries -> 410ms / 2 queries.**
+
+These are the only two places placement is expressed as raw SQL rather than
+through `PLACED_STUDENT_FILTER`. Both carry a comment saying so. They were
+verified equivalent rather than assumed — old and new run side by side and
+their output compared, against existing data and against seeded edge cases in
+a rolled-back transaction (empty inactive department for the COALESCE path, a
+REJECTED application that must not count as placed, a closed drive that must
+not count as open). Identical in every case.
+
+### Reading a dev-server log
+
+Numbers from `next dev` are not production numbers, and most of the alarming
+ones are webpack. From a clean run of this project:
+
+```
+Compiled / in 5s (1107 modules)
+GET /  200 in 3493ms   <- first hit, includes the compile
+GET /  200 in  113ms   <- same page, already compiled
+```
+
+Only requests with no `Compiling ...` line before them measure anything real.
+A `500` is a crash, not a slow page — and a 20s one is almost always two dev
+servers sharing `.next`, which is what the "Port 3000 is in use, using 3001"
+banner means.
+
 ### The remaining 1.9s is distance, not code
 
 Nine queries at 221 ms is a floor no amount of refactoring gets under. Neon
