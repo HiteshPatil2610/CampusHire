@@ -2629,6 +2629,32 @@
     animation: skeleton-shimmer 1.4s ease infinite;
   }
 
+  /* Nav click feedback. Painted from `useLinkStatus` on the first frame after
+     a click, covering the gap before the route's skeleton takes over — during
+     that gap the previous page is still on screen. */
+  .nav-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    flex: none;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    border-top-color: var(--accent-dark);
+    animation: nav-spin 0.6s linear infinite;
+  }
+
+  @keyframes nav-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav-spinner {
+      animation-duration: 2s;
+    }
+  }
+
   @keyframes skeleton-shimmer {
     0% {
       background-position: 100% 50%;

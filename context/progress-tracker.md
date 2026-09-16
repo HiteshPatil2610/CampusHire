@@ -2310,6 +2310,35 @@ why `prefetch={true}` across 23 links would be actively harmful at 500 users.
 Verified by rendering every shape on a temporary public route and screenshotting
 it; the route and its middleware entry were reverted afterwards.
 
+### Instant click feedback
+
+Even with a skeleton in place there is a gap between the click and the skeleton
+painting, and during that gap the *previous* page is still on screen — so the
+click reads as "nothing happened". Next 15.3's `useLinkStatus` reports the
+pending transition from inside the `<Link>` with no network involved, so a
+spinner can paint on the very first frame after the click. Sidebar nav items
+and the footer Settings link now carry one (`.nav-spinner` in globals.css,
+reduced-motion aware). It adds nothing to the bundle — shared First Load JS
+stayed at 103 kB.
+
+Measured on a production build (`next start`), which is the only place these
+numbers mean anything:
+
+```
+full page load       10-30 ms
+RSC prefetch shell    8-9  ms   <- fires on viewport entry, before the click
+middleware only       4-6  ms
+```
+
+Against `next dev` on the same machine: 3,493 ms on a route's first hit (5s
+webpack compile) and 113 ms warm. The gap between those two columns is the
+whole reason dev timings should never be used to judge this app.
+
+Not verified end-to-end: the click-to-skeleton time on an *authenticated*
+route, because there is still no student account to test with (see the open
+question below). The mechanism and the bundle cost are confirmed; the felt
+latency on a real dashboard navigation is not yet measured.
+
 ### Reading a dev-server log
 
 Numbers from `next dev` are not production numbers, and most of the alarming

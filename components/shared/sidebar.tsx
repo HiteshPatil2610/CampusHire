@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link, { useLinkStatus } from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useClerk, useUser } from '@clerk/nextjs';
 import {
@@ -147,6 +147,24 @@ const ROLE_LABELS: Record<string, string> = {
   superadmin: 'Super Admin / TPO',
 };
 
+/**
+ * Instant click feedback for a nav link.
+ *
+ * Even with the route shell prefetched there is a gap between the click and
+ * the skeleton painting, and during it the *old* page is still on screen — so
+ * a click can read as "nothing happened". `useLinkStatus` reports the pending
+ * transition from inside the Link with no network involved, so this paints on
+ * the very first frame after the click. It must be rendered as a descendant of
+ * the `<Link>` whose status it reports.
+ */
+function NavPendingSpinner() {
+  const { pending } = useLinkStatus();
+
+  if (!pending) return null;
+
+  return <span className="nav-spinner" role="status" aria-label="Loading" />;
+}
+
 export interface SidebarProps {
   role: 'student' | 'admin' | 'superadmin';
 }
@@ -253,9 +271,14 @@ export default function Sidebar({ role }: SidebarProps) {
                     )}
                     <span>{item.label}</span>
                   </span>
-                  {item.badge && unreadCount > 0 && (
-                    <span className="badge badge-accent">{unreadCount}</span>
-                  )}
+                  <span
+                    style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                  >
+                    {item.badge && unreadCount > 0 && (
+                      <span className="badge badge-accent">{unreadCount}</span>
+                    )}
+                    <NavPendingSpinner />
+                  </span>
                 </Link>
               );
             })}
@@ -273,6 +296,7 @@ export default function Sidebar({ role }: SidebarProps) {
         >
           <Settings size={16} />
           <span>Settings</span>
+          <NavPendingSpinner />
         </Link>
         <button
           className="sidebar-link"
