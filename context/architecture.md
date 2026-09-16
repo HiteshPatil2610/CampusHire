@@ -62,11 +62,14 @@ read path cheap, and both are load-bearing rather than stylistic:
   only one that reaches Postgres. A new helper that reads the database on an
   authorization path belongs in that file, wrapped the same way. Do not
   "optimise" by threading the user object through every signature.
-- **Multi-relation reads use `relationLoadStrategy: "join"`.** Prisma's
-  default emits one query per `include`d relation, so a nine-relation read is
-  ten round trips. The `relationJoins` preview feature is enabled in
-  `schema.prisma` for this. Any read with more than two relations should set
-  it.
+- **`relationJoins` is enabled in `schema.prisma`, and that is what matters.**
+  Without it Prisma emits one query per `include`d relation, so a
+  nine-relation read is ten round trips. With it, `join` becomes the *default*
+  for every relation read in the app — measured on this database, the student
+  profile goes from 10 queries / ~3,400ms to 1 query / ~300ms. New code does
+  not need to opt in; a few call sites pass `relationLoadStrategy: "join"`
+  explicitly, which is documentation rather than a behaviour change. What you
+  must not do is pass `relationLoadStrategy: "query"`, which opts back out.
 - **Independent queries go out together.** A `count` and its `findMany` for
   the same screen do not depend on each other and belong in one
   `Promise.all`. The same goes for unrelated sections of a page.

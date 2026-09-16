@@ -2,10 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin } from "@/lib/auth";
-import {
-  PLACED_STUDENT_FILTER,
-  UNPLACED_STUDENT_FILTER,
-} from "../utils/placement-status";
+import { UNPLACED_STUDENT_FILTER } from "../utils/placement-status";
 
 export interface AdminDashboardStats {
   totalStudents: number;
@@ -27,51 +24,69 @@ export interface AdminDashboardStats {
  * Get admin dashboard KPI stats + attention list, scoped to admin's dept.
  * Authorization: requireDepartmentAdmin()
  */
+/**
+ * Get admin dashboard KPI stats + attention list, scoped to admin's dept.
+ * Authorization: requireDepartmentAdmin()
+ *
+ * The five KPI counts are one statement rather than five round trips — same
+ * table, same department, differing only by filter, which is what
+ * `COUNT(*) FILTER` is for. The attention list is a separate query because it
+ * returns rows rather than a number, and it runs alongside rather than after.
+ *
+ * `placedStudents` mirrors PLACED_STUDENT_FILTER: at least one SELECTED
+ * application. Placement is derived, never stored — keep this in step with
+ * that filter.
+ */
 export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   const { department } = await requireDepartmentAdmin();
   const deptId = department.id;
 
-  const [
-    totalStudents,
-    placedStudents,
-    optedOutStudents,
-    pendingStudents,
-    openDrivesCount,
-  ] = await Promise.all([
-      prisma.student.count({ where: { departmentId: deptId } }),
-      prisma.student.count({
-        where: { departmentId: deptId, ...PLACED_STUDENT_FILTER },
-      }),
-      prisma.student.count({
-        where: { departmentId: deptId, isPending: false, optedIn: false },
-      }),
-      prisma.student.count({
-        where: { departmentId: deptId, isPending: true },
-      }),
-      prisma.drive.count({
-        where: {
-          departmentId: deptId,
-          applicationDeadline: { gt: new Date() },
-        },
-      }),
-    ]);
+  const [[counts], needingAttention] = await Promise.all([
+    prisma.$queryRaw<
+      Array<{
+        totalStudents: bigint;
+        placedStudents: bigint;
+        optedOutStudents: bigint;
+        pendingStudents: bigint;
+        openDrivesCount: bigint;
+      }>
+    >`
+      SELECT
+        COUNT(*)                                                       AS "totalStudents",
+        COUNT(*) FILTER (WHERE EXISTS (
+          SELECT 1 FROM "DriveApplication" da
+          WHERE da."studentId" = s."id" AND da."status" = 'SELECTED'
+        ))                                                             AS "placedStudents",
+        COUNT(*) FILTER (WHERE s."isPending" = false
+                           AND s."optedIn" = false)                    AS "optedOutStudents",
+        COUNT(*) FILTER (WHERE s."isPending" = true)                   AS "pendingStudents",
+        (SELECT COUNT(*) FROM "Drive" d
+          WHERE d."departmentId" = ${deptId}
+            AND d."applicationDeadline" > NOW())                       AS "openDrivesCount"
+      FROM "Student" s
+      WHERE s."departmentId" = ${deptId}
+    `,
+    // Students still seeking a placement and carrying active backlogs. A
+    // student who opted out is not "needing attention".
+    prisma.student.findMany({
+      where: {
+        departmentId: deptId,
+        isPending: false,
+        optedIn: true,
+        ...UNPLACED_STUDENT_FILTER,
+        academic: { activeBacklogs: { gt: 0 } },
+      },
+      take: 5,
+      orderBy: { name: "asc" },
+      include: {
+        academic: { select: { currentCGPA: true, activeBacklogs: true } },
+      },
+    }),
+  ]);
 
-  // Students needing attention: still seeking a placement, and carrying
-  // active backlogs. A student who opted out is not "needing attention".
-  const needingAttention = await prisma.student.findMany({
-    where: {
-      departmentId: deptId,
-      isPending: false,
-      optedIn: true,
-      ...UNPLACED_STUDENT_FILTER,
-      academic: { activeBacklogs: { gt: 0 } },
-    },
-    take: 5,
-    orderBy: { name: "asc" },
-    include: {
-      academic: { select: { currentCGPA: true, activeBacklogs: true } },
-    },
-  });
+  const n = (value: bigint) => Number(value);
+  const totalStudents = n(counts.totalStudents);
+  const placedStudents = n(counts.placedStudents);
 
   const placementRate =
     totalStudents > 0 ? Math.round((placedStudents / totalStudents) * 100) : 0;
@@ -79,9 +94,9 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   return {
     totalStudents,
     placedStudents,
-    optedOutStudents,
-    pendingStudents,
-    openDrivesCount,
+    optedOutStudents: n(counts.optedOutStudents),
+    pendingStudents: n(counts.pendingStudents),
+    openDrivesCount: n(counts.openDrivesCount),
     placementRate,
     studentsNeedingAttention: needingAttention.map((s) => ({
       id: s.id,

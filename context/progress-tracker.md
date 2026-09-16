@@ -2248,11 +2248,16 @@ What changed:
   call was its own round trip; one dashboard render issued the same `user` and
   `student` lookups five times. They are now memoised per request, so the
   helpers stay free to call anywhere and only the first costs a query.
-- **`relationJoins` preview feature enabled**, and the profile reads use
-  `relationLoadStrategy: "join"`. Prisma's default issues one query per
-  relation, so a nine-relation profile load cost ten round trips. Measured
-  here: **2,207 ms / 10 queries -> 234 ms / 1 query.** Also applied to the
-  department student roster, which pulls four relations per row.
+- **`relationJoins` preview feature enabled.** Prisma's default issues one
+  query per relation, so a nine-relation profile load cost ten round trips.
+  Measured here: **~3,400 ms / 10 queries -> ~300 ms / 1 query.**
+
+  Corrected after testing against seeded data: enabling the flag is what does
+  the work — it makes `join` the default for *every* relation read in the app,
+  not just annotated ones. Verified by comparing a call with the option
+  omitted (1 query) against an explicit `"query"` (10 queries) and an explicit
+  `"join"` (1 query), in both orderings. The explicit annotations left in
+  `get-profile.ts` and the roster are documentation, not the cause.
 - **`getEligibleDrives` no longer re-reads the student three times.** It
   reused `requireStudent` and then fetched the whole student row again just
   for `academic`; it now fetches only the academic record, request-cached.
@@ -2338,6 +2343,37 @@ Not verified end-to-end: the click-to-skeleton time on an *authenticated*
 route, because there is still no student account to test with (see the open
 question below). The mechanism and the bundle cost are confirmed; the felt
 latency on a real dashboard navigation is not yet measured.
+
+### Measured against 500 students
+
+`scripts/seed-perf-data.ts` fills the database to the scale this is being
+built for — 500 students across 5 departments, 30 drives, ~1,500 applications
+— because every earlier timing was taken against 8 students and 1 drive, which
+measures fixed overhead and nothing about scaling. Everything it writes is
+namespaced (`SD*` department codes, `@seed.test` emails, `[seed]` company
+names) and `--clear` removes it.
+
+Re-measured with that data in place:
+
+| path | before | after |
+|---|---|---|
+| student dashboard (full page) | 5,360 ms / 14 queries | 2,210 ms / 12 queries |
+| global reports (11 departments) | 2,424 ms / **54 queries** | 360 ms / 2 queries |
+| admin dashboard KPIs | 671 ms / 7 queries | 238 ms / 2 queries |
+| admin roster, page of 25 | 627 ms | 374 ms |
+
+The reports N+1 grew from 38 to 54 queries purely because the seed added four
+departments — the clearest demonstration of why it had to go.
+
+Two findings that did *not* match expectations, recorded because they change
+what is worth doing next:
+
+1. **The SQL prefilter on drives is currently worth nothing** — 320 ms vs
+   309 ms, one query either way. At 31 drives there is nothing to narrow. It
+   is insurance for when the drive table is large, not a present-day win.
+2. **The admin dashboard KPI counts were the last N+1-shaped hot path** and
+   are now one `COUNT(*) FILTER` statement. Verified equivalent against all 11
+   departments before replacing.
 
 ### Reading a dev-server log
 
