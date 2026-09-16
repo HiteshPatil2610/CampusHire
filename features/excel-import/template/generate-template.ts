@@ -6,15 +6,20 @@ import * as XLSX from 'xlsx';
  * Returns a Buffer that can be sent as a file download.
  */
 export function generateImportTemplate(departmentCode: string): Buffer {
+  // The first five columns are what the student's own sign-up card used to
+  // ask for, and are required for every row. The academic columns are
+  // optional — students fill those in themselves after activating.
   const headers = [
-    'Roll Number',
     'Full Name',
     'College Email',
     'Phone Number',
+    // 1 = lateral entry after a diploma, 0 = regular entry after 12th.
+    // Decides which academic records the student's profile will ask for.
+    'Diploma',
+    // Required unless Diploma is 1 — a lateral-entry student may not have
+    // been issued one yet and can add it from their profile later.
+    'Roll Number',
     '10th Percentage',
-    // Regular / Diploma. A diploma (lateral-entry) student fills the Diploma
-    // column and leaves 12th blank.
-    'Entry Type',
     '12th Percentage',
     'Diploma Percentage',
     'Current CGPA',
@@ -24,10 +29,11 @@ export function generateImportTemplate(departmentCode: string): Buffer {
   ];
 
   const sampleRows = [
-    ['21CS042', 'Aditi Sharma',  'aditi.sharma@college.edu',  '9876543210', '92.4', 'Regular', '89.6', '',     '8.84', '7', '0', departmentCode],
-    ['21CS089', 'Rohan Mehta',   'rohan.mehta@college.edu',   '9876543211', '85.0', 'Regular', '82.5', '',     '7.40', '7', '0', departmentCode],
-    // Lateral entry: diploma instead of 12th, and no semester 1-2 marks.
-    ['21CS104', 'Priya Patel',   'priya.patel@college.edu',   '',           '78.0', 'Diploma', '',     '81.2', '6.20', '7', '1', departmentCode],
+    ['Aditi Sharma', 'aditi.sharma@college.edu', '9876543210', '0', '21CS042', '92.4', '89.6', '',     '8.84', '7', '0', departmentCode],
+    ['Rohan Mehta',  'rohan.mehta@college.edu',  '9876543211', '0', '21CS089', '85.0', '82.5', '',     '7.40', '7', '0', departmentCode],
+    // Diploma = 1: diploma marks instead of 12th, and the roll number may be
+    // left blank until the college issues one.
+    ['Priya Patel',  'priya.patel@college.edu',  '9876543212', '1', '',        '78.0', '',     '81.2', '6.20', '7', '1', departmentCode],
   ];
 
   const worksheetData = [headers, ...sampleRows];

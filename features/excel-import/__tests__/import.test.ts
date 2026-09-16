@@ -112,7 +112,7 @@ CS002,Jane Smith,jane@example.com`;
 describe("Excel/CSV Import - Validator", () => {
   it("should detect invalid email format", () => {
     const rows = [
-      { rowNumber: 2, data: { rollNumber: "CS001", name: "John", email: "invalid-email" } },
+      { rowNumber: 2, data: { rollNumber: "CS001", phoneNumber: "9876543210", entryType: "REGULAR" as const, name: "John", email: "invalid-email" } },
     ];
 
     const result = validateImportRows(rows, "test.xlsx");
@@ -125,7 +125,7 @@ describe("Excel/CSV Import - Validator", () => {
 
   it("should detect missing required fields", () => {
     const rows = [
-      { rowNumber: 2, data: { rollNumber: "CS001", email: "john@example.com" } }, // missing name
+      { rowNumber: 2, data: { rollNumber: "CS001", phoneNumber: "9876543210", entryType: "REGULAR" as const, email: "john@example.com" } }, // missing name
     ];
 
     const result = validateImportRows(rows, "test.xlsx");
@@ -140,7 +140,7 @@ describe("Excel/CSV Import - Validator", () => {
       { 
         rowNumber: 2, 
         data: { 
-          rollNumber: "CS001", 
+          rollNumber: "CS001", phoneNumber: "9876543210", entryType: "REGULAR" as const, 
           name: "John", 
           email: "john@example.com",
           tenthPercentage: 150, // invalid: > 100
@@ -157,8 +157,8 @@ describe("Excel/CSV Import - Validator", () => {
 
   it("should detect duplicate roll numbers within file", () => {
     const rows = [
-      { rowNumber: 2, data: { rollNumber: "CS001", name: "John", email: "john@example.com" } },
-      { rowNumber: 3, data: { rollNumber: "CS001", name: "Jane", email: "jane@example.com" } },
+      { rowNumber: 2, data: { rollNumber: "CS001", phoneNumber: "9876543210", entryType: "REGULAR" as const, name: "John", email: "john@example.com" } },
+      { rowNumber: 3, data: { rollNumber: "CS001", phoneNumber: "9876543210", entryType: "REGULAR" as const, name: "Jane", email: "jane@example.com" } },
     ];
 
     const result = validateImportRows(rows, "test.xlsx");
@@ -172,8 +172,8 @@ describe("Excel/CSV Import - Validator", () => {
 
   it("should detect duplicate emails within file", () => {
     const rows = [
-      { rowNumber: 2, data: { rollNumber: "CS001", name: "John", email: "same@example.com" } },
-      { rowNumber: 3, data: { rollNumber: "CS002", name: "Jane", email: "same@example.com" } },
+      { rowNumber: 2, data: { rollNumber: "CS001", phoneNumber: "9876543210", entryType: "REGULAR" as const, name: "John", email: "same@example.com" } },
+      { rowNumber: 3, data: { rollNumber: "CS002", phoneNumber: "9876543210", entryType: "REGULAR" as const, name: "Jane", email: "same@example.com" } },
     ];
 
     const result = validateImportRows(rows, "test.xlsx");
@@ -188,14 +188,14 @@ describe("Excel/CSV Import - Validator", () => {
     vi.spyOn(prisma.student, 'findMany').mockResolvedValueOnce([
       { 
         id: "existing-1",
-        rollNumber: "CS001",
+        rollNumber: "CS001", phoneNumber: "9876543210", entryType: "REGULAR" as const,
         email: "different@example.com",
         departmentId: "dept-1",
       } as any,
     ]);
 
     const rows = [
-      { rowNumber: 2, data: { rollNumber: "CS001", name: "John", email: "john@example.com" } },
+      { rowNumber: 2, data: { rollNumber: "CS001", phoneNumber: "9876543210", entryType: "REGULAR" as const, name: "John", email: "john@example.com" } },
     ];
 
     const dbDuplicates = await checkDatabaseDuplicates(rows, "dept-1");
@@ -210,14 +210,14 @@ describe("Excel/CSV Import - Validator", () => {
     vi.spyOn(prisma.student, 'findMany').mockResolvedValueOnce([]).mockResolvedValueOnce([
       { 
         id: "existing-1",
-        rollNumber: "CS999",
+        rollNumber: "CS999", phoneNumber: "9876543210", entryType: "REGULAR" as const,
         email: "john@example.com",
         departmentId: "dept-1",
       } as any,
     ]);
 
     const rows = [
-      { rowNumber: 2, data: { rollNumber: "CS001", name: "John", email: "john@example.com" } },
+      { rowNumber: 2, data: { rollNumber: "CS001", phoneNumber: "9876543210", entryType: "REGULAR" as const, name: "John", email: "john@example.com" } },
     ];
 
     const dbDuplicates = await checkDatabaseDuplicates(rows, "dept-1");
@@ -229,9 +229,9 @@ describe("Excel/CSV Import - Validator", () => {
 
   it("should block import if any row has errors", () => {
     const rows = [
-      { rowNumber: 2, data: { rollNumber: "CS001", name: "John", email: "john@example.com" } },
-      { rowNumber: 3, data: { rollNumber: "CS002", name: "Jane", email: "invalid-email" } },
-      { rowNumber: 4, data: { rollNumber: "CS003", name: "Bob", email: "bob@example.com" } },
+      { rowNumber: 2, data: { rollNumber: "CS001", phoneNumber: "9876543210", entryType: "REGULAR" as const, name: "John", email: "john@example.com" } },
+      { rowNumber: 3, data: { rollNumber: "CS002", phoneNumber: "9876543210", entryType: "REGULAR" as const, name: "Jane", email: "invalid-email" } },
+      { rowNumber: 4, data: { rollNumber: "CS003", phoneNumber: "9876543210", entryType: "REGULAR" as const, name: "Bob", email: "bob@example.com" } },
     ];
 
     const result = validateImportRows(rows, "test.xlsx");

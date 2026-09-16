@@ -38,15 +38,19 @@ export function validateImportRows(
       // Check within-file duplicates only for valid rows
       const { rollNumber, email } = result.data;
 
-      if (seenRollNumbers.has(rollNumber)) {
-        duplicates.push({
-          row:          rowNumber,
-          field:        'rollNumber',
-          value:        rollNumber,
-          duplicateRow: seenRollNumbers.get(rollNumber),
-        });
-      } else {
-        seenRollNumbers.set(rollNumber, rowNumber);
+      // A diploma entrant may legitimately have no roll number, and several
+      // blanks in one file are not duplicates of each other.
+      if (rollNumber) {
+        if (seenRollNumbers.has(rollNumber)) {
+          duplicates.push({
+            row:          rowNumber,
+            field:        'rollNumber',
+            value:        rollNumber,
+            duplicateRow: seenRollNumbers.get(rollNumber),
+          });
+        } else {
+          seenRollNumbers.set(rollNumber, rowNumber);
+        }
       }
 
       if (seenEmails.has(email)) {

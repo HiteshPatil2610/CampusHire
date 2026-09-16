@@ -8,6 +8,7 @@ import { validateImportRows, checkDatabaseDuplicates } from '../validator/valida
 import { deleteImportFile } from '@/lib/blob';
 import { createAuditLog, AuditAction, AuditEntityType } from '@/lib/audit';
 import { studentRowSchema } from '../schemas/import';
+import { partitionRows, type RejectedRow } from '../validator/partition-rows';
 
 const commitInputSchema = z.object({
   blobUrl: z.string().url("Invalid blob URL"),
@@ -17,7 +18,13 @@ const commitInputSchema = z.object({
 });
 
 export type CommitImportResult =
-  | { success: true; count: number; departmentCode: string }
+  | {
+      success: true;
+      count: number;
+      /** Rows left behind because they had errors. */
+      skipped: RejectedRow[];
+      departmentCode: string;
+    }
   | { success: false; error: string; validationErrors?: unknown };
 
 /**
@@ -33,7 +40,9 @@ export type CommitImportResult =
  * - DB duplicates re-checked
  * - Import is atomic (Prisma transaction)
  * - Blob file deleted on success
- * - No records inserted if any row fails
+ * - Rows with errors are skipped and reported, never partially written —
+ *   per-row, as `architecture.md` invariant 4 describes. A single bad row no
+ *   longer blocks the rest of the file.
  */
 export async function commitImport(
   input: z.infer<typeof commitInputSchema>
@@ -77,11 +86,19 @@ export async function commitImport(
       validationResult.duplicates.push(...dbDuplicates);
     }
 
-    // 7. If any errors — abort entirely, do NOT insert anything
-    if (!validationResult.canImport) {
+    // 7. Split into importable rows and rejected ones. Computed by the same
+    // pure function the preview used, so what the admin approved is what gets
+    // written.
+    const { ready, rejected } = partitionRows(
+      parseResult.rows,
+      validationResult.errors,
+      validationResult.duplicates
+    );
+
+    if (ready.length === 0) {
       return {
         success: false,
-        error: `Import failed: ${validationResult.invalidRows} row(s) have errors.`,
+        error: `No importable rows — all ${rejected.length} row(s) have errors.`,
         validationErrors: {
           errors:     validationResult.errors,
           duplicates: validationResult.duplicates,
@@ -89,8 +106,8 @@ export async function commitImport(
       };
     }
 
-    // 8. Parse all valid rows into Student create data
-    const studentData = parseResult.rows.map(({ data }) => {
+    // 8. Parse the importable rows into Student create data
+    const studentData = ready.map(({ data }) => {
       const row = studentRowSchema.parse(data); // safe — already validated
       return {
         userId:      null,
@@ -106,18 +123,6 @@ export async function commitImport(
       };
     });
 
-    // Academic data for students that have academic fields in the file
-    const academicData = parseResult.rows
-      .map(({ data }) => studentRowSchema.parse(data))
-      .filter(row =>
-        row.tenthPercentage !== undefined ||
-        row.twelfthPercentage !== undefined ||
-        row.diplomaPercentage !== undefined ||
-        row.currentCGPA !== undefined ||
-        row.currentSemester !== undefined ||
-        row.activeBacklogs !== undefined
-      );
-
     // 9. ATOMIC TRANSACTION — all or nothing
     const createdStudents = await prisma.$transaction(async (tx) => {
       // Create all Student records
@@ -126,8 +131,8 @@ export async function commitImport(
       );
 
       // Create StudentAcademic records for rows that have academic data
-      for (let i = 0; i < parseResult.rows.length; i++) {
-        const row = studentRowSchema.parse(parseResult.rows[i].data);
+      for (let i = 0; i < ready.length; i++) {
+        const row = studentRowSchema.parse(ready[i].data);
         const student = students[i];
         const hasAcademic =
           row.tenthPercentage !== undefined ||
@@ -171,6 +176,7 @@ export async function commitImport(
       entityType: AuditEntityType.STUDENT,
       metadata: {
         importedCount: createdStudents.length,
+        skippedCount:  rejected.length,
         departmentId:  department.id,
         fileName,
         importedBy:    user.id,
@@ -180,6 +186,7 @@ export async function commitImport(
     return {
       success: true,
       count: createdStudents.length,
+      skipped: rejected,
       departmentCode: department.code,
     };
   } catch (error) {

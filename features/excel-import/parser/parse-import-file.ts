@@ -15,9 +15,14 @@ const HEADER_ALIASES: Record<string, string> = {
   '12th percentage': 'twelfthPercentage', '12th': 'twelfthPercentage',
   twelfth: 'twelfthPercentage', twelfth_pct: 'twelfthPercentage',
   '12th_pct': 'twelfthPercentage', '12th_percentage': 'twelfthPercentage', '12th %': 'twelfthPercentage',
-  'diploma percentage': 'diplomaPercentage', diploma: 'diplomaPercentage',
+  // Note: the bare header "Diploma" is the 1/0 entry-type flag below, not the
+  // percentage — the percentage must say so explicitly.
+  'diploma percentage': 'diplomaPercentage',
   diploma_pct: 'diplomaPercentage', 'diploma_percentage': 'diplomaPercentage',
-  'diploma %': 'diplomaPercentage',
+  'diploma %': 'diplomaPercentage', 'diploma marks': 'diplomaPercentage',
+  // The sheet's user-facing column is "Diploma" (1 / 0).
+  diploma: 'entryType', 'diploma student': 'entryType',
+  'is diploma': 'entryType', is_diploma: 'entryType',
   'entry type': 'entryType', entry_type: 'entryType', entry: 'entryType',
   'admission type': 'entryType', admission_type: 'entryType',
   'current cgpa': 'currentCGPA', cgpa: 'currentCGPA', current_cgpa: 'currentCGPA',
@@ -125,13 +130,11 @@ export async function parseImportFile(
             const n = parseFloat(rawValue);
             mapped[canonical] = isNaN(n) ? undefined : n;
           } else if (canonical === 'entryType') {
-            // Admins type "Diploma" / "Lateral" / "Regular" in plain text.
-            const normalized = rawValue.toLowerCase();
-            mapped[canonical] = normalized
-              ? normalized.startsWith('dip') || normalized.startsWith('lat')
-                ? 'DIPLOMA'
-                : 'REGULAR'
-              : undefined;
+            // Accept 1/0 as specified, plus the spellings admins actually
+            // type. Anything unrecognised is left undefined so the schema
+            // reports a missing Diploma column rather than silently
+            // defaulting someone to regular entry.
+            mapped[canonical] = normalizeDiplomaFlag(rawValue);
           } else if (['currentSemester', 'activeBacklogs'].includes(canonical)) {
             const n = parseInt(rawValue, 10);
             mapped[canonical] = isNaN(n) ? undefined : n;
@@ -156,4 +159,32 @@ export async function parseImportFile(
       error: 'Could not read file. Ensure it is a valid .xlsx, .xls, or .csv file.',
     };
   }
+}
+
+/**
+ * Read the sheet's "Diploma" column into an entry type.
+ *
+ * 1 / yes / true / "diploma" / "lateral" mean a lateral-entry student;
+ * 0 / no / false / "regular" mean a regular one. Anything else returns
+ * undefined so validation reports it, rather than guessing and quietly
+ * putting a diploma student on the 12th-marks track.
+ */
+export function normalizeDiplomaFlag(
+  raw: string
+): 'REGULAR' | 'DIPLOMA' | undefined {
+  const value = raw.trim().toLowerCase();
+  if (value === '') return undefined;
+
+  if (['1', 'yes', 'y', 'true', 'diploma', 'lateral'].includes(value)) {
+    return 'DIPLOMA';
+  }
+  if (['0', 'no', 'n', 'false', 'regular'].includes(value)) {
+    return 'REGULAR';
+  }
+
+  // Tolerate longer prose such as "Lateral entry" or "Regular (after 12th)".
+  if (value.startsWith('dip') || value.startsWith('lat')) return 'DIPLOMA';
+  if (value.startsWith('reg')) return 'REGULAR';
+
+  return undefined;
 }
