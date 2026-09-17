@@ -40,3 +40,6 @@ next-env.d.ts
 # sensitive documentation
 DATABASE_SETUP.md
 .neon
+
+# local database dumps (real data — never commit)
+backups/

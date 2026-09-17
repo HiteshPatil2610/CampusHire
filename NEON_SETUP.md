@@ -78,14 +78,63 @@ Singapore, the same queries cost single-digit milliseconds.
 
 In **Project settings**:
 
-- **History retention** — default is 6 hours. Raise it to **7 days**. This is
-  what makes point-in-time restore possible, and 6 hours is thin. It is the
-  reason the previous wipe was recoverable at all.
+- **History retention** — default is 6 hours, and on the **free tier that is
+  the ceiling**. It is what made the previous wipe recoverable, so know exactly
+  what it buys you: a mistake noticed within six hours can be undone, and one
+  noticed the next morning cannot. Raise it to 7 days if you ever move to a
+  paid plan.
+
+  Because six hours is thin, take your own dumps — see *Backups on the free
+  tier* below. That is the part that actually protects you.
 - **Autosuspend** — leaving it at 0 (never suspend) avoids a ~2 s cold start on
   the first query after idle. On the free tier this burns compute hours; 5
   minutes is a reasonable compromise while developing.
 
 ---
+
+## Backups on the free tier
+
+Neon's free plan gives 6 hours of point-in-time history and a **single**
+snapshot slot. Both are worth having, neither is a backup strategy: the window
+is short, and anything held inside the account disappears with the account.
+
+A local dump has none of those limits, costs nothing, and is the only copy that
+survives losing access to Neon itself:
+
+```bash
+npm run db:backup
+```
+
+Writes a compressed, timestamped dump to `backups/` (gitignored — dumps hold
+real student data and must never be committed). It uses the **unpooled**
+connection, because pgbouncer in transaction mode cannot hold the single
+consistent snapshot `pg_dump` needs.
+
+Restore into an empty database:
+
+```bash
+pg_restore --dbname "<connection string>" --clean --if-exists backups/<file>
+```
+
+Look inside one without restoring:
+
+```bash
+pg_restore --list backups/<file>
+```
+
+Requires the PostgreSQL client tools (`pg_dump` / `pg_restore`) on PATH. On
+Windows the client package alone is enough — no local server needed.
+
+**When to run it:** before any migration, before any script that writes in
+bulk, and on a routine once there is data you would mind re-entering. It takes
+seconds.
+
+**What is free and worth using alongside it:**
+
+- *Snapshot before something structural.* Branches → production → Create
+  snapshot. One slot only, so it is a "before I touch this" tool, not history.
+- *Branch instead of experimenting on production.* `neon checkout <name>
+  --create` gives an instant zero-copy copy. Break that, not the real thing.
 
 ## Step 3 — Get the connection string
 
