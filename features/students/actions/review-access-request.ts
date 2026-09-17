@@ -49,11 +49,22 @@ export async function reviewAccessRequest(
 
     const request = await prisma.studentAccessRequest.findUnique({
       where: { id: requestId },
-      include: { user: { select: { id: true, email: true } } },
+      include: { user: { select: { id: true, email: true, role: true } } },
     });
 
     if (!request) {
       return { success: false, error: "Request not found." };
+    }
+
+    // Promotion removes the request from the queue, but an admin can still be
+    // holding a stale page listing it. Approving from there would create a
+    // Student row for somebody who is now an admin, putting them back in the
+    // roster and in totalStudents — which is how this went wrong before.
+    if (request.user.role !== "STUDENT") {
+      return {
+        success: false,
+        error: `${request.email} has since been made a ${request.user.role === "SUPER_ADMIN" ? "super admin" : "department admin"} and no longer needs student access. Refresh the queue.`,
+      };
     }
 
     if (request.departmentId !== department.id) {

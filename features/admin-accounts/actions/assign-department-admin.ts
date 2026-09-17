@@ -10,6 +10,19 @@ import {
 } from "../schemas/admin";
 import { Prisma } from "@prisma/client";
 import { createAuditLogInTransaction, AuditAction, AuditEntityType } from "@/lib/audit";
+import { retireStudentAccess } from "../utils/retire-student-record";
+
+/**
+ * Thrown inside the assignment transaction to roll it back when the account's
+ * student record carries application history. Carries the helper's own
+ * explanation straight through to the admin who tried the promotion.
+ */
+class StudentRecordInUseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StudentRecordInUseError";
+  }
+}
 
 /**
  * Assign a user as department admin
@@ -89,6 +102,22 @@ export async function assignDepartmentAdmin(input: AssignDepartmentAdminInput) {
 
     // Perform atomic assignment with audit log
     const result = await prisma.$transaction(async (tx) => {
+      // This account stops being a student: retire its roster row, and take
+      // it off the approval queue if it was still waiting there. Both must
+      // happen in the same transaction as the promotion, or a failure
+      // half-way leaves an admin who is also a student.
+      const { retirement, withdrawal } = await retireStudentAccess(
+        tx,
+        validated.userId
+      );
+
+      // A student record with application history is not ours to delete —
+      // aborting the promotion is the deliberate resolution the helper asks
+      // for, and the transaction rolls back with it.
+      if (retirement.action === "refuse") {
+        throw new StudentRecordInUseError(retirement.reason);
+      }
+
       // Update user role
       const updatedUser = await tx.user.update({
         where: { id: validated.userId },
@@ -141,6 +170,9 @@ export async function assignDepartmentAdmin(input: AssignDepartmentAdminInput) {
           departmentId: validated.departmentId,
           email: user.email,
           departmentName: department.name,
+          // The deleted rows leave no trace of their own, so the trail is here.
+          retiredStudentRecord: retirement.applied,
+          withdrewPendingAccessRequest: withdrawal.applied,
         },
       }, currentUser.id);
 
@@ -169,6 +201,12 @@ export async function assignDepartmentAdmin(input: AssignDepartmentAdminInput) {
       data: result.admin,
     };
   } catch (error) {
+    // Not a failure — the promotion was refused on purpose, and the reason is
+    // written for the admin who attempted it.
+    if (error instanceof StudentRecordInUseError) {
+      return { success: false as const, error: error.message };
+    }
+
     console.error("Error assigning department admin:", error);
 
     // Handle duplicate assignment (race condition)

@@ -2516,6 +2516,50 @@ came back exact, both rolled back; `next build` passes (shared First Load JS
 unchanged at 103 kB, so no RSC boundary violation); the 27 pre-existing
 unrelated failures are unchanged.
 
+## Promotion takes an account off the waiting list — COMPLETE ✅
+
+Found while investigating "something is wrong with the database": two admins
+(`hitesh.patil24`, DEPT_ADMIN, and `adityakhebade.dev`, SUPER_ADMIN) were
+sitting in the COMP student roster and in `totalStudents`.
+
+Not stale data — an ordering hole. `retireStudentRecord` fires at promotion
+time, but both of these were promoted *while their `StudentAccessRequest` was
+still PENDING*, when there is no `Student` row to retire. The request stayed on
+the queue, an admin approved it afterwards, and approval is precisely what
+creates a `Student` row. Promote-then-approve silently undid the retirement.
+
+Both rows were empty (no applications, skills, projects, marks or academic
+record), so re-running the promotion scripts retired them with nothing
+cascading: students 1004 → 1002, COMP roster 104 → 102, applications unchanged
+at 2,876.
+
+The fix closes the hole at both ends:
+
+- `retireStudentAccess` now does the whole "this account is no longer a
+  student" cleanup — retire the roster row *and* delete a pending access
+  request — and every promotion path calls it. `assignDepartmentAdmin`, the
+  in-app path, was not calling `retireStudentRecord` at all; it now runs the
+  cleanup inside its existing transaction, and a refusal (application history)
+  aborts the promotion by rolling it back.
+- `reviewAccessRequest` refuses to approve any applicant whose role is no
+  longer `STUDENT`, so a stale queue in another tab cannot re-create the row.
+
+The pending request is **deleted**, not given a terminal status. `REJECTED` is
+not merely inaccurate — `registration.ts` refuses to let a REJECTED account
+register again, so it would permanently lock out anyone later demoted back to
+`STUDENT` by `removeDepartmentAdmin`. `APPROVED` would claim a `Student` row
+was created when none was. The audit log carries the trail instead
+(`retiredStudentRecord` / `withdrewPendingAccessRequest`).
+
+Verified against the live database inside a rolled-back transaction: a pending
+signup promoted mid-wait left the COMP queue (1 → 0), its request row was gone,
+no `Student` row was created, the role was live, and re-running was a no-op.
+3 new pure-decision tests; suite at 264 passing with the same 27 pre-existing
+failures.
+
+Note: the user has said this promotion process is itself going to be reworked,
+so this is a guard on the current flow rather than the final design.
+
 ## Local development note
 
 `next dev` and `next build` share the `.next` directory. Running a production

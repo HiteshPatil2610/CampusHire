@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { decideStudentRetirement } from "../utils/retire-student-record";
+import {
+  decideAccessRequestWithdrawal,
+  decideStudentRetirement,
+} from "../utils/retire-student-record";
 
 describe("decideStudentRetirement", () => {
   it("does nothing when the account never had a student record", () => {
@@ -48,5 +51,33 @@ describe("decideStudentRetirement", () => {
     });
 
     expect(refused.action).not.toBe("delete");
+  });
+});
+
+describe("decideAccessRequestWithdrawal", () => {
+  it("does nothing when the account never registered", () => {
+    expect(
+      decideAccessRequestWithdrawal({ hasRequest: false, status: null }).action
+    ).toBe("none");
+  });
+
+  it("withdraws a request still sitting on the waiting list", () => {
+    const result = decideAccessRequestWithdrawal({
+      hasRequest: true,
+      status: "PENDING",
+    });
+
+    expect(result.action).toBe("withdraw");
+  });
+
+  it("leaves an already-decided request alone", () => {
+    // Only PENDING is "on the waiting list". An APPROVED request belongs to a
+    // real student whose roster row retirement already handles, and a REJECTED
+    // one is what stops them re-registering — neither is ours to delete here.
+    for (const status of ["APPROVED", "REJECTED"] as const) {
+      expect(
+        decideAccessRequestWithdrawal({ hasRequest: true, status }).action
+      ).toBe("none");
+    }
   });
 });

@@ -18,7 +18,7 @@ config({ path: resolve(process.cwd(), ".env") });
 
 import { clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-import { retireStudentRecord } from "@/features/admin-accounts/utils/retire-student-record";
+import { retireStudentAccess } from "@/features/admin-accounts/utils/retire-student-record";
 
 async function makeSuperAdmin(email: string) {
   console.log(`\n🔍 Looking for user: ${email}\n`);
@@ -41,7 +41,7 @@ async function makeSuperAdmin(email: string) {
 
   // Retire any leftover student record BEFORE the "already an admin" exit
   // below, so re-running this script also repairs an account promoted earlier.
-  const retirement = await retireStudentRecord(prisma, user.id);
+  const { retirement, withdrawal } = await retireStudentAccess(prisma, user.id);
   if (retirement.action === "refuse") {
     console.error(`❌ ${retirement.reason}\n`);
     process.exit(1);
