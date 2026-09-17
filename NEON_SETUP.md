@@ -48,10 +48,26 @@ database — not between the user and the database. So:
 | Vercel Singapore (`sin1`) | **AWS Asia Pacific 1 (Singapore)** |
 | Unsure | **AWS US East 1** — matches Vercel's default |
 
-Neon has **no India region**. Singapore is the closest (~50–70 ms from Mumbai
-vs ~221 ms to Ohio), and it is the right pick *only if you also deploy the app
-to Singapore*. An app server in one region with a database in another is the
-worst combination and is what made local development feel so slow.
+Neon has **no India region**. Singapore is the closest, and it is the right
+pick *only if you also deploy the app to Singapore*. An app server in one
+region with a database in another is the worst combination and is what made
+local development feel so slow.
+
+Measured from this machine, laptop to database, after the move from Ohio to
+Singapore:
+
+| | Ohio (`us-east-2`) | Singapore (`ap-southeast-1`) |
+|---|---|---|
+| steady-state round trip | 221 ms | **~81 ms** |
+| 10 serial queries | ~2,210 ms | **812 ms** |
+
+A first sample or two runs slower while the connection warms — a median taken
+over nine cold-ish samples read 137 ms, while ten back-to-back queries
+averaged 81 ms. The second figure is the one that matters, since a real page
+issues its queries back to back.
+
+Note this is still laptop-to-Singapore. Once the app server sits *in*
+Singapore, the same queries cost single-digit milliseconds.
 
 > Local `npm run dev` will still feel slow whichever you pick, because your
 > laptop is the app server. That is expected and is not what production pays.
@@ -85,26 +101,49 @@ connections and the pooler is what keeps that from exhausting Postgres.
 
 ---
 
-## Step 4 — Update `.env.local`
+## Step 4 — Wire up `DATABASE_URL`
 
-Only `DATABASE_URL` changes here. Clerk keys are covered in
-[CLERK_SETUP.md](CLERK_SETUP.md).
+### If you used the Neon CLI (`neon link`)
+
+The CLI writes `DATABASE_URL`, `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` into
+**`.env`** for you, and re-pulls them on every `neon deploy`. Nothing to type.
+
+**But `DATABASE_URL` must then not exist in `.env.local`.** Next.js loads
+`.env.local` at *higher* precedence than `.env`, so a leftover line there
+silently wins and your app talks to the old database while the Prisma CLI talks
+to the new one. That split is very hard to diagnose from the symptoms. Delete
+the `DATABASE_URL` line from `.env.local` and let `.env` own it.
+
+### If you are setting it by hand
+
+Put it in `.env.local`, and make sure `.env` does not also define it:
 
 ```bash
-# Database — new Neon project
-DATABASE_URL=postgresql://neondb_owner:PASSWORD@ep-xxxx-pooler.REGION.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+DATABASE_URL=postgresql://USER:PASSWORD@ep-xxxx-pooler.REGION.aws.neon.tech/DBNAME?sslmode=require&channel_binding=require
 ```
 
-Notes:
+### Precedence, highest first
 
-- No quotes needed; if you use them, use double quotes.
+1. A variable exported in your **shell** — beats every file
+2. `.env.local`
+3. `.env`
+
+The shell one is worth knowing about: a terminal that exported `DATABASE_URL`
+earlier in its life keeps overriding both files, and `prisma migrate status`
+will cheerfully report on a database you did not mean. Check with
+`echo $DATABASE_URL` when something looks impossible.
+
+### Other notes
+
+- Quotes are optional; if you use them, use double quotes.
 - `lib/prisma.ts` appends `connection_limit=5` and `pool_timeout=20`
   automatically — do not add them yourself.
 - **Do not set `NODE_ENV` in any env file.** An inherited `NODE_ENV=development`
   makes `next build` fail while prerendering the error pages, with a misleading
   `<Html> should not be imported outside of pages/_document` error. Next sets it
   itself.
-- `.env.local` is gitignored. Keep it that way — it holds a database password.
+- `.env` and `.env.local` are both gitignored. Keep it that way — they hold a
+  database password.
 
 ---
 
