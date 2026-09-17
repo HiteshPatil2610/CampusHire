@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import type { User, Role, Department, DepartmentAdmin } from "@prisma/client";
 
 /**
@@ -92,13 +93,23 @@ export const getOrCreateUser = cache(async (): Promise<User | null> => {
       }
 
       // Create user with STUDENT role (default for self-registration)
-      user = await prisma.user.create({
-        data: {
-          clerkId,
-          email: primaryEmail.emailAddress,
-          role: "STUDENT",
-        },
-      });
+      try {
+        user = await prisma.user.create({
+          data: {
+            clerkId,
+            email: primaryEmail.emailAddress,
+            role: "STUDENT",
+          },
+        });
+      } catch (error) {
+        // A concurrent request may have created the same user first
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          user = await prisma.user.findUnique({ where: { clerkId } });
+          if (!user) throw error;
+        } else {
+          throw error;
+        }
+      }
 
       // Sync role to Clerk metadata
       await clerk.users.updateUserMetadata(clerkId, {
