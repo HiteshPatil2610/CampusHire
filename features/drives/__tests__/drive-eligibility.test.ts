@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { isStudentEligibleForDrive, getIneligibilityReasons } from "../queries/drive-eligibility";
 import type { HasEligibleDepartmentLinks } from "../utils/eligible-departments";
+import { Prisma } from "@prisma/client";
 import type { Drive, Student, StudentAcademic } from "@prisma/client";
 
 // Helper to create mock student
@@ -61,9 +62,7 @@ function createMockStudent(overrides?: Partial<Student & { academic: StudentAcad
 }
 
 // Helper to create mock drive. `eligibleDepartmentIds` builds the
-// `eligibleDepartmentLinks` relation the eligibility functions actually read;
-// `eligibleDepartments` (the legacy JSON column) is kept in step with it for
-// any code still reading the raw Drive row, but is not itself consulted.
+// `eligibleDepartmentLinks` relation the eligibility functions read.
 function createMockDrive(
   overrides?: Partial<Drive> & { eligibleDepartmentIds?: string[] }
 ): Drive & HasEligibleDepartmentLinks {
@@ -81,7 +80,7 @@ function createMockDrive(
     roleName: "Software Engineer",
     jobDescriptionUrl: null,
     jobDescriptionText: null,
-    packageOffered: 12.0,
+    packageOffered: new Prisma.Decimal("12.00"),
     selectionRounds: JSON.stringify(["Aptitude", "Technical", "HR"]),
     driveDate: futureDate,
     applicationDeadline: new Date(futureDate.getTime() - 7 * 24 * 60 * 60 * 1000), // 7 days before drive

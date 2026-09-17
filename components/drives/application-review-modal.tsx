@@ -21,6 +21,7 @@ import type {
 import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
 import { useToast } from '@/hooks/use-toast';
 
+import { formatPackage } from '@/features/drives/utils/format-package';
 export interface ApplicationReviewModalProps {
   open: boolean;
   onClose: () => void;
@@ -85,7 +86,7 @@ export default function ApplicationReviewModal({
 
   if (!open) return null;
 
-  const packageText = drive.packageDisplay || `${drive.packageOffered} LPA`;
+  const packageText = formatPackage(drive);
   const logoText = drive.companyName.slice(0, 4).toUpperCase();
   const missingRequired = fields.editable.filter(
     (field) => field.required && !values[field.key]?.trim()

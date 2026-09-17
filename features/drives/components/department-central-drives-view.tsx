@@ -7,6 +7,7 @@ import { resolveSelectedApplicationFields } from "../utils/application-fields";
 import { DepartmentDriveConfigPanel } from "./department-drive-config-panel";
 import type { DepartmentCentralDrive } from "../queries/get-department-central-drives";
 
+import { formatPackage } from "../utils/format-package";
 type SetupFilter = "all" | "ready" | "pending";
 
 interface DepartmentCentralDrivesViewProps {
@@ -396,7 +397,7 @@ export function DepartmentCentralDrivesView({
                         }}
                       >
                         {drive.roleName} ·{" "}
-                        {drive.packageDisplay || `${drive.packageOffered} LPA`}
+                        {formatPackage(drive)}
                       </div>
 
                       <div

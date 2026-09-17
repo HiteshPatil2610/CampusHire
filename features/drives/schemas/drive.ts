@@ -24,7 +24,15 @@ export const driveSchema = z
     packageOffered: z
       .number()
       .positive("Package must be positive")
-      .max(1000, "Package value seems unrealistic"),
+      .max(1000, "Package value seems unrealistic")
+      // The column is NUMERIC(10,2) and would silently round a third decimal
+      // place away. Rejecting it here means what the admin typed is what gets
+      // stored, or they are told why not. The epsilon is because the value
+      // arrives from parseFloat, so 12.34 * 100 is 1233.9999999999998.
+      .refine(
+        (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-9,
+        "Package can have at most 2 decimal places"
+      ),
     selectionRounds: z
       .array(z.string().min(1, "Round name cannot be empty"))
       .min(1, "At least one selection round is required")

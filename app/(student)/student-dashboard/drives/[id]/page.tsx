@@ -10,6 +10,7 @@ import { ApplySection } from '@/components/drives/apply-section';
 import { prisma } from '@/lib/prisma';
 import StatusBadge from '@/components/ui/status-badge';
 
+import { formatPackage } from '@/features/drives/utils/format-package';
 interface DriveDetailPageProps {
   params: Promise<{
     id: string;
@@ -133,7 +134,7 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
   const deadlineCheck = driveStatus === 'open';
 
   // Package display
-  const packageText = drive.packageDisplay || `${drive.packageOffered} LPA`;
+  const packageText = formatPackage(drive);
 
   // Get applicant count
   const applicantCount = await prisma.driveApplication.count({

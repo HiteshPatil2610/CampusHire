@@ -353,7 +353,10 @@ model Drive {
   roleName            String
   jobDescriptionUrl   String?
   jobDescriptionText  String?     @db.Text
-  packageOffered      Float
+  // Money, so NUMERIC rather than Float: exact storage and exact SQL
+  // aggregation. Prisma surfaces this as a Decimal, which is not a number —
+  // see features/drives/utils/format-package.ts before reading it.
+  packageOffered      Decimal     @db.Decimal(10, 2)
   selectionRounds     String      @db.Text // JSON array of round names
   driveDate           DateTime
   applicationDeadline DateTime

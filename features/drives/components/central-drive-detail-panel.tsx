@@ -10,6 +10,7 @@ import { buildApplicationFieldRows } from "../utils/application-fields";
 import { CentralDriveFieldsToggle } from "./central-drive-fields-toggle";
 import type { CentralDriveListItem } from "../queries/get-central-drives";
 
+import { formatPackage } from "../utils/format-package";
 interface DepartmentOption {
   id: string;
   name: string;
@@ -98,7 +99,7 @@ export function CentralDriveDetailPanel({
               {drive.companyName} — {drive.roleName}
             </h2>
             <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-              {drive.packageDisplay || `${drive.packageOffered} LPA`} · Min CGPA{" "}
+              {formatPackage(drive)} · Min CGPA{" "}
               {drive.minCGPA} · {drive._count.applications} applicant
               {drive._count.applications === 1 ? "" : "s"}
             </div>

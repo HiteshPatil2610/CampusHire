@@ -7,6 +7,7 @@ import { DepartmentScopeBanner } from '@/components/shared/department-scope-bann
 import KpiCard from '@/components/shared/kpi-card';
 import StatusBadge from '@/components/ui/status-badge';
 
+import { formatPackage } from '@/features/drives/utils/format-package';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -182,7 +183,7 @@ export default async function AdminDashboardPage() {
               {drivesResult.data.map((drive) => {
                 const status = getDriveStatus(drive.applicationDeadline);
                 const packageDisplay =
-                  drive.packageDisplay || `${drive.packageOffered} LPA`;
+                  formatPackage(drive);
 
                 return (
                   <div

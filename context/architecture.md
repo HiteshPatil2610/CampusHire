@@ -84,6 +84,26 @@ read path cheap, and both are load-bearing rather than stylistic:
   prefilter down and keep the exact check in JS. A prefilter may over-match;
   it must never under-match, or it silently hides rows a user is entitled to.
 
+## Money is NUMERIC, and NUMERIC is not a number
+
+`Drive.packageOffered` is `NUMERIC(10,2)`, not `Float`. Binary floating point
+cannot represent most decimal fractions exactly, which shows up as drift under
+`SUM` and as equality comparisons that should match and do not.
+
+Prisma surfaces that column as a `Decimal`, and this has a consequence worth
+knowing before reading it: decimal.js defines `toJSON`, and React's Flight
+serializer calls `toJSON` before it inspects a value, so the field arrives in a
+**client** component as a plain `string` while TypeScript still calls it
+`Decimal` on both sides. The compiler cannot see the difference, and neither
+can a template literal — which is why every display path goes through
+`formatPackage` (`features/drives/utils/format-package.ts`), which accepts all
+three runtime shapes.
+
+The rule: **never do arithmetic on a money column outside the database.**
+Format it for display, and let Postgres do the sums. A new money column gets
+`@db.Decimal(10, 2)`, a zod `.refine` rejecting more than 2 decimal places at
+the write boundary, and a formatter — not a `Float`.
+
 ## Index Policy
 
 Postgres serves a lookup on a column from any btree index whose *leftmost*

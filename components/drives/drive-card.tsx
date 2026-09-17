@@ -12,6 +12,7 @@ import {
 } from '@/features/drives/utils/eligible-departments';
 import StatusBadge from '@/components/ui/status-badge';
 
+import { formatPackage } from '@/features/drives/utils/format-package';
 interface DriveCardProps {
   drive: Drive & HasEligibleDepartmentLinks;
   isApplied: boolean;
@@ -48,7 +49,7 @@ export function DriveCard({
     .filter((code): code is string => Boolean(code));
 
   const logoText = drive.companyName.slice(0, 4).toUpperCase();
-  const packageText = drive.packageDisplay || `${drive.packageOffered} LPA`;
+  const packageText = formatPackage(drive);
 
   const hasLogistics = Boolean(
     drive.venue || drive.reportingTime || drive.pptLink || drive.externalApplyUrl

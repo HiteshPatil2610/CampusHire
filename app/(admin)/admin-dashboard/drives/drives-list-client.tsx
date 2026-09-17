@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getDriveStatus } from "@/features/drives/utils/drive-status";
 import type { Drive } from "@prisma/client";
 
+import { formatPackage } from "@/features/drives/utils/format-package";
 type DriveWithStatus = Drive & {
   _count: { applications: number };
   status: "open" | "closed";
@@ -137,7 +138,7 @@ export function DrivesListClient({
               </thead>
               <tbody>
                 {drives.map((drive) => {
-                  const packageDisplay = drive.packageDisplay || `${drive.packageOffered} LPA`;
+                  const packageDisplay = formatPackage(drive);
                   const deadline = new Date(drive.applicationDeadline);
                   const driveDate = new Date(drive.driveDate);
 

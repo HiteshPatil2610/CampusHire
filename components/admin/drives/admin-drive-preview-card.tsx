@@ -1,10 +1,25 @@
 "use client";
 
 import { getDriveStatus, getDaysUntilDeadline } from "@/features/drives/utils/drive-status";
-import type { Drive } from "@prisma/client";
+import { formatPackage } from "@/features/drives/utils/format-package";
+
+/**
+ * The half-filled form this card previews, not a saved row — so the numbers
+ * are what the inputs parsed to (and `NaN` while a field is still empty),
+ * rather than the `Decimal`/`Float` a `Drive` from the database would carry.
+ */
+interface DrivePreviewDraft {
+  companyName?: string;
+  roleName?: string;
+  packageOffered?: number | null;
+  packageDisplay?: string | null;
+  minCGPA?: number | null;
+  driveDate?: Date | string | null;
+  applicationDeadline?: Date | string | null;
+}
 
 interface AdminDrivePreviewCardProps {
-  drive: Partial<Drive>;
+  drive: DrivePreviewDraft;
   venue?: string;
   reportingTime?: string;
   deptCode: string;
@@ -23,8 +38,7 @@ export function AdminDrivePreviewCard({
   const daysLeft = deadline ? Math.floor(getDaysUntilDeadline(deadline)) : null;
   const isDlPassed = driveStatus === "closed";
 
-  const packageDisplay = drive.packageDisplay || 
-    (drive.packageOffered ? `${drive.packageOffered} LPA` : "CTC TBD");
+  const packageDisplay = formatPackage(drive);
 
   return (
     <div

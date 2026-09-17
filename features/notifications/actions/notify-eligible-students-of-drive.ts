@@ -6,6 +6,7 @@ import {
 } from "@/features/drives/utils/eligible-departments";
 import type { Drive } from "@prisma/client";
 
+import { formatPackage } from "@/features/drives/utils/format-package";
 /**
  * Announce a newly posted drive to the students who can actually apply to it.
  *
@@ -61,7 +62,7 @@ export async function notifyEligibleStudentsOfDrive(
       return { notified: 0 };
     }
 
-    const packageText = drive.packageDisplay ?? `${drive.packageOffered} LPA`;
+    const packageText = formatPackage(drive);
 
     await prisma.notification.createMany({
       data: recipients.map((student) => ({

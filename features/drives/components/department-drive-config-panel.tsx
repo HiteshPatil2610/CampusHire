@@ -16,6 +16,7 @@ import { StudentApplicationPreviewModal } from "./student-application-preview";
 import type { StoredApplicationField } from "../utils/application-fields";
 import type { DepartmentCentralDrive } from "../queries/get-department-central-drives";
 
+import { formatPackage } from "../utils/format-package";
 interface DepartmentDriveConfigPanelProps {
   drive: DepartmentCentralDrive;
   departmentCodesById: Record<string, string>;
@@ -150,7 +151,7 @@ export function DepartmentDriveConfigPanel({
 
   const mandatoryCount = fields.filter((field) => field.required).length;
   const logisticsReady = Boolean(venue.trim() && reportingTime.trim());
-  const packageText = drive.packageDisplay || `${drive.packageOffered} LPA`;
+  const packageText = formatPackage(drive);
 
   // Previews read the live form state, so the admin sees unsaved edits too.
   const previewLogistics = {

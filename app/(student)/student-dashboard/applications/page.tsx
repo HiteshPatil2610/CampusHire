@@ -6,6 +6,7 @@ import StatusBadge from '@/components/ui/status-badge';
 import Pagination from '@/components/ui/pagination';
 import Link from 'next/link';
 
+import { formatPackage } from '@/features/drives/utils/format-package';
 interface ApplicationsPageProps {
   searchParams: Promise<{
     page?: string;
@@ -244,7 +245,7 @@ export default async function ApplicationsPage({ searchParams }: ApplicationsPag
             <tbody>
               {applicationsResult.data.map((application) => {
                 const driveStatus = getDriveStatus(application.drive.applicationDeadline);
-                const packageText = application.drive.packageDisplay || `${application.drive.packageOffered} LPA`;
+                const packageText = formatPackage(application.drive);
                 const appliedDate = new Date(application.appliedAt).toLocaleDateString('en-IN', {
                   day: 'numeric',
                   month: 'short',

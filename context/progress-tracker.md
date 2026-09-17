@@ -2473,6 +2473,49 @@ the next:
 5. **`20260917110000_drop_legacy_drive_eligible_departments_json`** — drops
    `Drive.eligibleDepartments`. `setEligibleDepartments` no longer writes it.
 
+## Drive.packageOffered is NUMERIC(10,2) — COMPLETE ✅
+
+The second of the two schema debts recorded during the DB-latency work. CTC is
+money and was `double precision`, which cannot hold most decimal fractions
+exactly and drifts under `SUM` and equality. Now `NUMERIC(10,2)`
+(`20260917120000_drive_package_offered_decimal`), converted in place with an
+explicit `USING` cast while the table is still small.
+
+Verified lossless *before* running: all 59 rows were integers 4–24, none null,
+and `COUNT(*) FILTER (WHERE "packageOffered"::numeric(10,2)::float8 <> "packageOffered")`
+returned 0.
+
+The interesting part is what Prisma hands back. The column comes through as a
+`Decimal`, deliberately not a `number` — but decimal.js defines `toJSON`, and
+React's Flight serializer calls `toJSON` before it looks at a value, so the
+same field is a plain **string** by the time a client component reads it.
+TypeScript says `Decimal` on both sides and a template literal accepts either,
+so nothing in the toolchain flags the difference: after the type change, `tsc`
+reported 13 errors and **not one of them was a display site**.
+
+So display was centralised rather than patched. `formatPackage` takes
+`Decimal | number | string | null`, replacing the
+``packageDisplay || `${packageOffered} LPA` `` expression that was duplicated
+across 13 files. Behaviour is unchanged for real rows —
+`Decimal("12.00").toString()` is `"12"`, the same as the old Float rendered —
+with two deliberate corrections: an empty `packageDisplay` now falls through to
+the number instead of rendering blank (the notification producer used `??`
+where everywhere else used `||`), and a missing amount renders "CTC TBD"
+instead of "NaN LPA".
+
+Writes were tightened to match the column instead of letting Postgres round
+silently: the zod schema rejects more than 2 decimal places, and
+`parsePackageFromDisplay` rounds to 2. `AdminDrivePreviewCard` was typed
+`Partial<Drive>` but previews *unsaved form state*, so its numbers are
+`parseFloat` output (`NaN` while a field is empty), not a `Drive`'s — it now
+has its own `DrivePreviewDraft` type, which is what the Decimal change exposed.
+
+Verified: 6 new Vitest cases pin the three runtime shapes including the
+post-serialization string; a write of `12.75` round-tripped exactly and `SUM`
+came back exact, both rolled back; `next build` passes (shared First Load JS
+unchanged at 103 kB, so no RSC boundary violation); the 27 pre-existing
+unrelated failures are unchanged.
+
 ## Local development note
 
 `next dev` and `next build` share the `.next` directory. Running a production

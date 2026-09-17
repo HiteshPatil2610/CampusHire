@@ -28,6 +28,7 @@ import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
 import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 
+import { formatPackage } from '@/features/drives/utils/format-package';
 export const dynamic = 'force-dynamic';
 
 /** Rows the dashboard notification widget shows before "View all". */
@@ -418,7 +419,7 @@ export default async function StudentDashboardPage() {
                       <td>{drive.companyName}</td>
                       <td>{drive.roleName}</td>
                       <td>
-                        {drive.packageDisplay || `${drive.packageOffered} LPA`}
+                        {formatPackage(drive)}
                       </td>
                       <td>{drive.minCGPA}</td>
                       <td>{formatDriveDate(drive.driveDate)}</td>

@@ -26,6 +26,7 @@ import { parseJsonArray } from '@/lib/parse-json-array';
 import StatusBadge from '@/components/ui/status-badge';
 import StageTrack from './stage-track';
 import { useToast } from '@/hooks/use-toast';
+import { formatPackage } from '@/features/drives/utils/format-package';
 import {
   Dialog,
   DialogContent,
@@ -86,7 +87,7 @@ export default function DashboardDriveCard({
     applicationStatus === 'IN_PROGRESS';
 
   const logoText = drive.companyName.slice(0, 4).toUpperCase();
-  const packageText = drive.packageDisplay || `${drive.packageOffered} LPA`;
+  const packageText = formatPackage(drive);
   const selectionRounds = parseJsonArray(drive.selectionRounds);
   const hasLogistics = Boolean(
     drive.venue || drive.reportingTime || drive.pptLink || drive.contactPerson

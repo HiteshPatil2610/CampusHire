@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getMyApplications } from "../queries/get-my-applications";
+import { Prisma } from "@prisma/client";
 
 // Mock Prisma
 vi.mock("@/lib/prisma", () => ({
@@ -20,7 +21,7 @@ describe("getMyApplications", () => {
     companyName: "TechCorp",
     roleName: "Software Engineer",
     jobDescriptionUrl: null,
-    packageOffered: 12.0,
+    packageOffered: new Prisma.Decimal("12.00"),
     selectionRounds: JSON.stringify(["Aptitude", "Technical", "HR"]),
     driveDate: new Date("2026-12-01"),
     applicationDeadline: new Date("2026-11-15"),

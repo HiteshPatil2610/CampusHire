@@ -98,7 +98,7 @@ describe("applyToDrive", () => {
     roleName: "Software Engineer",
     jobDescriptionUrl: null,
     jobDescriptionText: null,
-    packageOffered: 12.0,
+    packageOffered: new Prisma.Decimal("12.00"),
     selectionRounds: JSON.stringify(["Aptitude", "Technical", "HR"]),
     driveDate: new Date("2026-12-01"),
     applicationDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
