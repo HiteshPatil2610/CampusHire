@@ -27,8 +27,10 @@ export async function updateAcademicInfo(input: AcademicInfoInput): Promise<Acti
 
     const isDiploma = validated.entryType === "DIPLOMA";
 
+    // entryType itself is not written here: the field is read-only on this
+    // form (fixed at registration on `Student`, not `StudentAcademic`), and
+    // is only read above to decide which branch below to keep.
     const record = {
-      entryType: validated.entryType,
       tenthPercentage: validated.tenthPercentage,
       tenthBoard: validated.tenthBoard || null,
       tenthYear: validated.tenthYear ?? null,
