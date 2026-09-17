@@ -80,7 +80,7 @@ model Drive {
   companyName           String
   roleName              String
   jobDescriptionUrl     String?  // Vercel Blob URL
-  packageOffered        Float
+  packageOffered        Decimal  @db.Decimal(10, 2) // money — never Float
   selectionRounds       String   @db.Text // JSON array of round names
   driveDate             DateTime
   applicationDeadline   DateTime
@@ -88,15 +88,29 @@ model Drive {
   externalApplyUrl      String?
   minCGPA               Float
   maxActiveBacklogs     Int
-  eligibleDepartments   String   @db.Text // JSON array of department IDs
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   
   // Relations
   department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  // Which departments may apply — real rows, not a JSON array.
+  eligibleDepartmentLinks DriveEligibleDepartment[]
   
   @@index([departmentId])
   @@index([applicationDeadline])
+}
+
+model DriveEligibleDepartment {
+  id           String   @id @default(cuid())
+  driveId      String
+  departmentId String
+  createdAt    DateTime @default(now())
+
+  drive      Drive      @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([driveId, departmentId])
+  @@index([departmentId])
 }
 
 enum ApplyMethod {
@@ -111,7 +125,7 @@ enum ApplyMethod {
 - `companyName` - Hiring company name (required)
 - `roleName` - Job role/position title (required)
 - `jobDescriptionUrl` - PDF uploaded to Vercel Blob (optional)
-- `packageOffered` - Salary package in LPA (required)
+- `packageOffered` - Salary package in LPA (required). `Decimal(10,2)`, not `Float` — read it with `formatPackage`, never do arithmetic on it outside the database.
 - `selectionRounds` - JSON array of round names (required, e.g., ["Aptitude", "Technical", "HR"])
 - `driveDate` - Date when drive will be conducted (required)
 - `applicationDeadline` - Last date to apply (required)
@@ -123,7 +137,7 @@ enum ApplyMethod {
 **Eligibility Criteria:**
 - `minCGPA` - Minimum CGPA required (required, 0-10 scale)
 - `maxActiveBacklogs` - Maximum allowed active backlogs (required, typically 0-2)
-- `eligibleDepartments` - JSON array of department IDs that can apply (required)
+- `eligibleDepartmentLinks` - `DriveEligibleDepartment` rows naming the departments that can apply (required, at least one). Real foreign keys, so a deleted department cannot linger.
 
 **Metadata:**
 - `departmentId` - Posted by which department (required, for department scope)
@@ -133,7 +147,7 @@ enum ApplyMethod {
 
 1. **No Status Field**: Drive status is NEVER stored. It is always calculated from `applicationDeadline`.
 2. **Department Scope**: Every drive belongs to exactly one department. The department admin who posts it.
-3. **JSON Fields**: `selectionRounds` and `eligibleDepartments` stored as JSON text for simplicity.
+3. **JSON Fields**: `selectionRounds` and `applicationFields` are still JSON text. Eligible departments are **not** — they are `DriveEligibleDepartment` rows, so membership is an indexed FK lookup with referential integrity.
 
 ---
 
@@ -173,7 +187,7 @@ export function getDriveStatus(applicationDeadline: Date): DriveStatus {
 
 A student is eligible for a drive if ALL conditions are met:
 
-1. **Department Match**: Student's department is in drive's `eligibleDepartments` list
+1. **Department Match**: Student's department has a `DriveEligibleDepartment` row for the drive
 2. **CGPA Requirement**: Student's current CGPA >= drive's `minCGPA`
 3. **Backlogs Limit**: Student's active backlogs <= drive's `maxActiveBacklogs`
 4. **Drive Status**: Drive must be "open" (deadline not passed)
@@ -204,9 +218,8 @@ export function isStudentEligibleForDrive(
   // Check drive is open
   if (getDriveStatus(drive.applicationDeadline) !== "open") return false;
   
-  // Check department eligibility
-  const eligibleDeptIds: string[] = JSON.parse(drive.eligibleDepartments);
-  if (!eligibleDeptIds.includes(student.departmentId)) return false;
+  // Check department eligibility (relation must be loaded by the caller)
+  if (!eligibleDepartmentIdsOf(drive).includes(student.departmentId)) return false;
   
   // Check CGPA requirement
   if (student.academic.currentCGPA < drive.minCGPA) return false;
@@ -229,15 +242,14 @@ const drives = await prisma.drive.findMany({
     applicationDeadline: { gt: new Date() }, // Open drives only
     minCGPA: { lte: student.academic.currentCGPA },
     maxActiveBacklogs: { gte: student.academic.activeBacklogs },
-    eligibleDepartments: { contains: student.departmentId }, // JSON contains check
+    // Real FK membership — exact, indexed, and needs no re-check in JS.
+    eligibleDepartmentLinks: { some: { departmentId: student.departmentId } },
   },
+  include: { eligibleDepartmentLinks: { select: { departmentId: true } } },
 });
 
-// Then verify each drive's eligibleDepartments array properly
-const fullyEligible = drives.filter(drive => {
-  const deptIds: string[] = JSON.parse(drive.eligibleDepartments);
-  return deptIds.includes(student.departmentId);
-});
+// CGPA/backlog/deadline are still re-checked in JS via the shared eligibility
+// function, but the department filter above is already exact.
 ```
 
 ---
@@ -420,7 +432,9 @@ const driveSchema = z.object({
   companyName: z.string().min(1, "Company name is required").max(200),
   roleName: z.string().min(1, "Role name is required").max(200),
   jobDescriptionUrl: z.string().url().optional(),
-  packageOffered: z.number().positive("Package must be positive"),
+  packageOffered: z.number().positive("Package must be positive")
+    // NUMERIC(10,2) would round a third decimal away silently.
+    .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-9, "Package can have at most 2 decimal places"),
   selectionRounds: z.array(z.string().min(1)).min(1, "At least one round required"),
   driveDate: z.string().min(1, "Drive date is required"),
   applicationDeadline: z.string().min(1, "Application deadline is required"),
@@ -428,6 +442,8 @@ const driveSchema = z.object({
   externalApplyUrl: z.string().url().optional(),
   minCGPA: z.number().min(0, "CGPA cannot be negative").max(10, "CGPA cannot exceed 10"),
   maxActiveBacklogs: z.number().int().min(0, "Backlogs cannot be negative"),
+  // Still an array of IDs on the wire; the action writes them as
+  // DriveEligibleDepartment rows via setEligibleDepartments.
   eligibleDepartments: z.array(z.string().min(1)).min(1, "At least one department required"),
 }).refine(
   (data) => {

@@ -54,6 +54,8 @@
 - Large or binary content (profile photos, JD PDFs) belongs in Vercel Blob — store only the returned URL in Postgres.
 - Every table that scopes to a department includes a `departmentId` foreign key; every query for a `DEPT_ADMIN`-scoped resource filters on it explicitly — never rely on implicit scoping.
 - Soft-delete is not used unless a feature explicitly requires history (e.g. audit log entries are append-only and never deleted).
+- Money is `Decimal @db.Decimal(10, 2)`, never `Float` — a binary float cannot hold most decimal fractions exactly and drifts under `SUM`. Prisma returns it as a `Decimal`, which is not a number and which React serialises to a plain `string` on its way into a client component, so route every read through a formatter (`features/drives/utils/format-package.ts`) and never do arithmetic on it outside the database. Reject more than two decimal places at the write boundary rather than letting Postgres round silently.
+- A set of references — which departments a drive is open to — is rows with foreign keys, not a JSON array in a text column. Text cannot be indexed for membership, forces a prefilter that over-matches, and lets a deleted row's ID linger with nothing to catch it. Give the set exactly one write path that replaces it wholesale inside the same transaction as the parent row (`setEligibleDepartments`), so the two halves can never be written apart.
 
 ## Environment Variables
 

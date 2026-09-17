@@ -392,21 +392,22 @@ reads as real and silently fails every eligibility comparison.
 
 ### Known schema debts
 
-Carried over deliberately — neither is a performance problem today, both are
-worth knowing:
+Both debts previously listed here were paid off on 2026-09-17, while the
+tables were still small:
 
-- **`Drive.eligibleDepartments` is a JSON array stored as text.** It cannot be
-  indexed for membership, so eligibility filters with a substring prefilter and
-  re-checks exactly in JavaScript. At 31 drives this costs 0.07 ms. It becomes
-  worth normalising into a `DriveEligibleDepartment` join table when the drive
-  table gets large — or sooner, for referential integrity, since nothing stops
-  a deleted department's ID lingering in that JSON.
-- **`Drive.packageOffered` is a `Float`.** Money in a binary float cannot
-  represent every decimal exactly. `Decimal` is the correct type. Worth fixing
-  while the table is empty — it is far more painful later.
+- **`Drive.eligibleDepartments`** (a JSON array of IDs in a text column) is now
+  the `DriveEligibleDepartment` join table — real foreign keys, an indexed
+  membership lookup, and no way for a deleted department's ID to linger. Done
+  as expand/backfill/verify/drop across two migrations; the old column is gone.
+- **`Drive.packageOffered`** is now `NUMERIC(10,2)` instead of `Float`. Note
+  that Prisma returns it as a `Decimal`, which is **not** a number, and which
+  React serialises to a plain `string` on its way into a client component —
+  read it through `formatPackage` and never do arithmetic on it outside the
+  database. See "Money is NUMERIC" in `context/architecture.md`.
 
-Other JSON-in-text columns: `Drive.selectionRounds`,
-`Drive.applicationFields`, `StudentPreferences.workModes`.
+Remaining JSON-in-text columns, none of them currently a problem:
+`Drive.selectionRounds`, `Drive.applicationFields`,
+`StudentPreferences.workModes`.
 
 ---
 
@@ -487,19 +488,16 @@ the 221 ms the old us-east-2 project had. Then re-run the dashboard query
 sequence and tell me what changed.
 ```
 
-### The two schema debts, if you want them fixed
+### Changing the schema
+
+Both schema debts that used to be listed here are done (see "Known schema
+debts" above). The shape of those prompts is worth reusing for the next one —
+what made them work was naming the safety rails, not the change:
 
 ```
-Normalise Drive.eligibleDepartments into a DriveEligibleDepartment join table
-with real foreign keys. Write the migration with a backfill, update every read
-and write path, keep the old column until the code is switched, then drop it.
-Verify old and new produce identical eligibility results before removing
-anything.
-```
-
-```
-Change Drive.packageOffered from Float to Decimal(10,2) and update every place
-that reads or writes it. Do this while the table is small.
+<the change>. Write the migration with a backfill, update every read and write
+path, keep the old column until the code is switched, then drop it. Verify old
+and new produce identical results before removing anything.
 ```
 
 ### If something goes wrong

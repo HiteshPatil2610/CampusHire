@@ -894,7 +894,7 @@ app/(super-admin)/super-admin-dashboard/
 | `d.company` | `drive.companyName` |
 | `d.role` | `drive.roleName` |
 | `d.ctc` | `drive.packageDisplay` |
-| `d.departments` | Parse `drive.eligibleDepartments` JSON |
+| `d.departments` | `drive.eligibleDepartmentLinks.map(l => l.departmentId)` (include the relation) |
 | `d.status === 'Open'` | `getDriveStatus(drive.applicationDeadline) === 'open'` |
 
 ---

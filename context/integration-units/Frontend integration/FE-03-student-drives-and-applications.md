@@ -96,7 +96,7 @@ model Drive {
 
   // Package display — stored as formatted string for flexibility
   // e.g. "12.0 – 16.0 LPA" or "18 LPA"
-  // The existing `packageOffered Float` stores the numeric value.
+  // The existing `packageOffered Decimal(10,2)` stores the numeric value.
   // This field stores the display string.
   packageDisplay  String?
 
@@ -320,7 +320,7 @@ modal. The modal/confirmation is on the detail page, not the card.
 | `drive.driveDate` | `drive.driveDate` |
 | `drive.driveDeadlineRaw` | `drive.applicationDeadline` |
 | `drive.deadline` (formatted string) | Format `drive.applicationDeadline` with `toLocaleDateString()` |
-| `drive.departments[]` | Parse `JSON.parse(drive.eligibleDepartments)` — array of department IDs, not names |
+| `drive.departments[]` | `drive.eligibleDepartmentLinks.map(l => l.departmentId)` — department IDs, not names. The relation must be included by the query. |
 | `drive.logoText` | First 4 chars of `drive.companyName.toUpperCase()` |
 | `drive.rounds` | `drive.roundsDescription` (new field, or `drive.selectionRounds`) |
 | `drive.jd` | `drive.jobDescriptionUrl` — show link to open PDF, not inline text |
@@ -346,7 +346,8 @@ const daysLeft = getDaysUntilDeadline(drive.applicationDeadline);
 
 ## 5.7 Department display
 
-`drive.eligibleDepartments` is a JSON string of department IDs (UUIDs).
+Eligible departments are `drive.eligibleDepartmentLinks` rows (each a
+`departmentId`), loaded by including the relation — not a JSON string.
 The DriveCard cannot join to get department names (server-side query context).
 
 Two options:
