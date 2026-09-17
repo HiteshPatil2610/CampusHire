@@ -10,23 +10,42 @@
  *   - departments   code starts with "SD"
  *   - students      email ends with "@seed.test"
  *   - drives        companyName starts with "[seed]"
- * Nothing outside those namespaces is created, and the only pre-existing row
- * touched is the one student named by TARGET_EMAIL, who is given the academic
- * record and roll number they are missing so they can actually see drives.
+ * Nothing outside those namespaces is created.
  *
- *   npx tsx scripts/seed-perf-data.ts          seed (idempotent)
- *   npx tsx scripts/seed-perf-data.ts --clear  remove everything seeded
+ *   npx tsx scripts/seed-perf-data.ts            seed (idempotent)
+ *   npx tsx scripts/seed-perf-data.ts --clear    remove everything seeded
+ *
+ * Optionally give it a real, signed-in student account:
+ *
+ *   npx tsx scripts/seed-perf-data.ts --student you@example.com
+ *
+ * That account is handed the academic record and roll number it needs to see
+ * drives at all, plus a few applications, so the dashboard renders with real
+ * content. Omit it and only the namespaced rows are created.
  *
  * This writes to whatever DATABASE_URL points at. It is a development tool.
  */
 import { config } from 'dotenv';
-config({ path: '.env.local' });
+// Env lives in two files and the split matters: .env.local holds the
+// hand-managed keys (Clerk, Blob) while .env is written by the Neon CLI and
+// owns DATABASE_URL. dotenv does not overwrite a variable that is already set,
+// so loading .env.local first and .env second reproduces Next.js's precedence
+// (.env.local wins) rather than relying on whichever happens to be found.
+config({ path: ".env.local" });
+config({ path: ".env" });
 import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-/** The linked student account used for signed-in testing. */
-const TARGET_EMAIL = 'raccoonlive444@gmail.com';
+/**
+ * A real signed-in student to make browsable, passed with `--student <email>`.
+ * Optional: without it the script seeds only its own namespaced rows, which is
+ * what you want on a fresh database where nobody has signed up yet.
+ */
+const TARGET_EMAIL = (() => {
+  const i = process.argv.indexOf('--student');
+  return i !== -1 ? process.argv[i + 1] : undefined;
+})();
 
 const SEED_DEPT_PREFIX = 'SD';
 const SEED_EMAIL_DOMAIN = '@seed.test';
@@ -91,45 +110,51 @@ async function clear() {
   });
   console.log(`  departments   ${depts.count}`);
 
-  console.log('\nThe target student keeps the academic record this script gave them.');
+  console.log('\nAn account passed with --student keeps the academic record it was given.');
   console.log('Done.\n');
 }
 
 async function seed() {
   console.log('Seeding performance test data...\n');
 
-  // --- The signed-in test account needs an academic record to see any drive.
-  const target = await prisma.student.findUnique({
-    where: { email: TARGET_EMAIL },
-    include: { academic: true },
-  });
-  if (!target) {
-    throw new Error(`No student with email ${TARGET_EMAIL}`);
-  }
-  if (!target.academic) {
-    await prisma.studentAcademic.create({
-      data: {
-        studentId: target.id,
-        tenthPercentage: 88.5, tenthBoard: 'CBSE', tenthYear: 2019,
-        twelfthPercentage: 84.2, twelfthBoard: 'CBSE', twelfthYear: 2021,
-        currentCGPA: 8.1, currentSemester: 7, activeBacklogs: 0, pastBacklogCount: 0,
-      },
+  // --- Optional: make one real signed-in account browsable.
+  let target: { id: string; departmentId: string } | null = null;
+  if (TARGET_EMAIL) {
+    const found = await prisma.student.findUnique({
+      where: { email: TARGET_EMAIL },
+      include: { academic: true },
     });
-    console.log(`  academic record created for ${TARGET_EMAIL} (CGPA 8.1)`);
-  } else {
-    console.log(`  ${TARGET_EMAIL} already has an academic record`);
-  }
-  if (!target.rollNumber) {
-    // A student with no roll number is blocked from applying to any drive.
-    await prisma.student.update({ where: { id: target.id }, data: { rollNumber: 'COMP900' } });
-    console.log('  roll number set to COMP900 (required before applying)');
+    if (!found) {
+      console.log(`  no student with email ${TARGET_EMAIL} - skipping that step`);
+    } else {
+      target = { id: found.id, departmentId: found.departmentId };
+      if (!found.academic) {
+        await prisma.studentAcademic.create({
+          data: {
+            studentId: found.id,
+            tenthPercentage: 88.5, tenthBoard: 'CBSE', tenthYear: 2019,
+            twelfthPercentage: 84.2, twelfthBoard: 'CBSE', twelfthYear: 2021,
+            currentCGPA: 8.1, currentSemester: 7, activeBacklogs: 0, pastBacklogCount: 0,
+          },
+        });
+        console.log(`  academic record created for ${TARGET_EMAIL} (CGPA 8.1)`);
+      }
+      if (!found.rollNumber) {
+        // A student with no roll number is blocked from applying to any drive.
+        await prisma.student.update({ where: { id: found.id }, data: { rollNumber: 'SEED900' } });
+        console.log('  roll number set to SEED900 (required before applying)');
+      }
+    }
   }
 
   // --- Departments
-  const comp = await prisma.department.findUnique({ where: { code: 'COMP' } });
-  if (!comp) throw new Error('Expected a COMP department to exist');
-
-  const departments = [comp];
+  // Seed into whatever real departments already exist, plus the namespaced
+  // ones below. On a fresh database there are none, and the SD* departments
+  // alone give enough spread to exercise the per-department queries.
+  const existing = await prisma.department.findMany({
+    where: { NOT: { code: { startsWith: SEED_DEPT_PREFIX } } },
+  });
+  const departments = [...existing];
   for (const d of DEPARTMENTS) {
     const dept = await prisma.department.upsert({
       where: { code: d.code },
@@ -138,7 +163,7 @@ async function seed() {
     });
     departments.push(dept);
   }
-  console.log(`  departments: ${departments.length} (1 existing + ${DEPARTMENTS.length} seeded)`);
+  console.log(`  departments: ${departments.length} (${existing.length} existing + ${DEPARTMENTS.length} seeded)`);
 
   // --- Students
   const rand = rng(42);
@@ -278,19 +303,24 @@ async function seed() {
   }
 
   // --- Give the target student something to look at
-  const targetDrives = await prisma.drive.findMany({
-    where: { companyName: { startsWith: SEED_DRIVE_PREFIX }, eligibleDepartments: { contains: comp.id } },
-    select: { id: true },
-    take: 3,
-  });
-  for (const d of targetDrives) {
-    await prisma.driveApplication.upsert({
-      where: { studentId_driveId: { studentId: target.id, driveId: d.id } },
-      update: {},
-      create: { studentId: target.id, driveId: d.id, stage: 'APPLIED', status: 'IN_PROGRESS' },
+  if (target) {
+    const targetDrives = await prisma.drive.findMany({
+      where: {
+        companyName: { startsWith: SEED_DRIVE_PREFIX },
+        eligibleDepartments: { contains: target.departmentId },
+      },
+      select: { id: true },
+      take: 3,
     });
+    for (const d of targetDrives) {
+      await prisma.driveApplication.upsert({
+        where: { studentId_driveId: { studentId: target.id, driveId: d.id } },
+        update: {},
+        create: { studentId: target.id, driveId: d.id, stage: 'APPLIED', status: 'IN_PROGRESS' },
+      });
+    }
+    console.log(`  applications for ${TARGET_EMAIL}: ${targetDrives.length}`);
   }
-  console.log(`  target student applications: ${targetDrives.length}`);
 
   console.log('\nDone.\n');
 }

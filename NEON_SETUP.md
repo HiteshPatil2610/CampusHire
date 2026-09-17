@@ -93,7 +93,7 @@ In **Project settings**:
 selected. It looks like:
 
 ```
-postgresql://neondb_owner:PASSWORD@ep-xxxx-pooler.REGION.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+postgresql://USER:PASSWORD@ep-HOST-pooler.REGION.aws.neon.tech/DBNAME?sslmode=require&channel_binding=require
 ```
 
 Use the **pooled** (`-pooler`) host. Serverless functions open many short-lived

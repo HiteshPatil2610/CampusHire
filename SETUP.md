@@ -39,22 +39,25 @@ This will install all required packages including:
 
 ### 3. Set Up Environment Variables
 
-Create a `.env.local` file in the project root:
+Two files, and it matters which gets what. See `.env.example` for the full
+explanation; the short version:
 
-```bash
-# Copy the example file
-cp .env.example .env.local
-```
+- **`.env`** is written by the Neon CLI (`neon link` / `neon deploy`). It owns
+  `DATABASE_URL`, `DATABASE_URL_UNPOOLED` and `NEON_BRANCH`. Do not hand-edit it.
+- **`.env.local`** is yours: Clerk keys and the Vercel Blob token.
 
-Now edit `.env.local` and fill in the required values:
+**Never put `DATABASE_URL` in `.env.local`.** Next.js loads `.env.local` at
+higher precedence than `.env`, so a line there silently overrides the
+Neon-managed connection and your app ends up on a different database from the
+Prisma CLI — with no error to tell you.
+
+Create `.env.local` with the hand-managed values only:
 
 ```env
-# Database (Neon PostgreSQL)
-DATABASE_URL="your-neon-postgresql-connection-string"
-
 # Clerk Authentication
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="your-clerk-publishable-key"
 CLERK_SECRET_KEY="your-clerk-secret-key"
+CLERK_WEBHOOK_SECRET="your-clerk-webhook-signing-secret"
 NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in"
 NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up"
 NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/"
@@ -62,9 +65,13 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/"
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL="/"
 NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL="/"
 
-# Node Environment
-NODE_ENV="development"
+# Vercel Blob (optional locally if you are not testing uploads)
+BLOB_READ_WRITE_TOKEN="your-vercel-blob-token"
 ```
+
+Do **not** set `NODE_ENV` in any env file. Next sets it itself, and an
+inherited `NODE_ENV=development` makes `next build` fail while prerendering the
+error pages, with an error that points nowhere near the cause.
 
 **Important**: Never commit `.env.local` to version control. It's already in `.gitignore`.
 
@@ -74,13 +81,17 @@ NODE_ENV="development"
 
 ### Neon PostgreSQL (Database)
 
-1. Go to [neon.tech](https://neon.tech) and sign up for a free account
-2. Create a new project named "campushire" (or any name you prefer)
-3. Once created, click on "Connection Details" in your project dashboard
-4. Copy the connection string (format: `postgresql://user:password@host/database?sslmode=require`)
-5. Paste it as the `DATABASE_URL` in your `.env.local` file
+Full instructions — account, region choice, schema, and the rules that keep the
+database intact — are in **[NEON_SETUP.md](NEON_SETUP.md)**. In brief:
 
-**Note**: If you want to use the existing production database, contact the project admin for the connection string.
+```bash
+npm i -g neon@latest
+neon login
+neon link --project-id <your-project-id> --branch production
+```
+
+`neon link` writes the connection variables into `.env` for you. There is no
+connection string to copy by hand, and nothing to paste into `.env.local`.
 
 ### Clerk (Authentication)
 
@@ -102,37 +113,30 @@ NODE_ENV="development"
 
 ## 🗄️ Database Setup
 
-### Option 1: Use Existing Database (Recommended for Team Members)
+The repo carries a baseline migration that creates the whole schema — 17
+tables, 23 foreign keys, 7 enums — in one step:
 
-If the database migration has already been applied to a shared Neon database:
+```bash
+npx prisma migrate deploy
+npx prisma generate
+npx prisma migrate status
+```
 
-1. Get the `DATABASE_URL` from your project admin
-2. Add it to your `.env.local` file
-3. Run Prisma generate to create the client:
-   ```bash
-   npx prisma generate
-   ```
-4. Verify connection:
-   ```bash
-   npx prisma db pull
-   ```
+`migrate status` should report **"Database schema is up to date!"** and name the
+database you expect. If it names one you did not configure, check
+`echo $DATABASE_URL` — a shell-exported variable outranks both env files.
 
-### Option 2: Set Up Your Own Database (For Independent Development)
+### Seed test data (optional)
 
-If you want your own development database:
+To work against realistic volume rather than an empty database:
 
-1. Create a new Neon project (see "Getting Your API Keys" above)
-2. Add the connection string to `.env.local`
-3. Run the database migration:
-   ```bash
-   npx prisma migrate dev
-   ```
-4. Verify the migration:
-   ```bash
-   npx prisma migrate status
-   ```
+```bash
+npx tsx scripts/seed-perf-data.ts          # 500 students, 30 drives, ~1,500 applications
+npx tsx scripts/seed-perf-data.ts --clear  # remove it again
+```
 
-You should see output indicating that all migrations have been applied.
+Everything it writes is namespaced (`SD*` department codes, `@seed.test`
+emails, `[seed]` company names), so `--clear` cannot touch real records.
 
 ### View Your Database (Optional)
 
@@ -408,7 +412,7 @@ Before you start development, verify that:
 - [ ] Node.js 18+ is installed (`node --version`)
 - [ ] Dependencies are installed (`npm install` completed)
 - [ ] `.env.local` exists with all required keys
-- [ ] Database connection works (`npx prisma db pull`)
+- [ ] Database schema applied (`npx prisma migrate status` says up to date)
 - [ ] Prisma Client is generated (`npx prisma generate`)
 - [ ] Development server starts (`npm run dev`)
 - [ ] Tests pass (`npm run test`)

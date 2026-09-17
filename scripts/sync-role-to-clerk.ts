@@ -8,7 +8,13 @@ import { config } from "dotenv";
 import { resolve } from "path";
 
 // Load .env.local file
+// Env lives in two files and the split matters: .env.local holds the
+// hand-managed keys (Clerk, Blob) while .env is written by the Neon CLI and
+// owns DATABASE_URL. dotenv does not overwrite a variable that is already set,
+// so loading .env.local first and .env second reproduces Next.js's precedence
+// (.env.local wins) rather than relying on whichever happens to be found.
 config({ path: resolve(process.cwd(), ".env.local") });
+config({ path: resolve(process.cwd(), ".env") });
 
 import { createClerkClient } from "@clerk/backend";
 import { prisma } from "@/lib/prisma";

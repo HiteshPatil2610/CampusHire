@@ -5,7 +5,13 @@
  *   npx tsx scripts/verify-db.ts
  */
 import { config } from 'dotenv';
-config({ path: '.env.local' });
+// Env lives in two files and the split matters: .env.local holds the
+// hand-managed keys (Clerk, Blob) while .env is written by the Neon CLI and
+// owns DATABASE_URL. dotenv does not overwrite a variable that is already set,
+// so loading .env.local first and .env second reproduces Next.js's precedence
+// (.env.local wins) rather than relying on whichever happens to be found.
+config({ path: ".env.local" });
+config({ path: ".env" });
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -52,9 +58,15 @@ const prisma = new PrismaClient();
   console.log(`\n  your own students: ${yours}`);
   console.log(`  your departments:  ${yourDepts.map((d) => d.code).join(', ')}`);
 
-  const ok = users > 0 && students > 0 && depts > 0;
-  console.log(ok ? '\nLooks healthy.\n' : '\nEMPTY — this is not the restored data.\n');
+  // An empty database is a perfectly good state for a freshly created project,
+  // so this reports what it found rather than judging it. What it is really
+  // for is confirming *which* database answered.
+  const empty = users === 0 && students === 0 && depts === 0;
+  console.log(
+    empty
+      ? '\nReachable, schema present, no rows yet — expected on a fresh project.\n'
+      : '\nReachable, and holding data.\n'
+  );
 
   await prisma.$disconnect();
-  process.exit(ok ? 0 : 1);
 })();
