@@ -11,6 +11,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Index policy
+//
+// Postgres serves a query on a column from any btree index whose *leftmost*
+// column it is, so an `@@index([x])` alongside `x @unique` — or alongside an
+// `@@index([x, y])` — is a second copy of the same btree. It is never read,
+// and every insert and update maintains it. Thirteen such duplicates were
+// removed; before adding an index, check it is not already the leftmost
+// column of an existing one.
+
 // Application roles enum
 enum Role {
   STUDENT
@@ -88,8 +97,6 @@ model User {
   accessRequest    StudentAccessRequest?
   reviewedRequests StudentAccessRequest[] @relation("AccessRequestReviewedBy")
 
-  @@index([clerkId])
-  @@index([email])
 }
 
 // Department model - represents academic departments
@@ -108,7 +115,6 @@ model Department {
   driveConfigs   DriveDepartmentConfig[]
   accessRequests StudentAccessRequest[]
 
-  @@index([code])
 }
 
 // Department Admin model - links DEPT_ADMIN users to departments
@@ -180,10 +186,7 @@ model Student {
   applications   DriveApplication[]
   semesterMarks  SemesterMark[]
 
-  @@index([userId])
   @@index([departmentId])
-  @@index([rollNumber])
-  @@index([email])
   @@index([isPending])
   @@index([optedIn])
 }
@@ -204,7 +207,6 @@ model SemesterMark {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, semester])
-  @@index([studentId])
 }
 
 // ============================================================================
@@ -244,7 +246,6 @@ model StudentAcademic {
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-  @@index([studentId])
 }
 
 // StudentSkill - stores skills (many-to-one with Student)
@@ -260,7 +261,6 @@ model StudentSkill {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, skillName])
-  @@index([studentId])
 }
 
 // StudentProject - stores projects (many-to-one with Student)
@@ -338,7 +338,6 @@ model StudentPreferences {
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-  @@index([studentId])
 }
 
 // ============================================================================
@@ -452,7 +451,6 @@ model DriveApplication {
   stageUpdater User?   @relation("ApplicationStageUpdatedBy", fields: [stageUpdatedById], references: [id], onDelete: SetNull)
 
   @@unique([studentId, driveId])
-  @@index([studentId])
   @@index([driveId])
   @@index([stage])
   @@index([status])
@@ -495,7 +493,6 @@ model StudentAccessRequest {
   reviewedBy User?      @relation("AccessRequestReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([status])
-  @@index([departmentId])
   @@index([departmentId, status])
 }
 
@@ -543,7 +540,6 @@ model Notification {
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
   @@index([userId, isRead])
   @@index([createdAt])
 }

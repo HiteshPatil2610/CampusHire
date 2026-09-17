@@ -79,6 +79,26 @@ read path cheap, and both are load-bearing rather than stylistic:
   check in JS afterwards. A prefilter may over-match; it must never
   under-match, or it silently hides rows a user is entitled to.
 
+## Index Policy
+
+Postgres serves a lookup on a column from any btree index whose *leftmost*
+column it is. An `@@index([x])` sitting alongside `x @unique`, or alongside an
+`@@index([x, y])`, is therefore a second copy of the same btree that no query
+can ever prefer — and that every insert and update still has to maintain.
+Thirteen such duplicates were removed (68 indexes down to 55; `Student`'s
+index storage 264 kB down to 176 kB). Before adding an index, check the column
+is not already the leftmost of an existing one.
+
+The more important point, measured rather than assumed: **the database is not
+this app's bottleneck.** Against 500 students and ~1,500 applications, every
+hot query plans and executes in well under a millisecond — the admin roster
+page in 0.13 ms, the derived-placement count in 0.23 ms, the notifications
+page in 0.05 ms, each on an index scan. A single network round trip to the
+database is 221 ms. That is roughly a thousand to one, so schema-level work
+(more indexes, denormalising for speed) cannot move the number that matters.
+What moves it is issuing fewer queries per request, and putting the app server
+in the same region as the database.
+
 ## Navigation and Perceived Speed
 
 Every dashboard route is `force-dynamic`, and Next prefetches a dynamic route
