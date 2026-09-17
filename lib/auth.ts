@@ -102,10 +102,26 @@ export const getOrCreateUser = cache(async (): Promise<User | null> => {
           },
         });
       } catch (error) {
-        // A concurrent request may have created the same user first
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-          user = await prisma.user.findUnique({ where: { clerkId } });
-          if (!user) throw error;
+          const target = (error.meta?.target as string[] | undefined) ?? [];
+
+          if (target.includes("clerkId")) {
+            // A concurrent request created the same user first.
+            user = await prisma.user.findUnique({ where: { clerkId } });
+            if (!user) throw error;
+          } else if (target.includes("email")) {
+            // The email is already attached to a different clerkId — e.g. the
+            // Clerk application was swapped (new project/instance) so this
+            // person now signs in with a new clerkId under the same email.
+            // Re-point the existing row rather than fail, since User.email is
+            // unique and a second row for the same person can't be created.
+            user = await prisma.user.update({
+              where: { email: primaryEmail.emailAddress },
+              data: { clerkId },
+            });
+          } else {
+            throw error;
+          }
         } else {
           throw error;
         }
