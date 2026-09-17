@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { Drive } from '@prisma/client';
+import type { HasEligibleDepartmentLinks } from '@/features/drives/utils/eligible-departments';
 import { DriveCard } from './drive-card';
 import Pagination from '@/components/ui/pagination';
 
 interface DrivesGridProps {
-  drives: Drive[];
+  drives: (Drive & HasEligibleDepartmentLinks)[];
   appliedDriveIds: Set<string>;
   departmentMap: Record<string, string>;
   page: number;

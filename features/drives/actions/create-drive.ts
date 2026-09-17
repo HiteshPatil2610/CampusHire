@@ -4,6 +4,7 @@ import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { driveSchema, type DriveInput } from "../schemas/drive";
 import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
+import { setEligibleDepartments, withEligibleDepartmentLinks } from "../utils/eligible-departments";
 
 export interface CreateDriveResult {
   success: boolean;
@@ -32,36 +33,42 @@ export async function createDrive(input: DriveInput): Promise<CreateDriveResult>
       };
     }
 
-    // Create drive
-    const drive = await prisma.drive.create({
-      data: {
-        departmentId: department.id, // Always use authenticated admin's department
-        companyName: validated.companyName,
-        roleName: validated.roleName,
-        companyLogoUrl: validated.companyLogoUrl ?? null,
-        jobDescriptionUrl: validated.jobDescriptionUrl || null,
-        packageOffered: validated.packageOffered,
-        packageDisplay: validated.packageDisplay ?? null,
-        selectionRounds: JSON.stringify(validated.selectionRounds),
-        driveDate: new Date(validated.driveDate),
-        applicationDeadline: deadline,
-        applyMethod: validated.applyMethod,
-        externalApplyUrl: validated.externalApplyUrl || null,
-        minCGPA: validated.minCGPA,
-        maxActiveBacklogs: validated.maxActiveBacklogs,
-        eligibleDepartments: JSON.stringify(validated.eligibleDepartments),
-        venue: validated.venue ?? null,
-        reportingTime: validated.reportingTime ?? null,
-        contactPerson: validated.contactPerson ?? null,
-        contactPhone: validated.contactPhone ?? null,
-        pptLink: validated.pptLink ?? null,
-        applicationFields: validated.applicationFields ?? null,
-      },
+    // Create drive, then the eligible-department rows in the same
+    // transaction so neither half is written without the other.
+    const drive = await prisma.$transaction(async (tx) => {
+      const created = await tx.drive.create({
+        data: {
+          departmentId: department.id, // Always use authenticated admin's department
+          companyName: validated.companyName,
+          roleName: validated.roleName,
+          companyLogoUrl: validated.companyLogoUrl ?? null,
+          jobDescriptionUrl: validated.jobDescriptionUrl || null,
+          packageOffered: validated.packageOffered,
+          packageDisplay: validated.packageDisplay ?? null,
+          selectionRounds: JSON.stringify(validated.selectionRounds),
+          driveDate: new Date(validated.driveDate),
+          applicationDeadline: deadline,
+          applyMethod: validated.applyMethod,
+          externalApplyUrl: validated.externalApplyUrl || null,
+          minCGPA: validated.minCGPA,
+          maxActiveBacklogs: validated.maxActiveBacklogs,
+          venue: validated.venue ?? null,
+          reportingTime: validated.reportingTime ?? null,
+          contactPerson: validated.contactPerson ?? null,
+          contactPhone: validated.contactPhone ?? null,
+          pptLink: validated.pptLink ?? null,
+          applicationFields: validated.applicationFields ?? null,
+        },
+      });
+      await setEligibleDepartments(tx, created.id, validated.eligibleDepartments);
+      return created;
     });
 
     // Tell the students who can actually apply. Best-effort: a failed
     // fan-out must not fail a drive that was created successfully.
-    await notifyEligibleStudentsOfDrive(drive);
+    await notifyEligibleStudentsOfDrive(
+      withEligibleDepartmentLinks(drive, validated.eligibleDepartments)
+    );
 
     return {
       success: true,

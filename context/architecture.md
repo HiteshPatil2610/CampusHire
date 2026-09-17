@@ -73,11 +73,16 @@ read path cheap, and both are load-bearing rather than stylistic:
 - **Independent queries go out together.** A `count` and its `findMany` for
   the same screen do not depend on each other and belong in one
   `Promise.all`. The same goes for unrelated sections of a page.
-- **Filter in SQL, not in JavaScript.** Where a filter cannot be expressed
-  exactly — eligibility depends on `eligibleDepartments`, a JSON array stored
-  as text — push a *narrowing* prefilter to the database and keep the exact
-  check in JS afterwards. A prefilter may over-match; it must never
-  under-match, or it silently hides rows a user is entitled to.
+- **Filter in SQL, not in JavaScript.** Drive eligibility by department is a
+  real FK membership check — `eligibleDepartmentLinks: { some: { departmentId } } }`
+  against the `DriveEligibleDepartment` join table — not a prefilter. (This
+  used to be a JSON array stored as text, `Drive.eligibleDepartments`, which
+  could only support a *narrowing* `contains` substring prefilter rechecked
+  exactly in JS afterwards; that column was dropped once every read and write
+  path moved to the join table.) The general rule still applies to any other
+  filter that cannot be expressed exactly at the database: push a narrowing
+  prefilter down and keep the exact check in JS. A prefilter may over-match;
+  it must never under-match, or it silently hides rows a user is entitled to.
 
 ## Index Policy
 

@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { ExternalLink } from "lucide-react";
 import StatusBadge from "@/components/ui/status-badge";
 import { formatDriveDate, formatDeadline } from "@/lib/drive-date-helpers";
-import { parseJsonArray } from "@/lib/parse-json-array";
+import { eligibleDepartmentIdsOf } from "../utils/eligible-departments";
 import { getDriveStatus } from "../utils/drive-status";
 import { buildApplicationFieldRows } from "../utils/application-fields";
 import { CentralDriveFieldsToggle } from "./central-drive-fields-toggle";
@@ -71,10 +71,10 @@ export function CentralDriveDetailPanel({
 
   const eligibleCodes = useMemo(() => {
     const byId = new Map(departments.map((dept) => [dept.id, dept.code]));
-    return parseJsonArray(drive.eligibleDepartments)
+    return eligibleDepartmentIdsOf(drive)
       .map((id) => byId.get(id))
       .filter((code): code is string => Boolean(code));
-  }, [drive.eligibleDepartments, departments]);
+  }, [drive, departments]);
 
   const fieldRows = useMemo(
     () => buildApplicationFieldRows(drive.applicationFields),

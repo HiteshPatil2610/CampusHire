@@ -1,5 +1,9 @@
 import type { Drive, Student, StudentAcademic } from "@prisma/client";
 import { getDriveStatus } from "../utils/drive-status";
+import {
+  eligibleDepartmentIdsOf,
+  type HasEligibleDepartmentLinks,
+} from "../utils/eligible-departments";
 
 /**
  * Student with required academic and department information for eligibility check
@@ -7,6 +11,9 @@ import { getDriveStatus } from "../utils/drive-status";
 export type StudentWithEligibilityInfo = Student & {
   academic: StudentAcademic | null;
 };
+
+/** A drive with its eligible-department rows loaded — required for every check below. */
+export type DriveWithEligibility = Drive & HasEligibleDepartmentLinks;
 
 /**
  * Check if a student is eligible for a specific drive
@@ -24,18 +31,13 @@ export type StudentWithEligibilityInfo = Student & {
  */
 export function isStudentAcademicallyEligibleForDrive(
   student: StudentWithEligibilityInfo,
-  drive: Drive
+  drive: DriveWithEligibility
 ): boolean {
   if (!student.academic) {
     return false;
   }
 
-  try {
-    const eligibleDeptIds: string[] = JSON.parse(drive.eligibleDepartments);
-    if (!eligibleDeptIds.includes(student.departmentId)) {
-      return false;
-    }
-  } catch {
+  if (!eligibleDepartmentIdsOf(drive).includes(student.departmentId)) {
     return false;
   }
 
@@ -52,7 +54,7 @@ export function isStudentAcademicallyEligibleForDrive(
 
 export function isStudentEligibleForDrive(
   student: StudentWithEligibilityInfo,
-  drive: Drive
+  drive: DriveWithEligibility
 ): boolean {
   // Must have academic record
   if (!student.academic) {
@@ -76,7 +78,7 @@ export function isStudentEligibleForDrive(
  */
 export function getIneligibilityReasons(
   student: StudentWithEligibilityInfo,
-  drive: Drive
+  drive: DriveWithEligibility
 ): string[] {
   const reasons: string[] = [];
 
@@ -96,13 +98,8 @@ export function getIneligibilityReasons(
     reasons.push("Drive is closed");
   }
 
-  try {
-    const eligibleDeptIds: string[] = JSON.parse(drive.eligibleDepartments);
-    if (!eligibleDeptIds.includes(student.departmentId)) {
-      reasons.push("Your department is not eligible");
-    }
-  } catch {
-    reasons.push("Invalid eligibility configuration");
+  if (!eligibleDepartmentIdsOf(drive).includes(student.departmentId)) {
+    reasons.push("Your department is not eligible");
   }
 
   if (student.academic.currentCGPA < drive.minCGPA) {

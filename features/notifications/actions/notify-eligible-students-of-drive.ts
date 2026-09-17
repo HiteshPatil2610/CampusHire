@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { parseJsonArray } from "@/lib/parse-json-array";
 import { isStudentAcademicallyEligibleForDrive } from "@/features/drives/queries/drive-eligibility";
+import {
+  eligibleDepartmentIdsOf,
+  type HasEligibleDepartmentLinks,
+} from "@/features/drives/utils/eligible-departments";
 import type { Drive } from "@prisma/client";
 
 /**
@@ -22,10 +25,10 @@ import type { Drive } from "@prisma/client";
  * admin should not see an error for a drive that was posted successfully.
  */
 export async function notifyEligibleStudentsOfDrive(
-  drive: Drive
+  drive: Drive & HasEligibleDepartmentLinks
 ): Promise<{ notified: number }> {
   try {
-    const eligibleDepartmentIds = parseJsonArray(drive.eligibleDepartments);
+    const eligibleDepartmentIds = eligibleDepartmentIdsOf(drive);
     if (eligibleDepartmentIds.length === 0) {
       return { notified: 0 };
     }

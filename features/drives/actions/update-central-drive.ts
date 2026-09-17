@@ -8,6 +8,7 @@ import {
   type UpdateCentralDriveInput,
 } from "../schemas/central-drive";
 import { parsePackageFromDisplay } from "../utils/parse-package-display";
+import { setEligibleDepartments } from "../utils/eligible-departments";
 
 export interface UpdateCentralDriveResult {
   success: boolean;
@@ -64,27 +65,33 @@ export async function updateCentralDrive(
 
     const portalUrl = data.externalApplyUrl || null;
 
-    await prisma.drive.update({
-      where: { id: driveId },
-      data: {
-        companyName: data.companyName,
-        roleName: data.roleName,
-        jobDescriptionText: data.jobDescriptionText || null,
-        packageOffered: parsePackageFromDisplay(data.packageDisplay),
-        packageDisplay: data.packageDisplay,
-        driveDate: new Date(data.driveDate),
-        applicationDeadline: new Date(data.applicationDeadline),
-        applyMethod: portalUrl ? "EXTERNAL" : "IN_APP",
-        externalApplyUrl: portalUrl,
-        minCGPA: data.minCGPA,
-        maxActiveBacklogs: data.maxActiveBacklogs,
-        eligibleDepartments: JSON.stringify(departments.map((d) => d.id)),
-        venue: data.venue ?? null,
-        reportingTime: data.reportingTime ?? null,
-        contactPerson: data.contactPerson ?? null,
-        contactPhone: data.contactPhone ?? null,
-        pptLink: data.pptLink || null,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.drive.update({
+        where: { id: driveId },
+        data: {
+          companyName: data.companyName,
+          roleName: data.roleName,
+          jobDescriptionText: data.jobDescriptionText || null,
+          packageOffered: parsePackageFromDisplay(data.packageDisplay),
+          packageDisplay: data.packageDisplay,
+          driveDate: new Date(data.driveDate),
+          applicationDeadline: new Date(data.applicationDeadline),
+          applyMethod: portalUrl ? "EXTERNAL" : "IN_APP",
+          externalApplyUrl: portalUrl,
+          minCGPA: data.minCGPA,
+          maxActiveBacklogs: data.maxActiveBacklogs,
+          venue: data.venue ?? null,
+          reportingTime: data.reportingTime ?? null,
+          contactPerson: data.contactPerson ?? null,
+          contactPhone: data.contactPhone ?? null,
+          pptLink: data.pptLink || null,
+        },
+      });
+      await setEligibleDepartments(
+        tx,
+        driveId,
+        departments.map((d) => d.id)
+      );
     });
 
     await createAuditLog({

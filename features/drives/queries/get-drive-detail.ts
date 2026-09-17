@@ -6,10 +6,16 @@ import { isStudentEligibleForDrive } from "./drive-eligibility";
 import { checkApplicationExists } from "@/features/applications/queries/check-application-exists";
 import { applyDepartmentConfig } from "../utils/department-config-overlay";
 import type { DriveForStudent } from "../utils/department-config-overlay";
+import {
+  eligibleDepartmentLinksInclude,
+  type HasEligibleDepartmentLinks,
+} from "../utils/eligible-departments";
 import type { Drive, Department } from "@prisma/client";
 
+type DriveWithEligibility = Drive & HasEligibleDepartmentLinks;
+
 // department is null for central drives, which have no single owning department
-export type DriveWithDepartment = (Drive | DriveForStudent) & {
+export type DriveWithDepartment = (DriveWithEligibility | DriveForStudent<DriveWithEligibility>) & {
   department: Pick<Department, "id" | "name" | "code"> | null;
 };
 
@@ -38,6 +44,7 @@ export async function getDriveDetail(driveId: string): Promise<DriveWithDepartme
           code: true,
         },
       },
+      ...eligibleDepartmentLinksInclude,
     },
   });
 

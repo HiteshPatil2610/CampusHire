@@ -9,6 +9,10 @@ import {
 } from "./drive-eligibility";
 import { applyDepartmentConfig } from "../utils/department-config-overlay";
 import type { DriveForStudent } from "../utils/department-config-overlay";
+import {
+  eligibleDepartmentLinksInclude,
+  type HasEligibleDepartmentLinks,
+} from "../utils/eligible-departments";
 import type { Drive } from "@prisma/client";
 
 export interface StudentDrivesParams {
@@ -19,7 +23,7 @@ export interface StudentDrivesParams {
 }
 
 export interface StudentDrivesResult {
-  data: DriveForStudent[];
+  data: DriveForStudent<Drive & HasEligibleDepartmentLinks>[];
   page: number;
   pageSize: number;
   totalCount: number;
@@ -72,13 +76,14 @@ export async function getEligibleDrives(
     // Initial filters at query level for performance
     minCGPA: { lte: studentWithAcademic.academic.currentCGPA },
     maxActiveBacklogs: { gte: studentWithAcademic.academic.activeBacklogs },
-    // `eligibleDepartments` is a JSON array of department IDs stored as text,
-    // so a substring match is a *narrowing* prefilter, never a widening one:
-    // any drive that passes `isStudentAcademicallyEligibleForDrive` below must
-    // contain this ID. It can over-match (an ID that is a substring of
-    // another), and the exact JSON check that follows still rejects those.
-    // Without it every student's dashboard read every drive row in the system.
-    eligibleDepartments: { contains: studentWithAcademic.departmentId },
+    // A real FK membership check via DriveEligibleDepartment, replacing the
+    // old JSON-text `contains` prefilter (which could over-match on an ID
+    // that was a substring of another, relying on the in-memory recheck below
+    // to reject those). Without some filter here every student's dashboard
+    // read every drive row in the system.
+    eligibleDepartmentLinks: {
+      some: { departmentId: studentWithAcademic.departmentId },
+    },
   };
 
   // Status filter
@@ -101,12 +106,14 @@ export async function getEligibleDrives(
       { applicationDeadline: "asc" }, // Closest deadline first
       { createdAt: "desc" },
     ],
+    include: eligibleDepartmentLinksInclude,
   });
 
   const matchesEligibility =
     status === "open"
-      ? (drive: Drive) => isStudentEligibleForDrive(studentWithAcademic, drive)
-      : (drive: Drive) =>
+      ? (drive: (typeof allDrives)[number]) =>
+          isStudentEligibleForDrive(studentWithAcademic, drive)
+      : (drive: (typeof allDrives)[number]) =>
           isStudentAcademicallyEligibleForDrive(studentWithAcademic, drive);
 
   const eligibleDrives = allDrives.filter((drive) =>

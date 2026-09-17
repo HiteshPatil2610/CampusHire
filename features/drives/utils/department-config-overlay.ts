@@ -1,4 +1,5 @@
 import type { Drive, DriveDepartmentConfig } from "@prisma/client";
+import type { HasEligibleDepartmentLinks } from "./eligible-departments";
 
 /**
  * A central drive as one department's students see it.
@@ -8,16 +9,16 @@ import type { Drive, DriveDepartmentConfig } from "@prisma/client";
  * here keeps every downstream consumer (cards, detail page, apply flow) working
  * on a plain Drive shape while still showing department-specific values.
  */
-export type DriveForStudent = Drive & {
+export type DriveForStudent<TDrive extends Drive = Drive> = TDrive & {
   seatingAllocation: string | null;
   specialInstructions: string | null;
   coordinatorEmail: string | null;
 };
 
-export function applyDepartmentConfig(
-  drive: Drive,
+export function applyDepartmentConfig<TDrive extends Drive & HasEligibleDepartmentLinks>(
+  drive: TDrive,
   config: DriveDepartmentConfig | null | undefined
-): DriveForStudent {
+): DriveForStudent<TDrive> {
   if (!config) {
     return {
       ...drive,

@@ -2,6 +2,7 @@
 
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { eligibleDepartmentLinksInclude } from "../utils/eligible-departments";
 import type { CentralDriveListItem } from "./get-central-drives";
 
 /**
@@ -19,6 +20,7 @@ export async function getCentralDriveById(
     where: { id: driveId },
     include: {
       _count: { select: { applications: true } },
+      ...eligibleDepartmentLinksInclude,
     },
   });
 

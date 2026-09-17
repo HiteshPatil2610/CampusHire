@@ -2,7 +2,6 @@
 
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { parseJsonArray } from "@/lib/parse-json-array";
 import type { Drive } from "@prisma/client";
 
 export type DriveWithCount = Drive & {
@@ -22,14 +21,15 @@ export async function getCentralDrivesForDepartment(): Promise<DriveWithCount[]>
   const { department } = await requireDepartmentAdmin();
 
   const centralDrives = await prisma.drive.findMany({
-    where: { isCentralDrive: true },
+    where: {
+      isCentralDrive: true,
+      eligibleDepartmentLinks: { some: { departmentId: department.id } },
+    },
     orderBy: [{ applicationDeadline: "desc" }, { createdAt: "desc" }],
     include: {
       _count: { select: { applications: true } },
     },
   });
 
-  return centralDrives.filter((drive) =>
-    parseJsonArray(drive.eligibleDepartments).includes(department.id)
-  );
+  return centralDrives;
 }

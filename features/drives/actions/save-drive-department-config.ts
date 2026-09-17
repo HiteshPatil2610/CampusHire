@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { parseJsonArray } from "@/lib/parse-json-array";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
 import { AVAILABLE_STUDENT_FIELDS } from "../data/application-fields-catalog";
 import {
@@ -41,13 +40,18 @@ export async function saveDriveDepartmentConfig(
 
     const { driveId, fields, ...logistics } = validated.data;
 
-    const drive = await prisma.drive.findUnique({ where: { id: driveId } });
+    const drive = await prisma.drive.findUnique({
+      where: { id: driveId },
+      include: {
+        eligibleDepartmentLinks: { where: { departmentId: department.id }, select: { departmentId: true } },
+      },
+    });
 
     if (!drive || !drive.isCentralDrive) {
       return { success: false, error: "Central drive not found" };
     }
 
-    if (!parseJsonArray(drive.eligibleDepartments).includes(department.id)) {
+    if (drive.eligibleDepartmentLinks.length === 0) {
       return {
         success: false,
         error: "This drive is not open to your department",

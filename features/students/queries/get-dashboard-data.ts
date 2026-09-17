@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import type { Drive, DriveApplication } from "@prisma/client";
 import { getDriveDisplayStatus } from "@/features/drives/utils/drive-status";
-import { parseJsonArray } from "@/lib/parse-json-array";
+import {
+  eligibleDepartmentIdsOf,
+  type HasEligibleDepartmentLinks,
+} from "@/features/drives/utils/eligible-departments";
 
 /**
  * A drive paired with everything the student dashboard needs to render its
@@ -29,7 +32,7 @@ export interface StudentDashboardData<TDrive extends Drive = Drive> {
  * state. Eligibility filtering happens against the drives already resolved by
  * the caller, so this never widens what a student can see.
  */
-export async function getStudentDashboardData<TDrive extends Drive>(
+export async function getStudentDashboardData<TDrive extends Drive & HasEligibleDepartmentLinks>(
   studentId: string,
   eligibleDrives: TDrive[],
   featuredLimit = 4
@@ -66,7 +69,7 @@ export async function getStudentDashboardData<TDrive extends Drive>(
     drive,
     application: applicationByDrive.get(drive.id) ?? null,
     applicantCount: countByDrive.get(drive.id) ?? 0,
-    departmentCodes: parseJsonArray(drive.eligibleDepartments)
+    departmentCodes: eligibleDepartmentIdsOf(drive)
       .map((id) => codeByDepartment.get(id))
       .filter((code): code is string => Boolean(code)),
   }));

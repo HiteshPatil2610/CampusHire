@@ -2426,6 +2426,53 @@ below.
    notification-authorization). They predate this session and were verified
    unchanged after every commit.
 
+## Drive.eligibleDepartments normalized to a join table — COMPLETE ✅
+
+`Drive.eligibleDepartments` (a JSON array of department IDs in a text column
+— the schema debt flagged in the DB-latency investigation as "unindexable for
+membership, no referential integrity") is replaced by a
+`DriveEligibleDepartment` join table: real FKs to `Drive` and `Department`
+(both `onDelete: Cascade`), `@@unique([driveId, departmentId])`, indexed on
+`departmentId`. Mirrors the existing `DriveDepartmentConfig` pattern.
+
+Migration sequence (expand → migrate → contract), each step verified before
+the next:
+
+1. **`20260917103251_drive_eligible_department_join_table`** — creates the
+   table and backfills it from the JSON column in the same migration, via
+   `jsonb_array_elements_text` joined against `Department` — an ID with no
+   matching department (something the JSON column could never prevent) is
+   silently dropped rather than carried forward.
+2. **Dual-write, single write path.** `features/drives/utils/eligible-departments.ts`
+   exports `setEligibleDepartments(tx, driveId, departmentIds)`, called inside
+   the same transaction as the drive `create`/`update` in all 4 write paths
+   (`create-drive`, `create-central-drive`, `update-drive`,
+   `update-central-drive`) plus `scripts/seed-perf-data.ts`. No write path
+   touches the JSON column or the join table directly anymore.
+3. **Every read switched to the relation.** `drive-eligibility.ts`
+   (`isStudentEligibleForDrive`, `isStudentAcademicallyEligibleForDrive`,
+   `getIneligibilityReasons`) now takes `Drive & HasEligibleDepartmentLinks`
+   instead of parsing JSON. `getEligibleDrives`'s DB prefilter changed from a
+   JSON-text `contains` substring match to a real
+   `eligibleDepartmentLinks: { some: { departmentId } }` filter — narrower and
+   actually indexed. Two read paths (`getDepartmentCentralDrives`,
+   `getCentralDrivesForDepartment`) previously fetched *every* central drive
+   and filtered in JS; both now filter in the query. Every other read/write
+   path found by grepping `eligibleDepartments` across the repo (27 files) was
+   updated the same way — server actions, queries, and the client components
+   that render department-code chips (`drive-card`, `central-drive-detail-panel`,
+   `department-drive-config-panel`, `edit-drive-form`).
+4. **Verified before dropping anything**: a one-off script compared, for
+   every one of the 59 drives in the database, the JSON column's department
+   set (minus dangling IDs) against the join table's — full match. A separate
+   smoke test called `setEligibleDepartments` directly against a live seeded
+   drive, confirmed both representations updated correctly, then restored the
+   original value. `npx tsc --noEmit` and the Vitest suite (34/34 in the
+   affected files; the pre-existing 27 unrelated failures unchanged) passed
+   both before and after.
+5. **`20260917110000_drop_legacy_drive_eligible_departments_json`** — drops
+   `Drive.eligibleDepartments`. `setEligibleDepartments` no longer writes it.
+
 ## Local development note
 
 `next dev` and `next build` share the `.next` directory. Running a production

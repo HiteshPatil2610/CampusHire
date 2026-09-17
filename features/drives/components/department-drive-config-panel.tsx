@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { parseJsonArray } from "@/lib/parse-json-array";
+import { eligibleDepartmentIdsOf } from "../utils/eligible-departments";
 import { getDriveStatus } from "../utils/drive-status";
 import { resolveSelectedApplicationFields } from "../utils/application-fields";
 import {
@@ -133,10 +134,10 @@ export function DepartmentDriveConfigPanel({
   const status = getDriveStatus(new Date(drive.applicationDeadline));
   const eligibleCodes = useMemo(
     () =>
-      parseJsonArray(drive.eligibleDepartments)
+      eligibleDepartmentIdsOf(drive)
         .map((id) => departmentCodesById[id])
         .filter((code): code is string => Boolean(code)),
-    [drive.eligibleDepartments, departmentCodesById]
+    [drive, departmentCodesById]
   );
 
   const selectedKeys = useMemo(

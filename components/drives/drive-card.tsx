@@ -6,10 +6,14 @@ import type { Drive } from '@prisma/client';
 import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
 import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
 import { parseJsonArray } from '@/lib/parse-json-array';
+import {
+  eligibleDepartmentIdsOf,
+  type HasEligibleDepartmentLinks,
+} from '@/features/drives/utils/eligible-departments';
 import StatusBadge from '@/components/ui/status-badge';
 
 interface DriveCardProps {
-  drive: Drive;
+  drive: Drive & HasEligibleDepartmentLinks;
   isApplied: boolean;
   applicantCount?: number;
   departmentMap?: Record<string, string>; // dept ID -> dept code
@@ -39,7 +43,7 @@ export function DriveCard({
   const status = getDriveDisplayStatus(drive.applicationDeadline, drive.driveDate);
   const canApply = status === 'open';
 
-  const departmentCodes = parseJsonArray(drive.eligibleDepartments)
+  const departmentCodes = eligibleDepartmentIdsOf(drive)
     .map((id) => departmentMap[id])
     .filter((code): code is string => Boolean(code));
 

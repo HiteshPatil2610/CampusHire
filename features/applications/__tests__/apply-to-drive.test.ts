@@ -107,6 +107,7 @@ describe("applyToDrive", () => {
     minCGPA: 7.0,
     maxActiveBacklogs: 1,
     eligibleDepartments: JSON.stringify(["dept-1"]),
+    eligibleDepartmentLinks: [{ departmentId: "dept-1" }],
     companyLogoUrl: null,
     packageDisplay: "12 LPA",
     venue: null,

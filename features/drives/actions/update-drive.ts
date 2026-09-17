@@ -3,6 +3,7 @@
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { driveSchema, type DriveInput } from "../schemas/drive";
+import { setEligibleDepartments } from "../utils/eligible-departments";
 
 export interface UpdateDriveResult {
   success: boolean;
@@ -43,31 +44,34 @@ export async function updateDrive(
     // Validate input
     const validated = driveSchema.parse(input);
 
-    // Update drive
-    await prisma.drive.update({
-      where: { id: driveId },
-      data: {
-        companyName: validated.companyName,
-        roleName: validated.roleName,
-        companyLogoUrl: validated.companyLogoUrl ?? null,
-        jobDescriptionUrl: validated.jobDescriptionUrl || null,
-        packageOffered: validated.packageOffered,
-        packageDisplay: validated.packageDisplay ?? null,
-        selectionRounds: JSON.stringify(validated.selectionRounds),
-        driveDate: new Date(validated.driveDate),
-        applicationDeadline: new Date(validated.applicationDeadline),
-        applyMethod: validated.applyMethod,
-        externalApplyUrl: validated.externalApplyUrl || null,
-        minCGPA: validated.minCGPA,
-        maxActiveBacklogs: validated.maxActiveBacklogs,
-        eligibleDepartments: JSON.stringify(validated.eligibleDepartments),
-        venue: validated.venue ?? null,
-        reportingTime: validated.reportingTime ?? null,
-        contactPerson: validated.contactPerson ?? null,
-        contactPhone: validated.contactPhone ?? null,
-        pptLink: validated.pptLink ?? null,
-        applicationFields: validated.applicationFields ?? null,
-      },
+    // Update drive, then replace the eligible-department rows in the same
+    // transaction so neither half is written without the other.
+    await prisma.$transaction(async (tx) => {
+      await tx.drive.update({
+        where: { id: driveId },
+        data: {
+          companyName: validated.companyName,
+          roleName: validated.roleName,
+          companyLogoUrl: validated.companyLogoUrl ?? null,
+          jobDescriptionUrl: validated.jobDescriptionUrl || null,
+          packageOffered: validated.packageOffered,
+          packageDisplay: validated.packageDisplay ?? null,
+          selectionRounds: JSON.stringify(validated.selectionRounds),
+          driveDate: new Date(validated.driveDate),
+          applicationDeadline: new Date(validated.applicationDeadline),
+          applyMethod: validated.applyMethod,
+          externalApplyUrl: validated.externalApplyUrl || null,
+          minCGPA: validated.minCGPA,
+          maxActiveBacklogs: validated.maxActiveBacklogs,
+          venue: validated.venue ?? null,
+          reportingTime: validated.reportingTime ?? null,
+          contactPerson: validated.contactPerson ?? null,
+          contactPhone: validated.contactPhone ?? null,
+          pptLink: validated.pptLink ?? null,
+          applicationFields: validated.applicationFields ?? null,
+        },
+      });
+      await setEligibleDepartments(tx, driveId, validated.eligibleDepartments);
     });
 
     return {

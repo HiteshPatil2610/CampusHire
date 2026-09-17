@@ -9,6 +9,7 @@ import {
   type CreateCentralDriveInput,
 } from "../schemas/central-drive";
 import { parsePackageFromDisplay } from "../utils/parse-package-display";
+import { setEligibleDepartments, withEligibleDepartmentLinks } from "../utils/eligible-departments";
 
 export interface CreateCentralDriveResult {
   success: boolean;
@@ -61,33 +62,38 @@ export async function createCentralDrive(
 
     const portalUrl = data.externalApplyUrl || null;
 
-    const drive = await prisma.drive.create({
-      data: {
-        departmentId: null,
-        isCentralDrive: true,
-        createdByUserId: superAdmin.id,
-        companyName: data.companyName,
-        companyLogoUrl: data.companyLogoUrl ?? null,
-        roleName: data.roleName,
-        jobDescriptionText: data.jobDescriptionText || null,
-        packageOffered: parsePackageFromDisplay(data.packageDisplay),
-        packageDisplay: data.packageDisplay,
-        selectionRounds: JSON.stringify([]),
-        driveDate: new Date(data.driveDate),
-        applicationDeadline: deadline,
-        // A company portal link means students register externally; without
-        // one they apply in-app like any department drive.
-        applyMethod: portalUrl ? "EXTERNAL" : "IN_APP",
-        externalApplyUrl: portalUrl,
-        minCGPA: data.minCGPA,
-        maxActiveBacklogs: data.maxActiveBacklogs,
-        eligibleDepartments: JSON.stringify(departments.map((d) => d.id)),
-        venue: data.venue ?? null,
-        reportingTime: data.reportingTime ?? null,
-        contactPerson: data.contactPerson ?? null,
-        contactPhone: data.contactPhone ?? null,
-        pptLink: data.pptLink || null,
-      },
+    const eligibleDepartmentIds = departments.map((d) => d.id);
+
+    const drive = await prisma.$transaction(async (tx) => {
+      const created = await tx.drive.create({
+        data: {
+          departmentId: null,
+          isCentralDrive: true,
+          createdByUserId: superAdmin.id,
+          companyName: data.companyName,
+          companyLogoUrl: data.companyLogoUrl ?? null,
+          roleName: data.roleName,
+          jobDescriptionText: data.jobDescriptionText || null,
+          packageOffered: parsePackageFromDisplay(data.packageDisplay),
+          packageDisplay: data.packageDisplay,
+          selectionRounds: JSON.stringify([]),
+          driveDate: new Date(data.driveDate),
+          applicationDeadline: deadline,
+          // A company portal link means students register externally; without
+          // one they apply in-app like any department drive.
+          applyMethod: portalUrl ? "EXTERNAL" : "IN_APP",
+          externalApplyUrl: portalUrl,
+          minCGPA: data.minCGPA,
+          maxActiveBacklogs: data.maxActiveBacklogs,
+          venue: data.venue ?? null,
+          reportingTime: data.reportingTime ?? null,
+          contactPerson: data.contactPerson ?? null,
+          contactPhone: data.contactPhone ?? null,
+          pptLink: data.pptLink || null,
+        },
+      });
+      await setEligibleDepartments(tx, created.id, eligibleDepartmentIds);
+      return created;
     });
 
     await createAuditLog({
@@ -104,7 +110,9 @@ export async function createCentralDrive(
 
     // Tell the students who can actually apply, across every eligible
     // department. Best-effort: never fails the drive creation.
-    await notifyEligibleStudentsOfDrive(drive);
+    await notifyEligibleStudentsOfDrive(
+      withEligibleDepartmentLinks(drive, eligibleDepartmentIds)
+    );
 
     return { success: true, driveId: drive.id };
   } catch (error) {

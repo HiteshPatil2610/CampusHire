@@ -118,23 +118,18 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
   const ineligibilityReasons = getIneligibilityReasons(studentWithAcademic, drive);
   const isFullyEligible = ineligibilityReasons.length === 0;
 
-  // Parse eligible departments
-  let eligibleDeptNames: string[] = [];
-  try {
-    const deptIds: string[] = JSON.parse(drive.eligibleDepartments);
-    const depts = await prisma.department.findMany({
-      where: { id: { in: deptIds } },
-      select: { name: true },
-    });
-    eligibleDeptNames = depts.map((d) => d.name);
-  } catch {
-    // Invalid JSON
-  }
+  // Eligible departments, from the DriveEligibleDepartment relation
+  const eligibleDeptIds = drive.eligibleDepartmentLinks.map((link) => link.departmentId);
+  const eligibleDepts = await prisma.department.findMany({
+    where: { id: { in: eligibleDeptIds } },
+    select: { name: true },
+  });
+  const eligibleDeptNames = eligibleDepts.map((d) => d.name);
 
   // Check each eligibility criterion
   const cgpaCheck = studentWithAcademic.academic.currentCGPA >= drive.minCGPA;
   const backlogsCheck = studentWithAcademic.academic.activeBacklogs <= drive.maxActiveBacklogs;
-  const deptCheck = JSON.parse(drive.eligibleDepartments).includes(studentWithAcademic.departmentId);
+  const deptCheck = eligibleDeptIds.includes(studentWithAcademic.departmentId);
   const deadlineCheck = driveStatus === 'open';
 
   // Package display

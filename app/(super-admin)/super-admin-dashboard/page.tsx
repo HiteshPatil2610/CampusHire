@@ -5,28 +5,26 @@ import { getDepartmentMatrix } from "@/features/departments/queries/get-departme
 import KpiCard from "@/components/shared/kpi-card";
 import StatusBadge from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
+import { eligibleDepartmentIdsOf, eligibleDepartmentLinksInclude } from "@/features/drives/utils/eligible-departments";
 
 export default async function SuperAdminDashboardPage() {
   await requireSuperAdmin();
-  
+
   const [stats, deptMatrix, centralDrives] = await Promise.all([
     getSystemStats(),
     getDepartmentMatrix(),
     prisma.drive.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { department: true },
+      include: { department: true, ...eligibleDepartmentLinksInclude },
     }),
   ]);
 
   const deptCodeById = new Map(deptMatrix.map((d) => [d.id, d.code]));
 
-  function eligibleDeptCodes(eligibleDepartments: string): string {
-    try {
-      const ids: string[] = JSON.parse(eligibleDepartments);
-      return ids.map((id) => deptCodeById.get(id) || id).join(', ');
-    } catch {
-      return '';
-    }
+  function eligibleDeptCodes(drive: (typeof centralDrives)[number]): string {
+    return eligibleDepartmentIdsOf(drive)
+      .map((id) => deptCodeById.get(id) || id)
+      .join(', ');
   }
 
   return (
@@ -118,7 +116,7 @@ export default async function SuperAdminDashboardPage() {
               <div>
                 <strong>{drive.companyName}</strong> — {drive.roleName}
                 <div className="text-muted" style={{ fontSize: 11 }}>
-                  {eligibleDeptCodes(drive.eligibleDepartments)}
+                  {eligibleDeptCodes(drive)}
                 </div>
               </div>
             </div>

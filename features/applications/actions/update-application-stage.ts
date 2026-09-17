@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
-import { parseJsonArray } from "@/lib/parse-json-array";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
 import { createNotification, NotificationType } from "@/lib/notifications";
 import {
@@ -58,7 +57,10 @@ export async function updateApplicationStage(
             roleName: true,
             departmentId: true,
             isCentralDrive: true,
-            eligibleDepartments: true,
+            eligibleDepartmentLinks: {
+              where: { departmentId: department.id },
+              select: { departmentId: true },
+            },
           },
         },
       },
@@ -80,9 +82,7 @@ export async function updateApplicationStage(
     const ownsDrive = application.drive.departmentId === department.id;
     const runsCentralDrive =
       application.drive.isCentralDrive &&
-      parseJsonArray(application.drive.eligibleDepartments).includes(
-        department.id
-      );
+      application.drive.eligibleDepartmentLinks.length > 0;
 
     if (!ownsDrive && !runsCentralDrive) {
       throw new AuthorizationError(

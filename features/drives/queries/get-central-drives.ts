@@ -3,11 +3,16 @@
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getDriveStatus } from "../utils/drive-status";
+import {
+  eligibleDepartmentLinksInclude,
+  type HasEligibleDepartmentLinks,
+} from "../utils/eligible-departments";
 import type { Drive } from "@prisma/client";
 
-export type CentralDriveListItem = Drive & {
-  _count: { applications: number };
-};
+export type CentralDriveListItem = Drive &
+  HasEligibleDepartmentLinks & {
+    _count: { applications: number };
+  };
 
 export interface CentralDrivesParams {
   page?: number;
@@ -47,6 +52,7 @@ export async function getCentralDrives(
       take: pageSize,
       include: {
         _count: { select: { applications: true } },
+        ...eligibleDepartmentLinksInclude,
       },
     }),
   ]);

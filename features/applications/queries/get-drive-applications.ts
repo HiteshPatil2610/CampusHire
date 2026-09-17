@@ -2,7 +2,6 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
-import { parseJsonArray } from "@/lib/parse-json-array";
 import type {
   DriveApplication,
   Student,
@@ -49,7 +48,7 @@ export async function getDriveApplications(
     select: {
       departmentId: true,
       isCentralDrive: true,
-      eligibleDepartments: true,
+      eligibleDepartmentLinks: { where: { departmentId: department.id }, select: { departmentId: true } },
     },
   });
 
@@ -59,8 +58,7 @@ export async function getDriveApplications(
 
   const ownsDrive = drive.departmentId === department.id;
   const isEligibleCentralDrive =
-    drive.isCentralDrive &&
-    parseJsonArray(drive.eligibleDepartments).includes(department.id);
+    drive.isCentralDrive && drive.eligibleDepartmentLinks.length > 0;
 
   if (!ownsDrive && !isEligibleCentralDrive) {
     throw new AuthorizationError(

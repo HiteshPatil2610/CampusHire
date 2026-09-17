@@ -5,6 +5,7 @@ import { requireStudent } from "@/lib/auth";
 import { applyToDriveSchema } from "../schemas/application";
 import { EDITABLE_FIELD_KEYS } from "../utils/application-review-fields";
 import { isStudentEligibleForDrive, getIneligibilityReasons } from "@/features/drives/queries/drive-eligibility";
+import { eligibleDepartmentLinksInclude } from "@/features/drives/utils/eligible-departments";
 import { getDriveStatus } from "@/features/drives/utils/drive-status";
 import { checkApplicationExists } from "../queries/check-application-exists";
 import type { DriveApplication } from "@prisma/client";
@@ -103,6 +104,7 @@ export async function applyToDrive(
     // 4. Verify drive exists
     const drive = await prisma.drive.findUnique({
       where: { id: validated.data.driveId },
+      include: eligibleDepartmentLinksInclude,
     });
 
     if (!drive) {

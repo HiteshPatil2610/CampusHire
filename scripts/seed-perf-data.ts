@@ -34,6 +34,7 @@ import { config } from 'dotenv';
 config({ path: ".env.local" });
 config({ path: ".env" });
 import { PrismaClient, Prisma } from '@prisma/client';
+import { setEligibleDepartments } from '@/features/drives/utils/eligible-departments';
 
 const prisma = new PrismaClient();
 
@@ -237,22 +238,24 @@ async function seed() {
       });
       if (existing) continue;
 
-      await prisma.drive.create({
-        data: {
-          companyName: company,
-          roleName: ROLES[i % ROLES.length],
-          packageOffered: 4 + Math.round(rand() * 20),
-          packageDisplay: null,
-          selectionRounds: JSON.stringify(['Aptitude', 'Technical', 'HR']),
-          driveDate: new Date(deadline.getTime() + 7 * day),
-          applicationDeadline: deadline,
-          applyMethod: 'IN_APP',
-          minCGPA: Number((6 + rand() * 2.5).toFixed(1)),
-          maxActiveBacklogs: Math.floor(rand() * 3),
-          eligibleDepartments: JSON.stringify(eligible),
-          isCentralDrive: central,
-          departmentId: central ? null : dept.id,
-        },
+      await prisma.$transaction(async (tx) => {
+        const created = await tx.drive.create({
+          data: {
+            companyName: company,
+            roleName: ROLES[i % ROLES.length],
+            packageOffered: 4 + Math.round(rand() * 20),
+            packageDisplay: null,
+            selectionRounds: JSON.stringify(['Aptitude', 'Technical', 'HR']),
+            driveDate: new Date(deadline.getTime() + 7 * day),
+            applicationDeadline: deadline,
+            applyMethod: 'IN_APP',
+            minCGPA: Number((6 + rand() * 2.5).toFixed(1)),
+            maxActiveBacklogs: Math.floor(rand() * 3),
+            isCentralDrive: central,
+            departmentId: central ? null : dept.id,
+          },
+        });
+        await setEligibleDepartments(tx, created.id, eligible);
       });
       driveCount++;
     }
@@ -262,7 +265,7 @@ async function seed() {
   // --- Applications
   const allSeedDrives = await prisma.drive.findMany({
     where: { companyName: { startsWith: SEED_DRIVE_PREFIX } },
-    select: { id: true, eligibleDepartments: true },
+    select: { id: true, eligibleDepartmentLinks: { select: { departmentId: true } } },
   });
   const seedStudents = await prisma.student.findMany({
     where: { email: { endsWith: SEED_EMAIL_DOMAIN }, isPending: false },
@@ -278,8 +281,7 @@ async function seed() {
     const apps: Prisma.DriveApplicationCreateManyInput[] = [];
     const STAGES = ['APPLIED', 'APTITUDE', 'INTERVIEW', 'OFFER'] as const;
     for (const drive of allSeedDrives) {
-      let eligibleDepts: string[] = [];
-      try { eligibleDepts = JSON.parse(drive.eligibleDepartments); } catch { continue; }
+      const eligibleDepts = drive.eligibleDepartmentLinks.map((l) => l.departmentId);
       const pool = seedStudents.filter((s) => eligibleDepts.includes(s.departmentId));
       for (const s of pool) {
         if (rand() > 0.35) continue; // about a third of eligible students apply
@@ -307,7 +309,7 @@ async function seed() {
     const targetDrives = await prisma.drive.findMany({
       where: {
         companyName: { startsWith: SEED_DRIVE_PREFIX },
-        eligibleDepartments: { contains: target.departmentId },
+        eligibleDepartmentLinks: { some: { departmentId: target.departmentId } },
       },
       select: { id: true },
       take: 3,

@@ -12,6 +12,8 @@ import { AdminDrivePreviewCard } from "@/components/admin/drives/admin-drive-pre
 import DatePicker from "@/components/ui/date-picker";
 import UrlField from "@/components/ui/url-field";
 import { useToast } from "@/hooks/use-toast";
+import { eligibleDepartmentIdsOf } from "@/features/drives/utils/eligible-departments";
+import type { HasEligibleDepartmentLinks } from "@/features/drives/utils/eligible-departments";
 import type { Drive } from "@prisma/client";
 
 interface Department {
@@ -22,7 +24,7 @@ interface Department {
 
 interface EditDriveFormProps {
   driveId: string;
-  drive: Drive;
+  drive: Drive & HasEligibleDepartmentLinks;
   departmentId: string;
   departmentCode: string;
   allDepartments: Department[];
@@ -41,7 +43,7 @@ export function EditDriveForm({
 
   // Parse JSON fields
   const parsedRounds = JSON.parse(drive.selectionRounds);
-  const parsedEligibleDepts = JSON.parse(drive.eligibleDepartments);
+  const parsedEligibleDepts = eligibleDepartmentIdsOf(drive);
   const parsedApplicationFields = drive.applicationFields
     ? JSON.parse(drive.applicationFields)
     : [];

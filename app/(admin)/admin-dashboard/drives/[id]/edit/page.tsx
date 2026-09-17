@@ -2,6 +2,7 @@ import { requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { EditDriveForm } from "./edit-drive-form";
+import { eligibleDepartmentLinksInclude } from "@/features/drives/utils/eligible-departments";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -14,6 +15,7 @@ export default async function EditDrivePage(props: PageProps) {
   // Fetch the drive
   const drive = await prisma.drive.findUnique({
     where: { id: params.id },
+    include: eligibleDepartmentLinksInclude,
   });
 
   if (!drive) {

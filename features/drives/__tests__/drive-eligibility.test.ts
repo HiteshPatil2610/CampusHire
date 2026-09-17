@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isStudentEligibleForDrive, getIneligibilityReasons } from "../queries/drive-eligibility";
+import type { HasEligibleDepartmentLinks } from "../utils/eligible-departments";
 import type { Drive, Student, StudentAcademic } from "@prisma/client";
 
 // Helper to create mock student
@@ -59,10 +60,17 @@ function createMockStudent(overrides?: Partial<Student & { academic: StudentAcad
   };
 }
 
-// Helper to create mock drive
-function createMockDrive(overrides?: Partial<Drive>): Drive {
+// Helper to create mock drive. `eligibleDepartmentIds` builds the
+// `eligibleDepartmentLinks` relation the eligibility functions actually read;
+// `eligibleDepartments` (the legacy JSON column) is kept in step with it for
+// any code still reading the raw Drive row, but is not itself consulted.
+function createMockDrive(
+  overrides?: Partial<Drive> & { eligibleDepartmentIds?: string[] }
+): Drive & HasEligibleDepartmentLinks {
   const futureDate = new Date();
   futureDate.setDate(futureDate.getDate() + 30);
+  const { eligibleDepartmentIds, ...driveOverrides } = overrides ?? {};
+  const deptIds = eligibleDepartmentIds ?? ["dept-cs", "dept-it"];
 
   const baseDrive: Drive = {
     id: "drive-1",
@@ -81,7 +89,6 @@ function createMockDrive(overrides?: Partial<Drive>): Drive {
     externalApplyUrl: "https://example.com/apply",
     minCGPA: 7.0,
     maxActiveBacklogs: 0,
-    eligibleDepartments: JSON.stringify(["dept-cs", "dept-it"]),
     companyLogoUrl: null,
     packageDisplay: "12 LPA",
     venue: null,
@@ -96,7 +103,8 @@ function createMockDrive(overrides?: Partial<Drive>): Drive {
 
   return {
     ...baseDrive,
-    ...overrides,
+    ...driveOverrides,
+    eligibleDepartmentLinks: deptIds.map((departmentId) => ({ departmentId })),
   };
 }
 
@@ -131,7 +139,7 @@ describe("Drive Eligibility", () => {
     const drive = createMockDrive({
       minCGPA: 7.0,
       maxActiveBacklogs: 0,
-      eligibleDepartments: JSON.stringify(["dept-cs", "dept-it"]),
+      eligibleDepartmentIds: ["dept-cs", "dept-it"],
     });
 
     expect(isStudentEligibleForDrive(student, drive)).toBe(true);
@@ -165,7 +173,7 @@ describe("Drive Eligibility", () => {
     });
 
     const drive = createMockDrive({
-      eligibleDepartments: JSON.stringify(["dept-cs", "dept-it"]),
+      eligibleDepartmentIds: ["dept-cs", "dept-it"],
     });
 
     expect(isStudentEligibleForDrive(student, drive)).toBe(false);
@@ -300,7 +308,7 @@ describe("Drive Eligibility", () => {
     const drive = createMockDrive({
       minCGPA: 7.0,
       maxActiveBacklogs: 0,
-      eligibleDepartments: JSON.stringify(["dept-cs", "dept-it"]),
+      eligibleDepartmentIds: ["dept-cs", "dept-it"],
     });
 
     const reasons = getIneligibilityReasons(student, drive);
@@ -310,10 +318,10 @@ describe("Drive Eligibility", () => {
     expect(reasons.some((r) => r.includes("Maximum backlogs"))).toBe(true);
   });
 
-  it("should handle invalid JSON in eligibleDepartments", () => {
+  it("should return false when the drive has no eligible-department rows", () => {
     const student = createMockStudent();
     const drive = createMockDrive({
-      eligibleDepartments: "invalid-json",
+      eligibleDepartmentIds: [],
     });
 
     expect(isStudentEligibleForDrive(student, drive)).toBe(false);

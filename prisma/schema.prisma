@@ -96,7 +96,6 @@ model User {
   stageUpdates     DriveApplication[]     @relation("ApplicationStageUpdatedBy")
   accessRequest    StudentAccessRequest?
   reviewedRequests StudentAccessRequest[] @relation("AccessRequestReviewedBy")
-
 }
 
 // Department model - represents academic departments
@@ -109,12 +108,12 @@ model Department {
   updatedAt DateTime @updatedAt
 
   // Relations
-  admins         DepartmentAdmin[]
-  students       Student[]
-  drives         Drive[]
-  driveConfigs   DriveDepartmentConfig[]
-  accessRequests StudentAccessRequest[]
-
+  admins                DepartmentAdmin[]
+  students              Student[]
+  drives                Drive[]
+  driveConfigs          DriveDepartmentConfig[]
+  accessRequests        StudentAccessRequest[]
+  eligibleForDriveLinks DriveEligibleDepartment[]
 }
 
 // Department Admin model - links DEPT_ADMIN users to departments
@@ -245,7 +244,6 @@ model StudentAcademic {
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
 }
 
 // StudentSkill - stores skills (many-to-one with Student)
@@ -337,7 +335,6 @@ model StudentPreferences {
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
 }
 
 // ============================================================================
@@ -364,7 +361,6 @@ model Drive {
   externalApplyUrl    String?
   minCGPA             Float
   maxActiveBacklogs   Int
-  eligibleDepartments String      @db.Text // JSON array of department IDs
   companyLogoUrl      String?
   packageDisplay      String?
   venue               String?
@@ -377,15 +373,35 @@ model Drive {
   updatedAt           DateTime    @updatedAt
 
   // Relations
-  department        Department?             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  createdByUser     User?                   @relation("DriveCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  applications      DriveApplication[]
-  departmentConfigs DriveDepartmentConfig[]
+  department              Department?               @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  createdByUser           User?                     @relation("DriveCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  applications            DriveApplication[]
+  departmentConfigs       DriveDepartmentConfig[]
+  eligibleDepartmentLinks DriveEligibleDepartment[]
 
   @@index([departmentId])
   @@index([applicationDeadline])
   @@index([isCentralDrive])
   @@index([createdByUserId])
+}
+
+// Which departments a drive is open to, as real rows instead of a JSON array
+// in `Drive.eligibleDepartments` (kept, for now, as the read/write paths are
+// switched over to this table; see DriveEligibleDepartment migration notes).
+// Referential integrity means a deleted department can no longer leave a
+// dangling ID sitting in a drive's eligibility list, and membership is an
+// indexed FK lookup instead of a text substring scan.
+model DriveEligibleDepartment {
+  id           String   @id @default(cuid())
+  driveId      String
+  departmentId String
+  createdAt    DateTime @default(now())
+
+  drive      Drive      @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([driveId, departmentId])
+  @@index([departmentId])
 }
 
 // Per-department configuration layered over a central drive.

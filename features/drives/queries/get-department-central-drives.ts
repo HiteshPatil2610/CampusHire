@@ -2,10 +2,13 @@
 
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { parseJsonArray } from "@/lib/parse-json-array";
+import {
+  eligibleDepartmentLinksInclude,
+  type HasEligibleDepartmentLinks,
+} from "../utils/eligible-departments";
 import type { Drive, DriveDepartmentConfig } from "@prisma/client";
 
-export type DepartmentCentralDrive = Drive & {
+export type DepartmentCentralDrive = Drive & HasEligibleDepartmentLinks & {
   /**
    * This department's own configuration for the drive. Null until the admin
    * saves one — other departments' configurations are never loaded here.
@@ -33,7 +36,10 @@ export async function getDepartmentCentralDrives(): Promise<DepartmentCentralDri
 
   const [centralDrives, departments, studentCount] = await Promise.all([
     prisma.drive.findMany({
-      where: { isCentralDrive: true },
+      where: {
+        isCentralDrive: true,
+        eligibleDepartmentLinks: { some: { departmentId: department.id } },
+      },
       orderBy: [{ driveDate: "desc" }, { createdAt: "desc" }],
       include: {
         departmentConfigs: { where: { departmentId: department.id } },
@@ -44,18 +50,15 @@ export async function getDepartmentCentralDrives(): Promise<DepartmentCentralDri
             },
           },
         },
+        ...eligibleDepartmentLinksInclude,
       },
     }),
     prisma.department.findMany({ select: { id: true, code: true } }),
     prisma.student.count({ where: { departmentId: department.id } }),
   ]);
 
-  const eligible = centralDrives.filter((drive) =>
-    parseJsonArray(drive.eligibleDepartments).includes(department.id)
-  );
-
   return {
-    drives: eligible.map(({ departmentConfigs, _count, ...drive }) => ({
+    drives: centralDrives.map(({ departmentConfigs, _count, ...drive }) => ({
       ...drive,
       config: departmentConfigs[0] ?? null,
       departmentApplicantCount: _count.applications,
