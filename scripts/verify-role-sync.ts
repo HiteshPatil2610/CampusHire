@@ -48,6 +48,22 @@ interface ClerkUser {
   const clerkUsers = (await res.json()) as ClerkUser[];
   const byId = new Map(clerkUsers.map((u) => [u.id, u]));
 
+  // Say which Clerk application answered. The publishable key is base64 of the
+  // instance's frontend domain, so it identifies the instance without printing
+  // a secret — and swapping applications is otherwise invisible from the output.
+  const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
+  let instance = '(could not decode publishable key)';
+  try {
+    instance = Buffer.from(pk.replace(/^pk_(test|live)_/, ''), 'base64')
+      .toString('utf8')
+      .replace(/\$$/, '');
+  } catch {
+    /* keep the fallback */
+  }
+  const dbHost = (process.env.DATABASE_URL ?? '').match(/@([^/]+)/)?.[1] ?? 'unknown';
+  console.log(`\nClerk instance: ${instance}`);
+  console.log(`Database:       ${dbHost}`);
+
   const dbUsers = await prisma.user.findMany({
     select: { id: true, email: true, role: true, clerkId: true },
     orderBy: { createdAt: 'asc' },
