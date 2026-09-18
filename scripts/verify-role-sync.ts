@@ -17,8 +17,8 @@
  * Read-only. It changes nothing; fixes are suggested at the end.
  */
 import { config } from 'dotenv';
-config({ path: '.env.local' });
-config({ path: '.env' });
+config({ path: '.env', override: true });
+config({ path: '.env.local', override: true });
 
 import { PrismaClient } from '@prisma/client';
 

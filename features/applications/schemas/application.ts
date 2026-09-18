@@ -14,33 +14,31 @@ export const applyToDriveSchema = z.object({
     .record(z.string(), z.string().max(2000))
     .optional()
     .default({}),
-  /** The accuracy declaration must be ticked before an application is taken. */
+  /**
+   * The accuracy declaration must be ticked before an application is taken.
+   * It is also the point at which the student accepts that the submission is
+   * final — there is no edit and no withdrawal afterwards.
+   */
   consent: z.boolean().optional().default(false),
 });
 
 export type ApplyToDriveInput = z.infer<typeof applyToDriveSchema>;
 
 /**
- * Schema for withdrawing an application
- */
-export const withdrawApplicationSchema = z.object({
-  driveId: z.string().cuid("Invalid drive ID format"),
-});
-
-export type WithdrawApplicationInput = z.infer<
-  typeof withdrawApplicationSchema
->;
-
-/**
  * Schema for a department admin advancing an application.
  *
  * Both `stage` and `status` are admin-owned — no student-facing path writes
- * either one. The enum values mirror the Prisma enums exactly.
+ * either one.
+ *
+ * `WITHDRAWN` is deliberately absent. It still exists on the Prisma enum so
+ * that any historical row carrying it keeps reading correctly, but it is no
+ * longer a value anything can *write*: an application is final once submitted,
+ * so there is no actor — student or admin — who may move one into it.
  */
 export const updateApplicationStageSchema = z.object({
   applicationId: z.string().cuid("Invalid application ID"),
   stage: z.enum(["APPLIED", "APTITUDE", "INTERVIEW", "OFFER"]),
-  status: z.enum(["IN_PROGRESS", "SELECTED", "REJECTED", "WITHDRAWN"]),
+  status: z.enum(["IN_PROGRESS", "SELECTED", "REJECTED"]),
 });
 
 export type UpdateApplicationStageInput = z.infer<

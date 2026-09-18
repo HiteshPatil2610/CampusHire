@@ -22,8 +22,8 @@ export type ApplyToDriveResult =
   | { success: false; error: string; reasons?: string[] };
 
 /**
- * Apply to a drive
- * 
+ * Apply to a drive.
+ *
  * This action enforces ALL business rules server-side:
  * 1. Authenticated student role
  * 2. Student ownership (cannot apply for another student)
@@ -31,7 +31,15 @@ export type ApplyToDriveResult =
  * 4. Eligibility criteria met (re-checked server-side)
  * 5. Application deadline not passed (re-checked server-side)
  * 6. No existing application (checked at app level and DB constraint)
- * 
+ * 7. The accuracy/finality declaration was accepted
+ *
+ * **This is the only student-facing write path to `DriveApplication`, and it
+ * only ever inserts.** An application is final once submitted: there is no
+ * student action that edits its content and none that deletes it. The
+ * `(studentId, driveId)` unique constraint is what makes that a guarantee
+ * rather than a convention — a re-submission is refused here and, if two
+ * requests race, refused again by the database.
+ *
  * @param driveId - Drive ID to apply to
  * @returns Result with application or error
  */
@@ -136,7 +144,9 @@ export async function applyToDrive(
       };
     }
 
-    // 7. Check for existing application (UX improvement)
+    // 7. Refuse a second submission. This is what makes a submitted
+    // application immutable from the student's side: re-applying is the only
+    // vector they have, and it is closed here and at the unique constraint.
     const alreadyApplied = await checkApplicationExists(
       studentWithAcademic.id,
       drive.id
@@ -145,15 +155,17 @@ export async function applyToDrive(
     if (alreadyApplied) {
       return {
         success: false,
-        error: "You have already applied to this drive",
+        error:
+          "You have already applied to this drive. Applications are final and cannot be edited or withdrawn.",
       };
     }
 
-    // 8. Require the accuracy declaration
+    // 8. Require the accuracy and finality declaration
     if (!validated.data.consent) {
       return {
         success: false,
-        error: "Please confirm your details are accurate before submitting.",
+        error:
+          "Please confirm your details are accurate, and that you understand the application is final, before submitting.",
       };
     }
 
@@ -209,10 +221,12 @@ export async function applyToDrive(
     // Handle Prisma unique constraint error gracefully
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
-        // Unique constraint violation
+        // Unique constraint violation — two submissions raced past the check
+        // above. The first one stands; an application is never overwritten.
         return {
           success: false,
-          error: "You have already applied to this drive",
+          error:
+            "You have already applied to this drive. Applications are final and cannot be edited or withdrawn.",
         };
       }
     }

@@ -57,6 +57,35 @@ enum ApplyMethod {
   EXTERNAL
 }
 
+// Lifecycle of a master drive (the `Drive` row itself).
+//
+// DRAFT means the Super Admin is still composing it and assigning departments.
+// Existing rows were backfilled to PUBLISHED because they are already live to
+// students. Nothing gates student visibility on this yet — that lands with the
+// lifecycle phase.
+enum MasterDriveStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// Lifecycle of one department's instance of a drive (`DriveDepartmentConfig`).
+//
+// ASSIGNED   the Super Admin assigned the drive to this department; its admin
+//            has not configured it yet
+// CONFIGURED the department admin saved a configuration but has not published
+// PUBLISHED  the department admin released it to their students
+// CLOSED     administratively closed, distinct from "deadline passed", which
+//            is still derived and never stored
+// ARCHIVED   historical; the department is done with this drive entirely
+enum DepartmentDriveStatus {
+  ASSIGNED
+  CONFIGURED
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
 // Selection stage an application has reached.
 // Advanced by department admins as the drive progresses.
 enum ApplicationStage {
@@ -96,6 +125,7 @@ model User {
   stageUpdates     DriveApplication[]     @relation("ApplicationStageUpdatedBy")
   accessRequest    StudentAccessRequest?
   reviewedRequests StudentAccessRequest[] @relation("AccessRequestReviewedBy")
+  publishedDrives  DriveDepartmentConfig[] @relation("DepartmentDrivePublishedBy")
 }
 
 // Department model - represents academic departments
@@ -372,6 +402,10 @@ model Drive {
   contactPhone        String?
   pptLink             String?
   applicationFields   String?     @db.Text
+  // Master-drive lifecycle. Defaults to PUBLISHED so every pre-existing drive
+  // keeps behaving exactly as before; a newly created central drive starts as
+  // DRAFT and is released per department.
+  lifecycleStatus     MasterDriveStatus @default(PUBLISHED)
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
@@ -407,16 +441,34 @@ model DriveEligibleDepartment {
   @@index([departmentId])
 }
 
-// Per-department configuration layered over a central drive.
+// The DEPARTMENT DRIVE instance: one department's run of a master drive.
 //
 // A central drive is authored once by the Super Admin but runs separately in
-// each eligible department, so venue, coordinator and required application
+// each assigned department, so venue, coordinator and required application
 // fields are owned by the department admin and are visible only to students of
 // that department. The Drive row itself stays untouched by department admins.
+//
+// A row here is created by the assignment operation, together with the
+// matching `DriveEligibleDepartment` row, inside one transaction — the two are
+// the same fact (this drive runs in this department) recorded at two levels,
+// and must never exist without each other.
 model DriveDepartmentConfig {
   id                  String   @id @default(cuid())
   driveId             String
   departmentId        String
+  // Where this department's instance sits in its own lifecycle. Student
+  // visibility is gated on PUBLISHED; "deadline passed" remains a separate,
+  // derived open/closed state and is never stored.
+  status              DepartmentDriveStatus @default(ASSIGNED)
+  // When the Super Admin assigned the drive to this department.
+  assignedAt          DateTime @default(now())
+  // Set once, when the department admin releases the drive to their students.
+  publishedAt         DateTime?
+  publishedByUserId   String?
+  // Set at the same moment as publishedAt. Its presence is what makes the
+  // content fields immutable — a published drive is something students have
+  // already read and applied against.
+  lockedAt            DateTime?
   venue               String?
   reportingTime       String?
   coordinatorName     String?
@@ -430,11 +482,16 @@ model DriveDepartmentConfig {
   updatedAt           DateTime @updatedAt
 
   // Relations
-  drive      Drive      @relation(fields: [driveId], references: [id], onDelete: Cascade)
-  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  drive           Drive      @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  department      Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  publishedByUser User?      @relation("DepartmentDrivePublishedBy", fields: [publishedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([driveId, departmentId])
-  @@index([departmentId])
+  // A department admin's list is always "my department, filtered by status".
+  // This supersedes the plain [departmentId] index — Postgres serves that
+  // lookup from this btree's leftmost column, so keeping both would be a
+  // second copy every write has to maintain (see the index policy above).
+  @@index([departmentId, status])
 }
 
 // ============================================================================

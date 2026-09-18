@@ -9,6 +9,9 @@ import {
   STAGE_SEQUENCE,
   STAGE_LABELS,
   STATUS_LABELS,
+  WRITABLE_STATUSES,
+  isWritableStatus,
+  type WritableApplicationStatus,
 } from "@/features/applications/utils/application-progress";
 
 interface ApplicationStageControlProps {
@@ -27,9 +30,11 @@ const STATUS_BADGE: Record<ApplicationStatus, string> = {
 
 /**
  * The department admin's control for moving one application through the
- * selection process. This is the only place stage and status are written.
+ * selection process. This is the only place stage and status are written —
+ * the applicant's submitted content is immutable and has no control at all.
  *
- * A withdrawn application is read-only — withdrawal is the student's call.
+ * A historical withdrawn application predates the final-application rule and
+ * is read-only: nothing can move it any more.
  */
 export function ApplicationStageControl({
   applicationId,
@@ -40,9 +45,11 @@ export function ApplicationStageControl({
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [draftStage, setDraftStage] = useState<ApplicationStage>(stage);
-  const [draftStatus, setDraftStatus] = useState<ApplicationStatus>(status);
+  const [draftStatus, setDraftStatus] = useState<WritableApplicationStatus>(
+    isWritableStatus(status) ? status : "IN_PROGRESS"
+  );
 
-  const isLocked = status === "WITHDRAWN";
+  const isLocked = !isWritableStatus(status);
   const isDirty = draftStage !== stage || draftStatus !== status;
 
   function handleSave() {
@@ -59,9 +66,10 @@ export function ApplicationStageControl({
           description: result.error,
           variant: "destructive",
         });
-        // Put the controls back to what the server still holds.
+        // Put the controls back to what the server still holds. A non-writable
+        // status never reaches here — the control renders as a badge instead.
         setDraftStage(stage);
-        setDraftStatus(status);
+        if (isWritableStatus(status)) setDraftStatus(status);
         return;
       }
 
@@ -116,7 +124,7 @@ export function ApplicationStageControl({
         value={draftStatus}
         disabled={isPending}
         onChange={(e) => {
-          const nextStatus = e.target.value as ApplicationStatus;
+          const nextStatus = e.target.value as WritableApplicationStatus;
           setDraftStatus(nextStatus);
           if (nextStatus === "SELECTED") {
             setDraftStage("OFFER");
@@ -131,7 +139,7 @@ export function ApplicationStageControl({
           color: "var(--text-primary)",
         }}
       >
-        {(["IN_PROGRESS", "SELECTED", "REJECTED"] as const).map((value) => (
+        {WRITABLE_STATUSES.map((value) => (
           <option key={value} value={value}>
             {STATUS_LABELS[value]}
           </option>

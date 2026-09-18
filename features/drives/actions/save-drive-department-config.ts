@@ -10,6 +10,7 @@ import {
   type DriveDepartmentConfigInput,
 } from "../schemas/drive-department-config";
 import type { StoredApplicationField } from "../utils/application-fields";
+import { isDepartmentDriveLocked } from "../domain/drive-lifecycle";
 
 export interface SaveDriveDepartmentConfigResult {
   success: boolean;
@@ -58,6 +59,19 @@ export async function saveDriveDepartmentConfig(
       };
     }
 
+    // The department's own instance decides what may still be written. A
+    // published instance is locked: students have read it and applied against
+    // it, so the application form can no longer change. Enforced here, on the
+    // server — a disabled input is not a lock.
+    const existing = await prisma.driveDepartmentConfig.findUnique({
+      where: {
+        driveId_departmentId: { driveId, departmentId: department.id },
+      },
+      select: { id: true, status: true, lockedAt: true, applicationFields: true },
+    });
+
+    const locked = existing !== null && isDepartmentDriveLocked(existing);
+
     // Only catalog keys are accepted, so a client cannot inject arbitrary
     // fields into what students are asked to submit.
     const selected: StoredApplicationField[] = [];
@@ -77,7 +91,23 @@ export async function saveDriveDepartmentConfig(
       });
     }
 
-    const data = {
+    const serializedFields = JSON.stringify(selected);
+
+    // Once locked, a submitted change to the application form is refused
+    // outright rather than silently dropped — an admin who thinks they edited
+    // the form must be told they did not.
+    if (locked && serializedFields !== (existing?.applicationFields ?? null)) {
+      return {
+        success: false,
+        error:
+          "This drive is published. The application form is locked because students have already applied against it — logistics can still be updated.",
+      };
+    }
+
+    // Logistics stay editable after publication (a room changes, a coordinator
+    // swaps); the application form does not. See
+    // `EDITABLE_AFTER_PUBLISH_FIELDS` in domain/drive-lifecycle.ts.
+    const logisticsData = {
       venue: logistics.venue,
       reportingTime: logistics.reportingTime,
       coordinatorName: logistics.coordinatorName || null,
@@ -86,15 +116,30 @@ export async function saveDriveDepartmentConfig(
       seatingAllocation: logistics.seatingAllocation || null,
       pptLink: logistics.pptLink || null,
       specialInstructions: logistics.specialInstructions || null,
-      applicationFields: JSON.stringify(selected),
     };
+
+    const data = locked
+      ? logisticsData
+      : { ...logisticsData, applicationFields: serializedFields };
 
     await prisma.driveDepartmentConfig.upsert({
       where: {
         driveId_departmentId: { driveId, departmentId: department.id },
       },
-      create: { driveId, departmentId: department.id, ...data },
-      update: data,
+      create: {
+        driveId,
+        departmentId: department.id,
+        ...logisticsData,
+        applicationFields: serializedFields,
+        // Saving a configuration is what moves an instance off ASSIGNED.
+        status: "CONFIGURED",
+      },
+      update: {
+        ...data,
+        // A published, closed or archived instance keeps its status — saving
+        // logistics is not a lifecycle transition backwards.
+        ...(existing?.status === "ASSIGNED" ? { status: "CONFIGURED" as const } : {}),
+      },
     });
 
     await createAuditLog({

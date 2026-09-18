@@ -7,7 +7,12 @@ import { getDriveStatus } from "@/features/drives/utils/drive-status";
 import type { Drive } from "@prisma/client";
 
 import { formatPackage } from "@/features/drives/utils/format-package";
-type DriveWithStatus = Drive & {
+import type { WithSerializedPackage } from "@/features/drives/utils/serialize-drive";
+// Not currently rendered by any page as of this writing — no live caller
+// imports DrivesListClient. Typed for the same Server → Client boundary rule
+// as every other drive view (see serialize-drive.ts) so it isn't a landmine
+// if it's wired up later.
+type DriveWithStatus = WithSerializedPackage<Drive> & {
   _count: { applications: number };
   status: "open" | "closed";
   isCentralDrive: boolean;

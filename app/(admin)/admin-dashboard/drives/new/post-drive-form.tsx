@@ -147,19 +147,6 @@ export function PostDriveForm({
     }));
   }
 
-  function handleDeptToggle(deptId: string) {
-    setForm((prev) => {
-      const current = prev.eligibleDepartments;
-      if (deptId === departmentId) return prev; // Can't uncheck own dept
-      
-      if (current.includes(deptId)) {
-        return { ...prev, eligibleDepartments: current.filter((id) => id !== deptId) };
-      } else {
-        return { ...prev, eligibleDepartments: [...current, deptId] };
-      }
-    });
-  }
-
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -369,8 +356,7 @@ export function PostDriveForm({
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8, marginTop: 8 }}>
             {allDepartments.map((dept) => {
               const isOwnDept = dept.id === departmentId;
-              const isChecked = form.eligibleDepartments.includes(dept.id);
-              
+
               return (
                 <label
                   key={dept.id}
@@ -379,19 +365,14 @@ export function PostDriveForm({
                     alignItems: "center",
                     gap: 8,
                     padding: "8px 12px",
-                    background: isChecked ? "var(--accent-light)" : "var(--surface-1)",
+                    background: isOwnDept ? "var(--accent-light)" : "var(--surface-1)",
                     border: "0.5px solid var(--border)",
                     borderRadius: 6,
-                    cursor: isOwnDept ? "not-allowed" : "pointer",
-                    opacity: isOwnDept ? 0.7 : 1,
+                    cursor: "not-allowed",
+                    opacity: isOwnDept ? 1 : 0.5,
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => handleDeptToggle(dept.id)}
-                    disabled={isOwnDept}
-                  />
+                  <input type="checkbox" checked={isOwnDept} disabled readOnly />
                   <span style={{ fontSize: 13, fontWeight: 500 }}>
                     {dept.code} - {dept.name}
                     {isOwnDept && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 4 }}>(your dept)</span>}
@@ -400,6 +381,10 @@ export function PostDriveForm({
               );
             })}
           </div>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
+            A department drive reaches your own department only. To open a drive
+            to several departments, ask the Super Admin to post a central drive.
+          </p>
         </div>
       </div>
 

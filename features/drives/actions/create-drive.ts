@@ -1,10 +1,13 @@
 "use server";
 
 import { requireDepartmentAdmin } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { driveSchema, type DriveInput } from "../schemas/drive";
 import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
-import { setEligibleDepartments, withEligibleDepartmentLinks } from "../utils/eligible-departments";
+import { withEligibleDepartmentLinks } from "../utils/eligible-departments";
+import { resolveDeptAdminEligibleDepartments } from "../utils/department-scope";
+import { buildDepartmentDriveData } from "../domain/drive-write-data";
+import { assertDeadlineInFuture } from "../domain/drive-window";
+import { createDriveWithEligibility } from "../domain/persist-drive";
 
 export interface CreateDriveResult {
   success: boolean;
@@ -13,61 +16,49 @@ export interface CreateDriveResult {
 }
 
 /**
- * Create a new placement drive
- * Requires DEPT_ADMIN role and automatically associates with admin's department
+ * Create a department-owned master drive.
+ *
+ * Authorization: DEPT_ADMIN. Both the owning department and the set of
+ * departments the drive reaches come from the authenticated session — see
+ * `resolveDeptAdminEligibleDepartments`. Reaching several departments is the
+ * Super Admin's central-drive flow, not this one.
  */
 export async function createDrive(input: DriveInput): Promise<CreateDriveResult> {
   try {
-    // Verify authentication and get department admin context
-    const { user, admin, department } = await requireDepartmentAdmin();
+    const { department } = await requireDepartmentAdmin();
 
-    // Validate input
     const validated = driveSchema.parse(input);
 
-    // Ensure deadline is in future for new drives
-    const deadline = new Date(validated.applicationDeadline);
-    if (deadline <= new Date()) {
-      return {
-        success: false,
-        error: "Application deadline must be in the future",
-      };
+    // The department list is the session's, not the request's.
+    const scope = resolveDeptAdminEligibleDepartments(
+      validated.eligibleDepartments,
+      department.id
+    );
+    if (!scope.ok) {
+      return { success: false, error: scope.error };
     }
 
-    // Create drive, then the eligible-department rows in the same
-    // transaction so neither half is written without the other.
-    const drive = await prisma.$transaction(async (tx) => {
-      const created = await tx.drive.create({
-        data: {
-          departmentId: department.id, // Always use authenticated admin's department
-          companyName: validated.companyName,
-          roleName: validated.roleName,
-          companyLogoUrl: validated.companyLogoUrl ?? null,
-          jobDescriptionUrl: validated.jobDescriptionUrl || null,
-          packageOffered: validated.packageOffered,
-          packageDisplay: validated.packageDisplay ?? null,
-          selectionRounds: JSON.stringify(validated.selectionRounds),
-          driveDate: new Date(validated.driveDate),
-          applicationDeadline: deadline,
-          applyMethod: validated.applyMethod,
-          externalApplyUrl: validated.externalApplyUrl || null,
-          minCGPA: validated.minCGPA,
-          maxActiveBacklogs: validated.maxActiveBacklogs,
-          venue: validated.venue ?? null,
-          reportingTime: validated.reportingTime ?? null,
-          contactPerson: validated.contactPerson ?? null,
-          contactPhone: validated.contactPhone ?? null,
-          pptLink: validated.pptLink ?? null,
-          applicationFields: validated.applicationFields ?? null,
-        },
-      });
-      await setEligibleDepartments(tx, created.id, validated.eligibleDepartments);
-      return created;
-    });
+    const deadline = assertDeadlineInFuture(
+      new Date(validated.applicationDeadline)
+    );
+    if (!deadline.ok) {
+      return { success: false, error: deadline.error };
+    }
+
+    // A department posting its own drive is already its author, so its
+    // instance starts PUBLISHED rather than ASSIGNED — there is no separate
+    // party to hand it to. Only the Super Admin's assignment flow produces
+    // ASSIGNED instances.
+    const drive = await createDriveWithEligibility(
+      buildDepartmentDriveData(validated, department.id),
+      scope.eligibleDepartments,
+      "PUBLISHED"
+    );
 
     // Tell the students who can actually apply. Best-effort: a failed
     // fan-out must not fail a drive that was created successfully.
     await notifyEligibleStudentsOfDrive(
-      withEligibleDepartmentLinks(drive, validated.eligibleDepartments)
+      withEligibleDepartmentLinks(drive, scope.eligibleDepartments)
     );
 
     return {

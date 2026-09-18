@@ -7,18 +7,27 @@ import {
 } from "@/features/drives/utils/eligible-departments";
 
 /**
+ * The `Drive` shape this module needs, with `packageOffered` widened to
+ * `unknown`. Nothing here reads that field — pinning it to `Decimal` would
+ * force every caller to hand over a raw, unserialized drive even when the
+ * caller has already converted it for a Client Component (see
+ * serialize-drive.ts), which is exactly what the student dashboard does.
+ */
+type DriveLike = Omit<Drive, "packageOffered"> & { packageOffered: unknown };
+
+/**
  * A drive paired with everything the student dashboard needs to render its
  * card: the caller's own application (if any), how many students applied, and
  * the human-readable department codes the drive is open to.
  */
-export interface DashboardDrive<TDrive extends Drive = Drive> {
+export interface DashboardDrive<TDrive extends DriveLike = DriveLike> {
   drive: TDrive;
   application: DriveApplication | null;
   applicantCount: number;
   departmentCodes: string[];
 }
 
-export interface StudentDashboardData<TDrive extends Drive = Drive> {
+export interface StudentDashboardData<TDrive extends DriveLike = DriveLike> {
   /** Drives surfaced as cards - applied drives first, then closest deadline. */
   featured: DashboardDrive<TDrive>[];
   /** Every drive the student can see, for the "Active drives" table. */
@@ -32,7 +41,7 @@ export interface StudentDashboardData<TDrive extends Drive = Drive> {
  * state. Eligibility filtering happens against the drives already resolved by
  * the caller, so this never widens what a student can see.
  */
-export async function getStudentDashboardData<TDrive extends Drive & HasEligibleDepartmentLinks>(
+export async function getStudentDashboardData<TDrive extends DriveLike & HasEligibleDepartmentLinks>(
   studentId: string,
   eligibleDrives: TDrive[],
   featuredLimit = 4
@@ -96,7 +105,7 @@ export async function getStudentDashboardData<TDrive extends Drive & HasEligible
   return { featured, all, totalApplications, openDriveCount };
 }
 
-function featureRank(item: DashboardDrive<Drive>, now: Date): number {
+function featureRank(item: DashboardDrive<DriveLike>, now: Date): number {
   if (item.application) return 0;
   const status = getDriveDisplayStatus(
     item.drive.applicationDeadline,

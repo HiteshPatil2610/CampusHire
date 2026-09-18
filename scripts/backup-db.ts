@@ -23,8 +23,8 @@ import { config } from 'dotenv';
 // .env.local holds the hand-managed keys; .env is written by the Neon CLI and
 // owns DATABASE_URL. dotenv does not overwrite an already-set variable, so
 // this order reproduces Next.js's precedence.
-config({ path: '.env.local' });
-config({ path: '.env' });
+config({ path: '.env', override: true });
+config({ path: '.env.local', override: true });
 
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, statSync, readdirSync } from 'node:fs';

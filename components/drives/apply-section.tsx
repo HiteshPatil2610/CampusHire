@@ -57,6 +57,7 @@ export function ApplySection({
   studentRollNumber,
 }: ApplySectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [consent, setConsent] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const { toast } = useToast();
@@ -69,13 +70,16 @@ export function ApplySection({
     }
 
     // Open confirmation dialog for in-app application
+    setConsent(false);
     setIsDialogOpen(true);
   }
 
   function handleConfirmApply() {
     startTransition(async () => {
       try {
-        const result = await applyToDrive(driveId);
+        // `consent` is required by the server — an application is final, so it
+        // is only taken once the student has ticked the declaration.
+        const result = await applyToDrive(driveId, { consent });
 
         if (result.success) {
           toast({
@@ -329,6 +333,29 @@ export function ApplySection({
             after submitting.
           </div>
 
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8,
+              fontSize: 12,
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+              disabled={isPending}
+              style={{ marginTop: 2 }}
+            />
+            <span>
+              I have checked the details above and understand that this
+              application cannot be edited or withdrawn once submitted.
+            </span>
+          </label>
+
           <DialogFooter>
             <button
               type="button"
@@ -351,17 +378,18 @@ export function ApplySection({
             <button
               type="button"
               onClick={handleConfirmApply}
-              disabled={isPending}
+              disabled={isPending || !consent}
               style={{
                 padding: '8px 16px',
                 fontSize: 13,
                 fontWeight: 600,
                 borderRadius: 6,
                 border: 'none',
-                background: isPending ? 'var(--surface-2)' : 'var(--accent)',
+                background:
+                  isPending || !consent ? 'var(--surface-2)' : 'var(--accent)',
                 color: 'white',
-                cursor: isPending ? 'not-allowed' : 'pointer',
-                opacity: isPending ? 0.6 : 1,
+                cursor: isPending || !consent ? 'not-allowed' : 'pointer',
+                opacity: isPending || !consent ? 0.6 : 1,
               }}
             >
               {isPending ? 'Submitting...' : 'Confirm & Submit'}

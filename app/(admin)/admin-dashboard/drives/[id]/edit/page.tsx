@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { EditDriveForm } from "./edit-drive-form";
 import { eligibleDepartmentLinksInclude } from "@/features/drives/utils/eligible-departments";
+import { serializePackageOffered } from "@/features/drives/utils/serialize-drive";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -45,7 +46,7 @@ export default async function EditDrivePage(props: PageProps) {
 
       <EditDriveForm
         driveId={drive.id}
-        drive={drive}
+        drive={serializePackageOffered(drive)}
         departmentId={department.id}
         departmentCode={department.code}
         allDepartments={allDepts}

@@ -3,6 +3,7 @@
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { eligibleDepartmentLinksInclude } from "../utils/eligible-departments";
+import { serializePackageOffered } from "../utils/serialize-drive";
 import type { CentralDriveListItem } from "./get-central-drives";
 
 /**
@@ -28,5 +29,5 @@ export async function getCentralDriveById(
     return null;
   }
 
-  return drive;
+  return serializePackageOffered(drive);
 }

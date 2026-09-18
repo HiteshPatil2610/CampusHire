@@ -7,9 +7,10 @@ import {
   eligibleDepartmentLinksInclude,
   type HasEligibleDepartmentLinks,
 } from "../utils/eligible-departments";
+import { serializePackageOffered, type WithSerializedPackage } from "../utils/serialize-drive";
 import type { Drive } from "@prisma/client";
 
-export type CentralDriveListItem = Drive &
+export type CentralDriveListItem = WithSerializedPackage<Drive> &
   HasEligibleDepartmentLinks & {
     _count: { applications: number };
   };
@@ -70,5 +71,10 @@ export async function getCentralDrives(
     return a.driveDate.getTime() - b.driveDate.getTime();
   });
 
-  return { data: sorted, page, pageSize, totalCount };
+  return {
+    data: sorted.map((drive) => serializePackageOffered(drive)),
+    page,
+    pageSize,
+    totalCount,
+  };
 }

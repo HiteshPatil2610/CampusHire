@@ -14,6 +14,7 @@ import UrlField from "@/components/ui/url-field";
 import { useToast } from "@/hooks/use-toast";
 import { eligibleDepartmentIdsOf } from "@/features/drives/utils/eligible-departments";
 import type { HasEligibleDepartmentLinks } from "@/features/drives/utils/eligible-departments";
+import type { WithSerializedPackage } from "@/features/drives/utils/serialize-drive";
 import type { Drive } from "@prisma/client";
 
 interface Department {
@@ -24,7 +25,7 @@ interface Department {
 
 interface EditDriveFormProps {
   driveId: string;
-  drive: Drive & HasEligibleDepartmentLinks;
+  drive: WithSerializedPackage<Drive & HasEligibleDepartmentLinks>;
   departmentId: string;
   departmentCode: string;
   allDepartments: Department[];
@@ -92,19 +93,6 @@ export function EditDriveForm({
       ...prev,
       selectionRounds: prev.selectionRounds.filter((_: string, i: number) => i !== index),
     }));
-  }
-
-  function handleDeptToggle(deptId: string) {
-    setForm((prev) => {
-      const current = prev.eligibleDepartments;
-      if (deptId === departmentId) return prev;
-      
-      if (current.includes(deptId)) {
-        return { ...prev, eligibleDepartments: current.filter((id: string) => id !== deptId) };
-      } else {
-        return { ...prev, eligibleDepartments: [...current, deptId] };
-      }
-    });
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -267,8 +255,7 @@ export function EditDriveForm({
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8, marginTop: 8 }}>
             {allDepartments.map((dept) => {
               const isOwnDept = dept.id === departmentId;
-              const isChecked = form.eligibleDepartments.includes(dept.id);
-              
+
               return (
                 <label
                   key={dept.id}
@@ -277,23 +264,23 @@ export function EditDriveForm({
                     alignItems: "center",
                     gap: 8,
                     padding: "8px 12px",
-                    background: isChecked ? "var(--accent-light)" : "var(--surface-1)",
+                    background: isOwnDept ? "var(--accent-light)" : "var(--surface-1)",
                     border: "0.5px solid var(--border)",
                     borderRadius: 6,
-                    cursor: isOwnDept ? "not-allowed" : "pointer",
+                    cursor: "not-allowed",
+                    opacity: isOwnDept ? 1 : 0.5,
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => handleDeptToggle(dept.id)}
-                    disabled={isOwnDept}
-                  />
+                  <input type="checkbox" checked={isOwnDept} disabled readOnly />
                   <span style={{ fontSize: 13 }}>{dept.code}</span>
                 </label>
               );
             })}
           </div>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
+            A department drive reaches your own department only. To open a drive
+            to several departments, ask the Super Admin to post a central drive.
+          </p>
         </div>
       </div>
 

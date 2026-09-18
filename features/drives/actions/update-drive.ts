@@ -3,7 +3,10 @@
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { driveSchema, type DriveInput } from "../schemas/drive";
-import { setEligibleDepartments } from "../utils/eligible-departments";
+import { resolveDeptAdminEligibleDepartments } from "../utils/department-scope";
+import { isCentralDrive } from "../domain/drive-kind";
+import { toDepartmentDriveUpdateData } from "../domain/drive-write-data";
+import { updateDriveWithEligibility } from "../domain/persist-drive";
 
 export interface UpdateDriveResult {
   success: boolean;
@@ -11,18 +14,18 @@ export interface UpdateDriveResult {
 }
 
 /**
- * Update an existing placement drive
- * Requires DEPT_ADMIN role and verifies drive belongs to admin's department
+ * Update a department-owned master drive.
+ *
+ * Authorization: DEPT_ADMIN, and the drive must be their own department's.
+ * A central drive is refused outright — that stays with the Super Admin.
  */
 export async function updateDrive(
   driveId: string,
   input: DriveInput
 ): Promise<UpdateDriveResult> {
   try {
-    // Verify authentication and get department admin context
-    const { user, admin, department } = await requireDepartmentAdmin();
+    const { department } = await requireDepartmentAdmin();
 
-    // Verify drive exists and belongs to admin's department
     const existingDrive = await prisma.drive.findUnique({
       where: { id: driveId },
     });
@@ -34,6 +37,16 @@ export async function updateDrive(
       };
     }
 
+    // A central drive is the Super Admin's to edit, never a department's —
+    // checked on the domain discriminant rather than on a null departmentId.
+    if (isCentralDrive(existingDrive)) {
+      return {
+        success: false,
+        error:
+          "This is a central drive posted by the Super Admin and cannot be edited here.",
+      };
+    }
+
     if (existingDrive.departmentId !== department.id) {
       return {
         success: false,
@@ -41,38 +54,34 @@ export async function updateDrive(
       };
     }
 
-    // Validate input
     const validated = driveSchema.parse(input);
 
-    // Update drive, then replace the eligible-department rows in the same
-    // transaction so neither half is written without the other.
-    await prisma.$transaction(async (tx) => {
-      await tx.drive.update({
-        where: { id: driveId },
-        data: {
-          companyName: validated.companyName,
-          roleName: validated.roleName,
-          companyLogoUrl: validated.companyLogoUrl ?? null,
-          jobDescriptionUrl: validated.jobDescriptionUrl || null,
-          packageOffered: validated.packageOffered,
-          packageDisplay: validated.packageDisplay ?? null,
-          selectionRounds: JSON.stringify(validated.selectionRounds),
-          driveDate: new Date(validated.driveDate),
-          applicationDeadline: new Date(validated.applicationDeadline),
-          applyMethod: validated.applyMethod,
-          externalApplyUrl: validated.externalApplyUrl || null,
-          minCGPA: validated.minCGPA,
-          maxActiveBacklogs: validated.maxActiveBacklogs,
-          venue: validated.venue ?? null,
-          reportingTime: validated.reportingTime ?? null,
-          contactPerson: validated.contactPerson ?? null,
-          contactPhone: validated.contactPhone ?? null,
-          pptLink: validated.pptLink ?? null,
-          applicationFields: validated.applicationFields ?? null,
-        },
-      });
-      await setEligibleDepartments(tx, driveId, validated.eligibleDepartments);
-    });
+    // The department list is the session's, not the request's.
+    const scope = resolveDeptAdminEligibleDepartments(
+      validated.eligibleDepartments,
+      department.id
+    );
+    if (!scope.ok) {
+      return { success: false, error: scope.error };
+    }
+
+    const outcome = await updateDriveWithEligibility(
+      driveId,
+      toDepartmentDriveUpdateData(validated),
+      scope.eligibleDepartments,
+      "PUBLISHED"
+    );
+
+    // A department drive always reaches exactly its own department, so there
+    // is nothing to remove and this branch is unreachable in practice. It is
+    // handled rather than ignored so the contract holds if that ever changes.
+    if (!outcome.ok) {
+      return {
+        success: false,
+        error:
+          "This drive has applications from a department that would be removed. No changes were saved.",
+      };
+    }
 
     return {
       success: true,

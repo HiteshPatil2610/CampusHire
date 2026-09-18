@@ -94,6 +94,7 @@ describe("applyToDrive", () => {
     departmentId: "dept-1",
     createdByUserId: null,
     isCentralDrive: false,
+    lifecycleStatus: "PUBLISHED" as const,
     companyName: "TechCorp",
     roleName: "Software Engineer",
     jobDescriptionUrl: null,

@@ -4,8 +4,8 @@ import { getOrCreateUser, requireStudent, requireDepartmentAdmin, AuthorizationE
 import { prisma } from "@/lib/prisma";
 import { isStudentEligibleForDrive } from "./drive-eligibility";
 import { checkApplicationExists } from "@/features/applications/queries/check-application-exists";
-import { applyDepartmentConfig } from "../utils/department-config-overlay";
-import type { DriveForStudent } from "../utils/department-config-overlay";
+import { resolveDepartmentDrive } from "../domain/resolve-department-drive";
+import type { DriveForStudent } from "../domain/resolve-department-drive";
 import {
   eligibleDepartmentLinksInclude,
   type HasEligibleDepartmentLinks,
@@ -79,13 +79,9 @@ export async function getDriveDetail(driveId: string): Promise<DriveWithDepartme
 
     const hasApplied = await checkApplicationExists(student.id, drive.id);
 
-    if (!hasApplied && !isStudentEligibleForDrive(student, drive)) {
-      throw new AuthorizationError("You are not eligible for this drive");
-    }
-
     // A central drive's venue, coordinator and required fields are configured
-    // per department, so show this student their own department's setup.
-    const config = await prisma.driveDepartmentConfig.findUnique({
+    // per department, so show this student their own department's instance.
+    const instance = await prisma.driveDepartmentConfig.findUnique({
       where: {
         driveId_departmentId: {
           driveId: drive.id,
@@ -94,7 +90,21 @@ export async function getDriveDetail(driveId: string): Promise<DriveWithDepartme
       },
     });
 
-    return { ...applyDepartmentConfig(drive, config), department: drive.department };
+    // The drive has to be published *for this student's department* before it
+    // is theirs to read. A student who already applied keeps access to their
+    // own application's drive even after it is administratively closed.
+    if (!hasApplied && instance?.status !== "PUBLISHED") {
+      throw new AuthorizationError("You are not eligible for this drive");
+    }
+
+    if (!hasApplied && !isStudentEligibleForDrive(student, drive)) {
+      throw new AuthorizationError("You are not eligible for this drive");
+    }
+
+    return {
+      ...resolveDepartmentDrive(drive, instance),
+      department: drive.department,
+    };
   } else {
     // Super admin or other roles
     throw new AuthorizationError("Access denied");

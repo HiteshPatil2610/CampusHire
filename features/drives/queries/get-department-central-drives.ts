@@ -6,9 +6,10 @@ import {
   eligibleDepartmentLinksInclude,
   type HasEligibleDepartmentLinks,
 } from "../utils/eligible-departments";
+import { serializePackageOffered, type WithSerializedPackage } from "../utils/serialize-drive";
 import type { Drive, DriveDepartmentConfig } from "@prisma/client";
 
-export type DepartmentCentralDrive = Drive & HasEligibleDepartmentLinks & {
+export type DepartmentCentralDrive = WithSerializedPackage<Drive> & HasEligibleDepartmentLinks & {
   /**
    * This department's own configuration for the drive. Null until the admin
    * saves one — other departments' configurations are never loaded here.
@@ -59,7 +60,7 @@ export async function getDepartmentCentralDrives(): Promise<DepartmentCentralDri
 
   return {
     drives: centralDrives.map(({ departmentConfigs, _count, ...drive }) => ({
-      ...drive,
+      ...serializePackageOffered(drive),
       config: departmentConfigs[0] ?? null,
       departmentApplicantCount: _count.applications,
     })),

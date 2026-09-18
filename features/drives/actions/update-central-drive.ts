@@ -2,13 +2,18 @@
 
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
+import { AuditAction } from "@/lib/audit";
 import {
   updateCentralDriveSchema,
   type UpdateCentralDriveInput,
 } from "../schemas/central-drive";
-import { parsePackageFromDisplay } from "../utils/parse-package-display";
-import { setEligibleDepartments } from "../utils/eligible-departments";
+import { isCentralDrive } from "../domain/drive-kind";
+import { findLockedMasterFieldChanges } from "../domain/drive-lifecycle";
+import { toCentralDriveUpdateData } from "../domain/drive-write-data";
+import {
+  auditDriveWrite,
+  updateDriveWithEligibility,
+} from "../domain/persist-drive";
 
 export interface UpdateCentralDriveResult {
   success: boolean;
@@ -16,7 +21,7 @@ export interface UpdateCentralDriveResult {
 }
 
 /**
- * Update an existing central drive.
+ * Update an existing central (master) drive.
  *
  * Authorization: SUPER_ADMIN only. Department-posted drives are rejected —
  * editing those stays with the owning department admin.
@@ -34,7 +39,7 @@ export async function updateCentralDrive(
       return { success: false, error: "Drive not found" };
     }
 
-    if (!existing.isCentralDrive) {
+    if (!isCentralDrive(existing)) {
       return {
         success: false,
         error: "This drive belongs to a department and cannot be edited here",
@@ -51,6 +56,31 @@ export async function updateCentralDrive(
 
     const data = validated.data;
 
+    // Once any department has released this drive, the fields describing the
+    // opportunity are frozen. Changing the role, the eligibility bar or the
+    // deadline now would silently alter an experience students have already
+    // acted on — an applicant could become retroactively ineligible.
+    const publishedCount = await prisma.driveDepartmentConfig.count({
+      where: { driveId, status: { in: ["PUBLISHED", "CLOSED", "ARCHIVED"] } },
+    });
+
+    if (publishedCount > 0) {
+      const changed = findLockedMasterFieldChanges(
+        existing as unknown as Record<string, unknown>,
+        toCentralDriveUpdateData(data) as unknown as Record<string, unknown>
+      );
+
+      if (changed.length > 0) {
+        return {
+          success: false,
+          error:
+            `This drive is already live in ${publishedCount} department${publishedCount === 1 ? "" : "s"}. ` +
+            `These fields can no longer change: ${changed.join(", ")}. ` +
+            `No changes were saved.`,
+        };
+      }
+    }
+
     const departments = await prisma.department.findMany({
       where: { id: { in: data.eligibleDepartments }, isActive: true },
       select: { id: true, code: true },
@@ -63,47 +93,38 @@ export async function updateCentralDrive(
       };
     }
 
-    const portalUrl = data.externalApplyUrl || null;
+    const outcome = await updateDriveWithEligibility(
+      driveId,
+      toCentralDriveUpdateData(data),
+      departments.map((d) => d.id)
+    );
 
-    await prisma.$transaction(async (tx) => {
-      await tx.drive.update({
-        where: { id: driveId },
-        data: {
-          companyName: data.companyName,
-          roleName: data.roleName,
-          jobDescriptionText: data.jobDescriptionText || null,
-          packageOffered: parsePackageFromDisplay(data.packageDisplay),
-          packageDisplay: data.packageDisplay,
-          driveDate: new Date(data.driveDate),
-          applicationDeadline: new Date(data.applicationDeadline),
-          applyMethod: portalUrl ? "EXTERNAL" : "IN_APP",
-          externalApplyUrl: portalUrl,
-          minCGPA: data.minCGPA,
-          maxActiveBacklogs: data.maxActiveBacklogs,
-          venue: data.venue ?? null,
-          reportingTime: data.reportingTime ?? null,
-          contactPerson: data.contactPerson ?? null,
-          contactPhone: data.contactPhone ?? null,
-          pptLink: data.pptLink || null,
-        },
+    // Deselecting a department that already has applicants would orphan their
+    // applications, so the whole edit is refused rather than partly applied.
+    // The message names the departments to re-select.
+    if (!outcome.ok) {
+      const blockedCodes = await prisma.department.findMany({
+        where: { id: { in: outcome.blocked.map((b) => b.departmentId) } },
+        select: { code: true },
       });
-      await setEligibleDepartments(
-        tx,
-        driveId,
-        departments.map((d) => d.id)
-      );
-    });
 
-    await createAuditLog({
+      return {
+        success: false,
+        error:
+          `Cannot remove ${blockedCodes.map((d) => d.code).join(", ")} — ` +
+          `students there have already applied. Keep those departments selected, ` +
+          `or unassign them individually once their applications are resolved. ` +
+          `No changes were saved.`,
+      };
+    }
+
+    await auditDriveWrite({
       action: AuditAction.UPDATE,
-      entityType: AuditEntityType.DRIVE,
-      entityId: driveId,
-      metadata: {
-        companyName: data.companyName,
-        roleName: data.roleName,
-        isCentralDrive: true,
-        eligibleDepartmentCodes: departments.map((d) => d.code),
-      },
+      driveId,
+      kind: "CENTRAL",
+      companyName: data.companyName,
+      roleName: data.roleName,
+      eligibleDepartmentCodes: departments.map((d) => d.code),
     });
 
     return { success: true };

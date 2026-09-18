@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Ban,
   Calendar,
@@ -14,30 +13,20 @@ import {
   GraduationCap,
   Lock,
   MapPin,
-  Undo2,
 } from 'lucide-react';
 import type { ApplicationStage, ApplicationStatus, Drive } from '@prisma/client';
 import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
-import { withdrawApplication } from '@/features/applications/actions/withdraw-application';
 import ApplicationReviewModal from '@/components/drives/application-review-modal';
 import type { ApplicationReviewData } from '@/features/applications/utils/application-review-fields';
 import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
 import { parseJsonArray } from '@/lib/parse-json-array';
 import StatusBadge from '@/components/ui/status-badge';
 import StageTrack from './stage-track';
-import { useToast } from '@/hooks/use-toast';
 import { formatPackage } from '@/features/drives/utils/format-package';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import type { WithSerializedPackage } from '@/features/drives/utils/serialize-drive';
 
 export interface DashboardDriveCardProps {
-  drive: Drive;
+  drive: WithSerializedPackage<Drive>;
   stage: ApplicationStage | null;
   /** Outcome set by the department admin; null when not applied. */
   applicationStatus?: ApplicationStatus | null;
@@ -64,12 +53,8 @@ export default function DashboardDriveCard({
   eligible,
   ineligibilityReasons,
 }: DashboardDriveCardProps) {
-  const router = useRouter();
-  const { toast } = useToast();
   const [expanded, setExpanded] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
-  const [isPending, startTransition] = useTransition();
 
   const status = getDriveDisplayStatus(
     drive.applicationDeadline,
@@ -77,14 +62,6 @@ export default function DashboardDriveCard({
   );
   const isApplied = stage !== null;
   const isOpen = status === 'open';
-  // Withdrawal mirrors the server rule: only while the window is open and
-  // before the application has advanced past the first stage. An application
-  // the admin has already closed is never withdrawable.
-  const canWithdraw =
-    isApplied &&
-    isOpen &&
-    stage === 'APPLIED' &&
-    applicationStatus === 'IN_PROGRESS';
 
   const logoText = drive.companyName.slice(0, 4).toUpperCase();
   const packageText = formatPackage(drive);
@@ -95,26 +72,6 @@ export default function DashboardDriveCard({
   const logisticsLabel = drive.venue
     ? drive.venue.split(',')[0]
     : 'Logistics set';
-
-  function handleWithdraw() {
-    startTransition(async () => {
-      const result = await withdrawApplication(drive.id);
-      setConfirmWithdraw(false);
-      if (result.success) {
-        toast({
-          title: 'Application withdrawn',
-          description: `You are no longer applied to ${drive.companyName}.`,
-        });
-        router.refresh();
-      } else {
-        toast({
-          title: 'Could not withdraw',
-          description: result.error,
-          variant: 'destructive',
-        });
-      }
-    });
-  }
 
   return (
     <div className="drive-card">
@@ -441,19 +398,17 @@ export default function DashboardDriveCard({
           className="dc-action-row"
           style={{ justifyContent: 'space-between' }}
         >
-          <button
-            type="button"
-            className="dc-link-btn danger"
-            disabled={!canWithdraw || isPending}
-            title={
-              canWithdraw
-                ? 'Withdraw this application'
-                : 'Withdrawal closes once the deadline passes or your application advances'
-            }
-            onClick={() => setConfirmWithdraw(true)}
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 11,
+              color: 'var(--text-muted)',
+            }}
           >
-            <Undo2 size={12} aria-hidden /> Withdraw
-          </button>
+            <Lock size={11} aria-hidden /> Submitted — final
+          </span>
 
           <button
             type="button"
@@ -480,35 +435,6 @@ export default function DashboardDriveCard({
         ineligibilityReasons={ineligibilityReasons}
       />
 
-      <Dialog open={confirmWithdraw} onOpenChange={setConfirmWithdraw}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Withdraw this application?</DialogTitle>
-            <DialogDescription>
-              Your application to {drive.companyName} for {drive.roleName} will
-              be removed. You can apply again while the drive is still open.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setConfirmWithdraw(false)}
-              disabled={isPending}
-            >
-              Keep application
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger btn-sm"
-              onClick={handleWithdraw}
-              disabled={isPending}
-            >
-              {isPending ? 'Withdrawing…' : 'Withdraw'}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -22,10 +22,11 @@ import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
 import { useToast } from '@/hooks/use-toast';
 
 import { formatPackage } from '@/features/drives/utils/format-package';
+import type { WithSerializedPackage } from '@/features/drives/utils/serialize-drive';
 export interface ApplicationReviewModalProps {
   open: boolean;
   onClose: () => void;
-  drive: Drive;
+  drive: WithSerializedPackage<Drive>;
   fields: ApplicationReviewData;
   /** Server-computed eligibility; the action re-checks it before writing. */
   eligible: boolean;
@@ -397,7 +398,9 @@ export default function ApplicationReviewModal({
           />
           <span>
             I confirm that my verified academic data and auto-filled/updated
-            profile details are accurate and ready for recruiter screening.
+            profile details are accurate and ready for recruiter screening, and
+            I understand this application cannot be edited or withdrawn once
+            submitted.
           </span>
         </label>
 

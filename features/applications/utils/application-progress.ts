@@ -21,12 +21,37 @@ export const STAGE_LABELS: Record<ApplicationStage, string> = {
   OFFER: "Offer",
 };
 
+/**
+ * `WITHDRAWN` is retained on the read side only. Withdrawal was removed when
+ * applications became final, but the enum value stays on the Prisma model so a
+ * historical row still renders with its real outcome instead of crashing a
+ * `Record<ApplicationStatus, …>` lookup. Nothing writes it any more.
+ */
 export const STATUS_LABELS: Record<ApplicationStatus, string> = {
   IN_PROGRESS: "In Progress",
   SELECTED: "Selected",
   REJECTED: "Rejected",
   WITHDRAWN: "Withdrawn",
 };
+
+/**
+ * The outcomes an admin may actually set. `WITHDRAWN` is excluded: an
+ * application is final once submitted, so nothing writes that value any more —
+ * it survives only so historical rows still read.
+ */
+export const WRITABLE_STATUSES = [
+  "IN_PROGRESS",
+  "SELECTED",
+  "REJECTED",
+] as const satisfies readonly ApplicationStatus[];
+
+export type WritableApplicationStatus = (typeof WRITABLE_STATUSES)[number];
+
+export function isWritableStatus(
+  status: ApplicationStatus
+): status is WritableApplicationStatus {
+  return (WRITABLE_STATUSES as readonly ApplicationStatus[]).includes(status);
+}
 
 /** Position of a stage in {@link STAGE_SEQUENCE}. */
 export function stageIndex(stage: ApplicationStage): number {
@@ -70,20 +95,22 @@ export function validateStageTransition(params: {
 }): { valid: true } | { valid: false; error: string } {
   const { currentStage, currentStatus, nextStage, nextStatus } = params;
 
-  // A withdrawn application belongs to the student's decision, not the
-  // admin's — an admin can never revive or re-stage one.
+  // A historical withdrawn application is a closed record. Withdrawal no
+  // longer exists, so there is nothing to revive it into — it stays read-only.
   if (currentStatus === "WITHDRAWN") {
     return {
       valid: false,
-      error: "This application was withdrawn by the student and cannot be changed.",
+      error: "This application was withdrawn under the previous rules and can no longer be changed.",
     };
   }
 
-  // An admin cannot mark an application withdrawn on the student's behalf.
+  // Nothing may move an application into WITHDRAWN any more: an application is
+  // final once submitted, for the student and the admin alike. The schema
+  // already rejects the value; this keeps the pure rule honest on its own.
   if (nextStatus === "WITHDRAWN") {
     return {
       valid: false,
-      error: "Only the student can withdraw an application.",
+      error: "Applications are final and cannot be withdrawn.",
     };
   }
 

@@ -1,21 +1,25 @@
 import { z } from "zod";
+import {
+  driveCoreShape,
+  deadlineBeforeDriveDate,
+  maxActiveBacklogsField,
+} from "./drive-core";
 
 /**
- * Drive Creation/Update Schema
- * Validates all drive fields with proper business rules
+ * Department Drive Schema
+ *
+ * What a department admin submits when posting or editing their own
+ * department's drive. Shares `driveCoreShape` with the central drive schema;
+ * everything declared locally below is a field only this form has.
+ *
+ * Note `eligibleDepartments` is validated here but NOT trusted — the server
+ * replaces it with the caller's own department in `createDrive`/`updateDrive`
+ * via `resolveDeptAdminEligibleDepartments`.
  */
 export const driveSchema = z
   .object({
-    companyName: z
-      .string()
-      .min(1, "Company name is required")
-      .max(200, "Company name too long")
-      .trim(),
-    roleName: z
-      .string()
-      .min(1, "Role name is required")
-      .max(200, "Role name too long")
-      .trim(),
+    ...driveCoreShape,
+    maxActiveBacklogs: maxActiveBacklogsField(),
     jobDescriptionUrl: z
       .string()
       .url("Invalid job description URL")
@@ -33,12 +37,11 @@ export const driveSchema = z
         (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-9,
         "Package can have at most 2 decimal places"
       ),
+    packageDisplay: z.string().max(100).optional(),
     selectionRounds: z
       .array(z.string().min(1, "Round name cannot be empty"))
       .min(1, "At least one selection round is required")
       .max(20, "Too many selection rounds"),
-    driveDate: z.string().min(1, "Drive date is required"),
-    applicationDeadline: z.string().min(1, "Application deadline is required"),
     applyMethod: z.enum(["IN_APP", "EXTERNAL"], {
       required_error: "Apply method is required",
     }),
@@ -47,29 +50,6 @@ export const driveSchema = z
       .url("Invalid external URL")
       .optional()
       .or(z.literal("")),
-    minCGPA: z
-      .number()
-      .min(0, "CGPA cannot be negative")
-      .max(10, "CGPA cannot exceed 10"),
-    maxActiveBacklogs: z
-      .number()
-      .int("Backlogs must be a whole number")
-      .min(0, "Backlogs cannot be negative")
-      .max(10, "Backlogs limit seems unrealistic"),
-    eligibleDepartments: z
-      .array(z.string().min(1))
-      .min(1, "At least one eligible department is required")
-      .max(50, "Too many departments"),
-    // New display fields
-    packageDisplay: z.string().max(100).optional(),
-    // Logistics fields (all optional)
-    // Blob URL returned by /api/admin/drives/logo. Optional — drive cards
-    // fall back to a text tile built from the company name.
-    companyLogoUrl: z.string().url("Invalid logo URL").nullish(),
-    venue: z.string().max(500).optional(),
-    reportingTime: z.string().max(100).optional(),
-    contactPerson: z.string().max(200).optional(),
-    contactPhone: z.string().max(50).optional(),
     pptLink: z.string().url().optional().or(z.literal("")),
     // Application fields configuration (JSON string)
     applicationFields: z.string().optional(),
@@ -83,43 +63,12 @@ export const driveSchema = z
       return true;
     },
     {
-      message: "External application URL is required when apply method is EXTERNAL",
+      message:
+        "External application URL is required when apply method is EXTERNAL",
       path: ["externalApplyUrl"],
     }
   )
-  .refine(
-    (data) => {
-      // Application deadline must be before drive date
-      try {
-        const driveDate = new Date(data.driveDate);
-        const deadline = new Date(data.applicationDeadline);
-        return deadline < driveDate;
-      } catch {
-        return false; // Invalid date format
-      }
-    },
-    {
-      message: "Application deadline must be before the drive date",
-      path: ["applicationDeadline"],
-    }
-  )
-  .refine(
-    (data) => {
-      // Application deadline must be in the future (for new drives)
-      try {
-        const deadline = new Date(data.applicationDeadline);
-        const now = new Date();
-        // Allow past deadlines for edits (handled separately in edit action)
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    {
-      message: "Invalid date format",
-      path: ["applicationDeadline"],
-    }
-  );
+  .refine(deadlineBeforeDriveDate.check, deadlineBeforeDriveDate.message);
 
 export type DriveInput = z.infer<typeof driveSchema>;
 

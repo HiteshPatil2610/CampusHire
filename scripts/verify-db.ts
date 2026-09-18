@@ -7,11 +7,15 @@
 import { config } from 'dotenv';
 // Env lives in two files and the split matters: .env.local holds the
 // hand-managed keys (Clerk, Blob) while .env is written by the Neon CLI and
-// owns DATABASE_URL. dotenv does not overwrite a variable that is already set,
-// so loading .env.local first and .env second reproduces Next.js's precedence
-// (.env.local wins) rather than relying on whichever happens to be found.
-config({ path: ".env.local" });
-config({ path: ".env" });
+// owns DATABASE_URL. Load .env first, then .env.local, both with override, so
+// .env.local wins over .env AND both win over a value exported in the shell.
+// Without override dotenv keeps whatever is already in process.env, and a
+// forgotten machine-level CLERK_SECRET_KEY silently aims these scripts at a
+// different Clerk application than the files name — which read as every User
+// row being "orphaned". This deliberately differs from `next dev`, where the
+// shell still wins; if the app and these scripts ever disagree, clear the shell.
+config({ path: ".env", override: true });
+config({ path: ".env.local", override: true });
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

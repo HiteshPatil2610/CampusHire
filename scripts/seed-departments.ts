@@ -3,8 +3,8 @@ import { resolve } from "path";
 
 // .env.local overrides DATABASE_URL in this project; load it first so this
 // script targets the same database the running app uses.
-config({ path: resolve(process.cwd(), ".env.local") });
-config({ path: resolve(process.cwd(), ".env") });
+config({ path: resolve(process.cwd(), ".env"), override: true });
+config({ path: resolve(process.cwd(), ".env.local"), override: true });
 
 import { prisma } from "../lib/prisma";
 

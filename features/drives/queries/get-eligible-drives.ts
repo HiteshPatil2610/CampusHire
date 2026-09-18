@@ -7,12 +7,13 @@ import {
   isStudentAcademicallyEligibleForDrive,
   isStudentEligibleForDrive,
 } from "./drive-eligibility";
-import { applyDepartmentConfig } from "../utils/department-config-overlay";
-import type { DriveForStudent } from "../utils/department-config-overlay";
+import { resolveDepartmentDrives } from "../domain/resolve-department-drive";
+import type { DriveForStudent } from "../domain/resolve-department-drive";
 import {
   eligibleDepartmentLinksInclude,
   type HasEligibleDepartmentLinks,
 } from "../utils/eligible-departments";
+import { serializePackageOffered, type WithSerializedPackage } from "../utils/serialize-drive";
 import type { Drive } from "@prisma/client";
 
 export interface StudentDrivesParams {
@@ -23,7 +24,7 @@ export interface StudentDrivesParams {
 }
 
 export interface StudentDrivesResult {
-  data: DriveForStudent<Drive & HasEligibleDepartmentLinks>[];
+  data: WithSerializedPackage<DriveForStudent<Drive & HasEligibleDepartmentLinks>>[];
   page: number;
   pageSize: number;
   totalCount: number;
@@ -84,6 +85,17 @@ export async function getEligibleDrives(
     eligibleDepartmentLinks: {
       some: { departmentId: studentWithAcademic.departmentId },
     },
+    // A student sees their own department's instance, and only once that
+    // department has published it. An ASSIGNED or CONFIGURED instance is
+    // half-built — showing it would put partially configured data in front of
+    // students, which is exactly what the lifecycle exists to prevent.
+    // CLOSED and ARCHIVED are administratively over and equally hidden.
+    departmentConfigs: {
+      some: {
+        departmentId: studentWithAcademic.departmentId,
+        status: "PUBLISHED",
+      },
+    },
   };
 
   // Status filter
@@ -126,20 +138,17 @@ export async function getEligibleDrives(
   const paginatedDrives = eligibleDrives.slice(skip, skip + pageSize);
 
   // A central drive's venue, coordinator and required fields are configured per
-  // department, so show this student their own department's setup.
-  const configs = await prisma.driveDepartmentConfig.findMany({
+  // department, so show this student their own department's instance.
+  const instances = await prisma.driveDepartmentConfig.findMany({
     where: {
       departmentId: studentWithAcademic.departmentId,
       driveId: { in: paginatedDrives.map((drive) => drive.id) },
     },
   });
-  const configByDriveId = new Map(
-    configs.map((config) => [config.driveId, config])
-  );
 
   return {
-    data: paginatedDrives.map((drive) =>
-      applyDepartmentConfig(drive, configByDriveId.get(drive.id))
+    data: resolveDepartmentDrives(paginatedDrives, instances).map((drive) =>
+      serializePackageOffered(drive)
     ),
     page,
     pageSize,

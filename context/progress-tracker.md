@@ -55,6 +55,259 @@ Update this file after every meaningful implementation change.
 
 ## Completed
 
+- **Department assignment + full drive lifecycle (C2, C4) (CODE COMPLETE — MIGRATION NOT YET APPLIED):**
+  - **⚠️ Migration `20260918000000_drive_lifecycle_and_department_assignment`
+    is written but deliberately NOT applied.** `DATABASE_URL` points at the Neon
+    **production** branch, so it awaits explicit approval. Until it runs, the
+    code does not match the database and the app will fail at runtime against
+    the live DB. Apply order:
+    1. Neon snapshot
+    2. `npx prisma migrate deploy`
+    3. `npx tsx scripts/backfill-department-drive-instances.ts --dry-run`
+    4. `npx tsx scripts/backfill-department-drive-instances.ts`
+  - **The backfill is required, not optional.** Student visibility is gated on
+    `DriveDepartmentConfig.status = 'PUBLISHED'`, and the instance table was
+    empty (97 assignments, 0 instances). Without the backfill every drive
+    students can currently see would disappear. It creates one PUBLISHED
+    instance per existing assignment, dating `publishedAt`/`lockedAt` to the
+    drive's creation rather than "now", and is idempotent.
+  - **Schema (additive only, nothing dropped):** new enums `MasterDriveStatus`
+    (DRAFT/PUBLISHED/ARCHIVED) and `DepartmentDriveStatus`
+    (ASSIGNED/CONFIGURED/PUBLISHED/CLOSED/ARCHIVED);
+    `Drive.lifecycleStatus` defaulting to PUBLISHED so existing rows are
+    unaffected; `DriveDepartmentConfig.status`, `assignedAt`, `publishedAt`,
+    `publishedByUserId` (FK, `SetNull`), `lockedAt`. Index
+    `[departmentId]` replaced by `[departmentId, status]` per the documented
+    index policy — the old one was the leftmost column of the new composite.
+  - **Assignment owns both rows.** `domain/department-assignment.ts` —
+    `ensureDepartmentsAssigned` (idempotent, creates edge + instance at
+    ASSIGNED in one transaction), `removeDepartmentAssignment` (refuses when
+    that department has applications), `reconcileDepartmentAssignments`, and
+    `findBlockedRemovals` (checked *before* any write, so a blocked removal
+    refuses the whole edit instead of committing half).
+  - **Root cause this closed:** `setEligibleDepartments` replaced eligibility
+    wholesale with delete-and-recreate. Once instances carried state that would
+    have orphaned them — and would have silently unassigned a department whose
+    students had already applied. No write path calls it directly any more.
+  - **Actions added:** `assignDriveToDepartments` and `unassignDriveDepartment`
+    (SUPER_ADMIN, audited via ASSIGN/UNASSIGN), `publishDepartmentDrive`
+    (DEPT_ADMIN, own department only — sets status/publishedAt/
+    publishedByUserId/lockedAt and notifies that department's eligible students
+    only), `setDepartmentDriveStatus` (CLOSED/ARCHIVED),
+    `setMasterDriveStatus` (SUPER_ADMIN; refuses to publish a master assigned
+    to nobody). New query `getDriveAssignments` gives the explicit Master Drive
+    ↔ Department ↔ Department Drive mapping with per-department application
+    counts and a computed `canUnassign`.
+  - **Administrative CLOSED is separate from deadline expiry.** Open/closed by
+    deadline stays derived via `getDriveStatus()` and is still never stored
+    (invariant 7 untouched). A drive can be PUBLISHED with an expired deadline,
+    or CLOSED with a future one.
+  - **Locking reads `lockedAt`, not `status`,** so a CLOSED or ARCHIVED instance
+    stays locked — students applied against that content. Frozen on the
+    instance: `applicationFields` only. Still editable: venue, reporting time,
+    coordinator*, seating, PPT link, special instructions (a room change must
+    not require un-publishing). Frozen on the master once *any* department has
+    published: role, JD, minCGPA, maxBacklogs, deadline, drive date, apply
+    method, external URL, package, selection rounds — compared value by value,
+    so a logo can still be fixed. Recruitment stages are never locked:
+    `updateApplicationStage` writes `DriveApplication`, not the instance.
+  - **Student queries gated:** `getEligibleDrives` requires a PUBLISHED instance
+    for the student's own department; `getDriveDetail` refuses a non-PUBLISHED
+    instance, except that a student who already applied keeps access to their
+    own application's drive.
+  - **`notifyEligibleStudentsOfDrive`** gained a `departmentIds` narrowing that
+    intersects with the assigned set — it can narrow the audience, never widen
+    it.
+  - **`saveDriveDepartmentConfig`** now moves ASSIGNED → CONFIGURED on first
+    save, refuses an application-form change once locked (rather than silently
+    dropping it), and still accepts a logistics-only save on a published drive.
+  - **Tests:** `department-assignment.test.ts` (29) and `drive-lifecycle.test.ts`
+    (30) — assign one/multiple, duplicate assignment as reported no-op, removal
+    of an unconfigured department, removal refused with applications, every
+    transition edge including no-un-publishing and ARCHIVED terminality, the
+    lock contract, publish side effects, department-scoped notification, and
+    unauthorized access from the wrong role or department. `drive-department-scope.test.ts`
+    updated to assert on the assignment path.
+  - **Verification:** `tsc --noEmit` clean ✅ · lint only the two pre-existing
+    `<img>` warnings ✅ · `npm run build` successful, 23/23 pages ✅ · full suite
+    389 passed / 27 failed — the same 27 pre-existing failures.
+  - **Known gap:** no UI yet for assignment, publish, close or archive. The
+    server actions and query exist; the super-admin assignment console and the
+    department admin's publish control are not built.
+
+- **Unified drive domain model (C9) (COMPLETE):**
+  - **The problem:** central and department drives were two parallel
+    implementations — two schemas, four actions, separate query families and
+    component sets — and they had already drifted. `createDrive` persisted
+    `applicationFields`; `createCentralDrive` did not. `createCentralDrive`
+    hard-coded `selectionRounds: []` and derived `applyMethod`; `createDrive`
+    took both from input. Every new drive field had to be added twice.
+  - **No table renamed, no migration, no legacy column dropped.** The existing
+    schema already expresses MASTER DRIVE (`Drive`) → DEPARTMENT INSTANCE
+    (`DriveDepartmentConfig`) → APPLICATION (`DriveApplication`), with
+    `DriveEligibleDepartment` as the assignment edge. The refactor is a domain
+    vocabulary laid over it in `features/drives/domain/`.
+  - **Discriminant:** `DriveKind` (`CENTRAL` | `DEPARTMENT`) derived from the
+    existing `Drive.isCentralDrive` via `driveKindOf()`. `driveKindColumns()`
+    is now the only place `isCentralDrive`/`departmentId` are set, so a central
+    drive cannot be given an owning department and an edit cannot change a
+    drive's kind or owner.
+  - **Resolver:** `resolveDepartmentDrive(master, instance)` plus
+    `resolveDepartmentDrives(masters, instances)` replace
+    `applyDepartmentConfig`. Output shape is deliberately identical (flat
+    master row + instance overlay + the three instance-only fields), because
+    six components read it directly. `department-config-overlay.ts` deleted
+    after confirming its only two callers (`get-eligible-drives`,
+    `get-drive-detail`) were migrated.
+  - **Validation unified:** new `schemas/drive-core.ts` holds every constraint
+    both forms shared (company/role, CGPA bounds, dates, eligible departments,
+    logistics, the deadline-before-drive-date refinement, and the `optionalUrl`
+    preprocessor that was copied into two files). `drive.ts` and
+    `central-drive.ts` compose it and declare only what differs. Every message
+    is the one both schemas already used, so no form's validation output
+    changed. `drive-department-config.ts` now imports the shared `optionalUrl`
+    /`optionalText` instead of redefining them.
+  - **Writes unified:** `domain/drive-write-data.ts` builds each kind's column
+    payload once (previously written out twice per kind, in create and update);
+    `domain/persist-drive.ts` owns the drive-plus-eligibility transaction and a
+    consistent audit entry; `domain/drive-window.ts` holds the pure
+    deadline-in-future check, kept dependency-free so reaching it does not pull
+    in Prisma, Clerk and the audit log.
+  - **Also fixed by unification:** a no-op third `.refine` on `driveSchema`
+    (unconditional `return true`) is gone, and a malformed date now fails the
+    deadline check instead of silently passing it.
+  - **Behaviour change worth knowing:** `updateCentralDrive` now persists
+    `companyLogoUrl`, which the hand-written payload silently dropped. No live
+    effect — that action still has zero UI callers (see the baseline audit).
+  - **Authorization preserved exactly:** SUPER_ADMIN still owns central
+    drives (`requireSuperAdmin()` first statement in all three central
+    actions), DEPT_ADMIN still owns their own department's drive and their own
+    instance, and the C1 department-scope fix is untouched. `updateDrive` now
+    refuses a central drive on the domain discriminant rather than on a null
+    `departmentId`.
+  - **Preserved as required:** routes/URLs unchanged, student-facing resolved
+    shape unchanged, `Decimal`/`formatPackage` handling unchanged (the resolver
+    keeps `packageOffered` a `Decimal`; serialization stays the last step before
+    a Client Component), audit logging preserved, notification behaviour
+    unchanged pending the lifecycle work.
+  - **Tests:** `features/drives/__tests__/drive-domain.test.ts`, 30 tests —
+    discriminant and column forcing, resolver inheritance/override/per-field
+    fallback/empty-string handling/no-mutation/Decimal survival/resolved-shape
+    contract/no cross-department leakage, write payloads and the create-only
+    columns an edit must not touch, and the validation rules both schemas now
+    share.
+  - **Verification:** `tsc --noEmit` clean ✅ · `next lint` only the two
+    pre-existing `<img>` warnings ✅ · `npm run build` successful, all routes
+    compiled ✅ · full suite 330 passed / 27 failed — the same 27 pre-existing
+    failures throughout.
+  - **Still outstanding (unchanged by this work):** `drives-list-client.tsx`
+    and `get-central-drives-for-department.ts` remain orphaned. Deliberately
+    **not** deleted — they are the pieces needed to restore department-owned
+    drives to `/admin-dashboard/drives`, which currently lists central drives
+    only (C-NEW-1 in the baseline audit).
+  - **Not done here (deliberately):** lifecycle/publish/lock (C2), per-department
+    content overrides (C3), eligibility rules (C8), `ApplicationSnapshot` (C6).
+
+- **Applications are final — withdrawal removed (C7) (COMPLETE):**
+  - **The contradiction:** `project-overview.md` said applications are final
+    with no edit and no withdrawal; `architecture.md` and a live
+    `withdrawApplication` server action said the opposite and *deleted* the row.
+    A student could therefore silently vacate a drive's applicant count, which
+    is exactly the reporting problem the "final" rule exists to prevent.
+  - **Resolved in favour of finality**, per the intended workflow: review the
+    configured fields → acknowledge → understand it cannot be edited or
+    withdrawn → submit → final.
+  - **Server:** deleted `features/applications/actions/withdraw-application.ts`
+    and `withdrawApplicationSchema`. `applyToDrive` is now the only
+    student-facing write path and it only ever inserts; a re-submission is
+    refused at the app level and again at the `(studentId, driveId)` unique
+    constraint, which is what makes immutability a guarantee rather than a
+    convention.
+  - **Admin boundary unchanged but tightened:** `WITHDRAWN` removed from
+    `updateApplicationStageSchema`, so it is no longer a writable value for
+    anyone. `validateStageTransition` still refuses it independently, so the
+    pure rule holds on its own. New `WRITABLE_STATUSES` /
+    `WritableApplicationStatus` / `isWritableStatus` express the writable
+    subset in the type system; the admin stage control uses them.
+  - **History preserved:** `ApplicationStatus.WITHDRAWN` is deliberately
+    **kept** on the Prisma enum — no migration, no data rewrite. Labels,
+    badges and `TERMINAL_STATUSES` still render it, and a historical withdrawn
+    row is read-only rather than erased. (Live check: 0 such rows exist, since
+    withdrawal deleted rather than flagged.)
+  - **UI:** Withdraw button, confirm dialog, handler and now-unused
+    router/toast/transition state removed from `dashboard-drive-card.tsx`,
+    replaced by a "Submitted — final" marker. Both consent declarations
+    (`application-review-modal.tsx`, `apply-section.tsx`) now state explicitly
+    that the application cannot be edited or withdrawn.
+  - **Bug found and fixed while inspecting the apply UI:** the drive *detail*
+    page's `ApplySection` called `applyToDrive(driveId)` with no options, so
+    `consent` defaulted to `false` and **every submission from that page was
+    rejected by the server**. Added the acknowledgement checkbox, gated the
+    submit button on it, and passed `consent` through. A regression test pins
+    that a missing consent stays a refusal rather than becoming an implicit
+    acceptance.
+  - **Tests:** `features/applications/__tests__/application-immutability.test.ts`,
+    18 tests — submit with/without consent, consent absent entirely, locked
+    fields stripped from `submittedDetails`, re-submission refused, racing
+    re-submission refused at P2002, no withdraw action or caller anywhere in
+    the tree, `WITHDRAWN` refused at both the schema and the pure rule,
+    historical withdrawn row frozen, and admin scope intact (own department
+    advances; other department refused; non-admin refused; only
+    stage/status/stageUpdated* written; never deletes). Verified as genuine
+    regression tests by restoring the deleted action: 2 failed, then green
+    again once removed.
+  - **Verification:** `tsc --noEmit` clean ✅ · lint clean on all 8 changed
+    files ✅ · `vitest run features/applications` 54/54 ✅ · full suite 300
+    passed / 27 failed — the same 27 pre-existing failures as before.
+  - **Not done here (deliberately):** `ApplicationSnapshot` (C6) was not
+    introduced — nothing in this rule required it.
+
+- **Security fix — department scope on drive mutations (C1) (COMPLETE):**
+  - **The hole:** `createDrive` and `updateDrive` passed the client's
+    `eligibleDepartments` array straight into `setEligibleDepartments()`. The
+    owning `departmentId` was forced server-side but the *eligibility set* was
+    not, so a crafted Server Action payload let a department admin put their
+    drive in front of another department's students — breaking
+    `architecture.md` invariant 2. The post/edit drive forms locked only the
+    admin's own checkbox and left the others tickable, so the UI was offering
+    the operation, not just failing to prevent it.
+  - **Fix:** new pure helper `features/drives/utils/department-scope.ts`
+    (`resolveDeptAdminEligibleDepartments`). It returns `[session department]`
+    and *rejects* a payload naming any other department rather than quietly
+    narrowing it — silently accepting a request that asked for more than it was
+    granted hides both an attack and a broken form. Wired into `createDrive`
+    and `updateDrive`; the resolved value is what reaches both
+    `setEligibleDepartments` and the notification fan-out.
+  - **Also hardened:** `updateDrive` now refuses a central drive explicitly
+    (`isCentralDrive`) instead of relying on its `departmentId` being null.
+  - **UI aligned:** both admin drive forms now render every department row as
+    read-only with the admin's own department checked, plus a note pointing at
+    the Super Admin's central-drive flow for multi-department reach. The server
+    check is the control; this only stops the UI offering a rejected action.
+  - **Audited and found already correct** (no change needed): `createCentralDrive`,
+    `updateCentralDrive`, `updateCentralDriveApplicationFields` (all
+    `requireSuperAdmin()` first, `departmentId`/`isCentralDrive` forced),
+    `saveDriveDepartmentConfig`, `getDriveApplications`, `updateApplicationStage`,
+    `getStudentDetailForAdmin`, `addStudentManual`,
+    `broadcastDepartmentNotification`, `/api/admin/drives/logo`.
+  - **Tests:** `features/drives/__tests__/drive-department-scope.test.ts`, 18 tests
+    — the pure rule, admin-of-A-cannot-target-B on both create and update,
+    admin-of-A-can-operate-on-A, dept admin refused on a central drive, and
+    Super Admin retaining multi-department reach via `createCentralDrive`.
+    Verified as genuine regression tests by temporarily reverting the
+    enforcement: 2 failed, then passed again once restored.
+  - **Verification:** `tsc --noEmit` clean ✅ · lint clean on all 5 changed files ✅
+    · `vitest run features/drives features/applications` 87/87 ✅ · full suite
+    282 passed / 27 failed, the same 27 pre-existing failures as before the
+    change (React `cache` unavailable in the vitest env kills 2 suites; stale
+    cuid fixtures and incomplete `vi.mock("@/lib/auth")` account for the rest).
+  - **Live-data check:** 0 department-owned drives currently have an
+    out-of-department eligibility row, so the hole was open but never exploited
+    and no backfill or cleanup is needed.
+  - **Not done here (deliberately):** drive lifecycle, per-department overrides,
+    eligibility rules, and the duplicate drive architecture — C2/C3/C4/C8/C9 are
+    untouched.
+
 - **Unit 11 — Super Admin Central Drives (COMPLETE):**
   - **Schema changes (`Drive` only):**
     - `departmentId String?` — was required; null now means the drive was posted centrally by the Super Admin rather than owned by one department
@@ -2568,3 +2821,94 @@ symptoms are misleading (`Cannot find module './vendor-chunks/@clerk.js'`,
 `[object Event]`, pages rendering with no CSS) and none of them point at the
 real cause. Two dev servers on the same directory do the same thing. Always
 stop the server, confirm the process is gone, then clear `.next`.
+
+## Env precedence: shell variables were silently winning
+
+`scripts/verify-role-sync.ts` reported all 6 `User` rows as orphaned, claiming
+their `clerkId`s belonged to a different Clerk application. The report was
+wrong, and the cause was the env loading every script shares.
+
+Machine-level `CLERK_SECRET_KEY` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` were
+exported in the Windows environment, pointing at a second Clerk application
+(`proven-ringtail-9461`, 3 users) rather than the one `.env.local` names
+(`pleasing-jawfish-119`, 6 users). Because `dotenv.config()` never overwrites
+a variable that is already set, every script silently queried the wrong Clerk
+instance — `injected env (0)` in the output was the only clue, and it reads as
+noise. Against the correct instance all 6 clerkIds and roles match exactly.
+
+Fixed in all 9 scripts that load env: load `.env` first, then `.env.local`,
+both with `override: true`. That keeps the documented file precedence
+(`.env.local` beats `.env`) while making both beat a stale shell value. This
+deliberately diverges from `next dev`, which still lets the shell win — so if
+the app and these scripts ever disagree, the shell is the thing to clear.
+
+`.env.local` also lost two keys it should never have held, both of which
+`.env.example` already warns about:
+
+- `DATABASE_URL` — `.env` owns it (Neon CLI). The copy was the same database
+  today, but `.env.local` outranks `.env`, so it would pin the app to a stale
+  branch after the next `neon checkout` while the Prisma CLI followed the new
+  one.
+- `NODE_ENV=development` — makes `next build` fail while prerendering error
+  pages, with a message pointing nowhere near the cause. `lib/env.ts` defaults it.
+
+Separately: `CLERK_WEBHOOK_SECRET` has never been set, so
+`app/api/webhooks/clerk/route.ts` returns 500 before reading any payload and
+the webhook has never created a row. All 6 users were created by the
+`getOrCreateUser` fallback instead — which is why every row has `name = null`,
+the one field the webhook path populates and the fallback does not.
+
+## Drive.packageOffered: Decimal cannot cross into a Client Component
+
+`9e94480` (`refactor(db): store Drive.packageOffered as NUMERIC(10,2)`) made
+Prisma hand back a `Decimal` instance for this column instead of a plain
+`number`. React's Flight serializer rejects `Decimal` outright at the Server →
+Client boundary — it checks the value's prototype before ever calling
+`toJSON()`, so decimal.js defining `toJSON` does not save it, despite what a
+comment in `format-package.ts` used to claim. Confirmed directly: `raw
+packageOffered` has `constructor: i` (decimal.js's internal class name) and
+`is plain object: false`.
+
+Five query/page sites returned a `Drive` object straight to a `"use client"`
+component:
+
+- `getEligibleDrives` → `DrivesGrid`/`DriveCard` (student drives listing) and,
+  via the same data, `DashboardDriveCard`/`ApplicationReviewModal` (student
+  dashboard home)
+- `app/(admin).../drives/[id]/edit/page.tsx` → `EditDriveForm` (direct
+  `prisma.drive.findUnique`, no query wrapper)
+- `getDepartmentCentralDrives` → `DepartmentCentralDrivesView`
+- `getCentralDrives` → `CentralDrivesView`
+- `getCentralDriveById` — same return type as `getCentralDrives`, found only
+  because `tsc` caught it; it has no caller yet
+
+Fixed with one helper, `features/drives/utils/serialize-drive.ts`:
+`serializePackageOffered()` converts `packageOffered` to a plain string (never
+a `number` — money must not round-trip through a binary float, same rule
+`format-package.ts` already documents), and `WithSerializedPackage<T>`
+narrows the type so a raw `Decimal` reaching a client prop is a compile error,
+not a runtime one. Applied as the last step before each of the five sites
+returns, after any other Prisma calls or overlay logic that still needs the
+real `Decimal`.
+
+Two shared types elsewhere had hardcoded `packageOffered: Decimal` into their
+generic constraint even though neither reads the field:
+`DriveWithEligibility` (`drive-eligibility.ts`) and the `TDrive extends
+Drive` bound in `get-dashboard-data.ts`. Both now widen `packageOffered` to
+`unknown`, so they accept either a raw or already-serialized drive — which is
+what let `getStudentDashboardData` keep taking `getEligibleDrives`' now-
+serialized output on the dashboard page.
+
+`drives-list-client.tsx` got the same type fix for consistency; it currently
+has no importer, so it isn't live.
+
+Verified: `tsc --noEmit` clean, `npm run test` at the same 264-passing/
+27-pre-existing-failing baseline (none of the 27 touch drives), and a direct
+check against a real row confirmed React Flight's actual rejection condition
+(non-`Object.prototype` prototype) is true for the raw `Decimal` and false
+after `serializePackageOffered`. Could not click through the affected pages
+in-browser — that needs an authenticated session, and both typing credentials
+and `clerk impersonate` (which doesn't need a password) are actions this
+assistant declines/is blocked from taking respectively. Worth a manual
+click-through on `/student-dashboard/drives` and `/student-dashboard` to
+confirm the console error is gone.

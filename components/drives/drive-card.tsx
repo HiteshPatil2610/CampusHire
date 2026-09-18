@@ -13,8 +13,9 @@ import {
 import StatusBadge from '@/components/ui/status-badge';
 
 import { formatPackage } from '@/features/drives/utils/format-package';
+import type { WithSerializedPackage } from '@/features/drives/utils/serialize-drive';
 interface DriveCardProps {
-  drive: Drive & HasEligibleDepartmentLinks;
+  drive: WithSerializedPackage<Drive & HasEligibleDepartmentLinks>;
   isApplied: boolean;
   applicantCount?: number;
   departmentMap?: Record<string, string>; // dept ID -> dept code

@@ -63,7 +63,7 @@ describe("validateStageTransition", () => {
     ).toEqual({ valid: true });
   });
 
-  it("refuses to change an application the student withdrew", () => {
+  it("refuses to change a historical withdrawn application", () => {
     const result = validateStageTransition({
       currentStage: "APPLIED",
       currentStatus: "WITHDRAWN",
@@ -74,7 +74,7 @@ describe("validateStageTransition", () => {
     expect(result.valid).toBe(false);
   });
 
-  it("refuses to let an admin withdraw on the student's behalf", () => {
+  it("refuses to move any application into WITHDRAWN", () => {
     const result = validateStageTransition({
       ...base,
       nextStage: "APPLIED",

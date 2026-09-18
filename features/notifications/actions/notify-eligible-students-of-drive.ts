@@ -26,10 +26,22 @@ import { formatPackage } from "@/features/drives/utils/format-package";
  * admin should not see an error for a drive that was posted successfully.
  */
 export async function notifyEligibleStudentsOfDrive(
-  drive: Drive & HasEligibleDepartmentLinks
+  drive: Drive & HasEligibleDepartmentLinks,
+  /**
+   * Restrict the fan-out to specific departments. Publishing is a
+   * per-department act, so releasing a central drive in one department must
+   * not announce it to the others still configuring theirs.
+   */
+  options: { departmentIds?: string[] } = {}
 ): Promise<{ notified: number }> {
   try {
-    const eligibleDepartmentIds = eligibleDepartmentIdsOf(drive);
+    const assigned = eligibleDepartmentIdsOf(drive);
+    // Intersected rather than replaced: a caller can narrow the audience but
+    // never widen it past the departments the drive is actually assigned to.
+    const eligibleDepartmentIds = options.departmentIds
+      ? assigned.filter((id) => options.departmentIds!.includes(id))
+      : assigned;
+
     if (eligibleDepartmentIds.length === 0) {
       return { notified: 0 };
     }

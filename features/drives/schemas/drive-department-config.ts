@@ -1,24 +1,5 @@
 import { z } from "zod";
-
-/**
- * The URL input lets admins type a bare host ("meet.google.com/xyz-abc-def").
- * Add the scheme before validation so that isn't rejected as malformed.
- */
-const optionalUrl = (message: string) =>
-  z.preprocess(
-    (value) => {
-      if (typeof value !== "string") return value;
-
-      const trimmed = value.trim();
-      if (trimmed === "") return "";
-
-      return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    },
-    z.string().url(message).optional().or(z.literal(""))
-  );
-
-const optionalText = (max: number, message: string) =>
-  z.string().max(max, message).trim().optional().or(z.literal(""));
+import { optionalUrl, optionalText } from "./drive-core";
 
 /**
  * What a department admin may set on a central drive. Everything here is

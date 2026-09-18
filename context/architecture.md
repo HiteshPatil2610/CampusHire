@@ -28,7 +28,7 @@
 
 - **Database (Postgres via Prisma)**: all structured data — users, roles, departments, student profiles (personal/academic/skills/projects/experience/certifications/preferences), drives, eligibility rules, drive applications, admin accounts, audit log entries. This is the single source of truth for anything queried, filtered, or joined.
 - A drive has no stored `status` column. Whether it's "open" or "closed" is computed at read time by comparing the current timestamp to its `applicationDeadline` — every query that lists or filters drives (student-facing or admin-facing) runs through the same shared `getDriveStatus()` helper in `lib/`, so the rule can never drift between screens.
-- A `DriveApplication` has a unique constraint on `(studentId, driveId)` at the database level — this is what makes "apply once" a guarantee rather than a convention. The row's *content* is never edited by the student; its `stage` and `status` are owned by the department admin running the drive and advanced through the single server action `updateApplicationStage`. A student's only write path is withdrawal, which deletes the row while the drive is open and the application is still at `APPLIED` with status `IN_PROGRESS`.
+- A `DriveApplication` has a unique constraint on `(studentId, driveId)` at the database level — this is what makes "apply once" a guarantee rather than a convention. The row's *content* is never edited by the student; its `stage` and `status` are owned by the department admin running the drive and advanced through the single server action `updateApplicationStage`. A student has **no write path at all after submission**: `applyToDrive` only ever inserts, and there is no action that edits or deletes an application. Withdrawal was removed — it used to delete the row, which contradicted the "applications are final" rule in `project-overview.md` and let a student silently vacate a drive's applicant count. `ApplicationStatus.WITHDRAWN` is retained on the Prisma enum so historical rows still read, but nothing writes it: it is absent from `updateApplicationStageSchema` and refused by `validateStageTransition`.
 - **Placement is derived, never stored.** A student counts as placed when they hold a `DriveApplication` with `status = SELECTED`. There is no placement column on `Student` — the former `placementStatus` text column was written by nothing and read with three different casings, so every "Placed" count built on it was structurally always zero. Every screen resolves placement through `features/students/utils/placement-status.ts` (`PLACED_STUDENT_FILTER` for queries, `resolvePlacementState` for a row), so the definition cannot drift between the dept-admin and super-admin panels again.
 - `Student.optedIn` records whether a student is participating in campus placement at all; `Student.optedInLocked` lets a department admin freeze that choice so the student can no longer change it. Both the student (settings) and the department admin (student roster) can write `optedIn`; only the admin can write the lock, and the server re-reads the lock before accepting a student's change.
 - A student's pre-college record branches on `Student.entryType`, captured on the registration card. It lives on `Student` rather than `StudentAcademic` because it is known before any academic record exists — that table's CGPA and semester columns are `NOT NULL`, so capturing it there would need a placeholder row, and a 0.0 CGPA reads as a real value to every eligibility comparison. A `REGULAR` student submits a 12th record and studies semesters 1–8; a `DIPLOMA` (lateral-entry) student submits a diploma instead, is admitted into the second year, and has no semester 1 or 2 marks. The branch that does not apply is stored as `NULL`, never zero-filled — a 0% score would read as a real value and silently fail every eligibility comparison. `features/students/utils/entry-type.ts` owns the semester range and the "which percentage counts" resolution.
@@ -83,6 +83,126 @@ read path cheap, and both are load-bearing rather than stylistic:
   filter that cannot be expressed exactly at the database: push a narrowing
   prefilter down and keep the exact check in JS. A prefilter may over-match;
   it must never under-match, or it silently hides rows a user is entitled to.
+
+## The drive domain model
+
+```
+MASTER DRIVE          →  `Drive`
+  ↓                      one row per opportunity, owned by whoever posted it
+DEPARTMENT INSTANCE   →  `DriveDepartmentConfig`   unique (driveId, departmentId)
+  ↓                      what a department owns and configures
+APPLICATION           →  `DriveApplication`
+```
+
+`DriveEligibleDepartment` is the **assignment** edge — which departments a
+master drive is open to. An instance row need not exist for an assigned
+department; a missing instance means "inherit everything from the master",
+which is the state every assigned department is in until its admin saves a
+configuration. (Measured on production: 97 assignment rows, 0 instance rows.)
+
+**No table was renamed to express this.** The schema already supported the
+model; `features/drives/domain/` is the vocabulary laid over it, so reading the
+code does not require remembering that "config" means "instance".
+
+- **The discriminant is `DriveKind`** (`CENTRAL` | `DEPARTMENT`), derived from
+  the existing `Drive.isCentralDrive` column via `driveKindOf()`. Branch on it
+  rather than inferring intent from a null `departmentId` — that inference is
+  what made `getDriveDetail` reject every central drive for a department admin.
+  `driveKindColumns()` is the only place those two columns are set, so a
+  central drive can never be given an owning department.
+- **`resolveDepartmentDrive(master, instance)`** is the single abstraction for
+  department-facing drives. It returns a flat object: the master row with the
+  instance's values overlaid field by field (`??`, so an instance's deliberate
+  empty string is kept rather than inherited), plus the three instance-only
+  fields `seatingAllocation`, `specialInstructions`, `coordinatorEmail`. **That
+  resolved shape is a contract** — six components read it directly, so fields
+  may be added but not removed or renamed.
+- **Validation is shared, not duplicated.** `schemas/drive-core.ts` holds every
+  constraint both drive forms use; `drive.ts` and `central-drive.ts` compose it
+  and declare only what genuinely differs (a department drive has a numeric
+  package and selection rounds; a central drive has free-text CTC and derives
+  its apply method from a portal URL).
+- **Writes are shared too.** `domain/drive-write-data.ts` builds the column
+  payload once per kind, and `domain/persist-drive.ts` owns the
+  drive-plus-eligibility transaction and the audit entry. An edit never
+  rewrites `isCentralDrive` or `departmentId`, so a drive cannot change kind or
+  owner after creation.
+- **Authorization boundaries are unchanged by the unification**: `SUPER_ADMIN`
+  owns master/central drives, `DEPT_ADMIN` owns their own department's drive
+  and their own instance of a central one, and a department drive reaches only
+  the department that posted it.
+
+## Assignment and the drive lifecycle
+
+```
+MASTER DRIVE      DRAFT → PUBLISHED → ARCHIVED           (Super Admin)
+DEPARTMENT DRIVE  ASSIGNED → CONFIGURED → PUBLISHED → CLOSED → ARCHIVED
+                                                          (that department's admin)
+```
+
+**Assignment is one operation, and it owns both rows.** `assignDriveToDepartments`
+creates, per selected department and inside one transaction, the eligibility
+edge (`DriveEligibleDepartment`) *and* the instance (`DriveDepartmentConfig`) at
+`ASSIGNED`. They are the same fact recorded at two levels and must never exist
+without each other, which is why `setEligibleDepartments` is no longer called
+directly by any write path — its delete-and-recreate would have orphaned
+instances. It is idempotent: an already-assigned department is reported back,
+never duplicated, and its existing instance is left untouched.
+
+**Unassignment is protected.** `unassignDriveDepartment` refuses when that
+department's students hold applications to the drive, and reports the count. An
+application is a record of something a student actually did; unassigning is
+never a back door to deleting it — the same reason `DriveApplication.drive` is
+`onDelete: Restrict`. The drive update paths reconcile rather than replace, and
+`findBlockedRemovals` is checked *before* any write so a blocked removal refuses
+the whole edit instead of committing half of it.
+
+**Administrative CLOSED is not "the deadline passed".** Open/closed by deadline
+stays derived at read time via `getDriveStatus()` and is still never stored
+(invariant 7 is untouched). CLOSED is a department deciding to stop intake — it
+can happen before the deadline or long after one expired. A drive can be
+PUBLISHED with an expired deadline, or CLOSED with a future one; both mean "no
+new applications", for different reasons.
+
+**Publishing is per department**, and it is what students' visibility hangs on.
+`publishDepartmentDrive` sets `status = PUBLISHED`, `publishedAt`,
+`publishedByUserId` and `lockedAt` together, then notifies eligible students in
+**that department only** — releasing a central drive in one department must not
+announce it to the others still configuring theirs
+(`notifyEligibleStudentsOfDrive` takes a `departmentIds` narrowing that can
+never widen past the assigned set).
+
+**Locking is read from `lockedAt`, not from `status`** — deliberately, so an
+instance that is later CLOSED or ARCHIVED stays locked. Students applied against
+that content and the record has to keep matching what they were shown. The
+contract, all in `domain/drive-lifecycle.ts`:
+
+- **Instance, frozen after publish:** `applicationFields`. A submitted
+  application stores its answers by field key, so changing the form afterwards
+  would silently re-interpret history.
+- **Instance, still editable after publish:** venue, reporting time,
+  coordinator name/phone/email, seating allocation, PPT link, special
+  instructions. These are operational logistics, not the offer — a room changes,
+  a coordinator swaps. Freezing them would force a department to un-publish for
+  a room change, which is exactly what the lock exists to prevent.
+- **Master, frozen once *any* department has published:** role, JD (text and
+  URL), min CGPA, max backlogs, deadline, drive date, apply method, external
+  URL, package, selection rounds. Changing one now would alter an experience
+  students already acted on — an applicant could become retroactively
+  ineligible. Compared value by value, so a Super Admin can still fix a logo.
+- **Recruitment stages are never locked.** `updateApplicationStage` writes
+  `DriveApplication`, not the instance, so a drive can be run to completion
+  without unlocking any application content.
+
+All of it is enforced in the server actions. A disabled input is not a lock.
+
+**Student reads are gated on the instance.** `getEligibleDrives` requires
+`departmentConfigs: { some: { departmentId: <their own>, status: PUBLISHED } }`,
+and `getDriveDetail` refuses a drive whose instance for that student's
+department is not PUBLISHED — with one exception: a student who already applied
+keeps access to their own application's drive after it is administratively
+closed. ASSIGNED and CONFIGURED instances are half-built, and showing them would
+put partially configured data in front of students.
 
 ## Money is NUMERIC, and NUMERIC is not a number
 
@@ -157,7 +277,7 @@ is worth more than any query-level optimisation in this file.
 5. Session and identity always come from Clerk. The app does not implement its own password storage, session cookies, or OTP logic. The one exception is the one-time seed script, which creates the Super Admin directly via Clerk's backend API — it does not bypass Clerk.
 6. Large or binary content (photos, JD PDFs) never gets written into the Postgres database — it goes to Vercel Blob, with only the reference URL stored in Postgres.
 7. A drive's open/closed status is never stored — it is always derived from `applicationDeadline` via the shared `getDriveStatus()` helper. No code path is allowed to introduce a stored status field or compute the comparison inline elsewhere.
-8. A `DriveApplication`'s `stage` and `status` are written by exactly one server action (`updateApplicationStage`), callable only by a department admin, scoped both to a drive they run and to an applicant from their own department. No student-facing path writes either column. Every other column on the row is immutable after creation. The student's only mutation is withdrawal, which deletes the row rather than editing it.
+8. A `DriveApplication`'s `stage` and `status` are written by exactly one server action (`updateApplicationStage`), callable only by a department admin, scoped both to a drive they run and to an applicant from their own department. No student-facing path writes either column. Every other column on the row is immutable after creation, and the student has no mutation at all — an application is final once submitted. The `(studentId, driveId)` unique constraint is what enforces that: re-applying is the only vector a student has, and it is refused both in `applyToDrive` and at the database.
 10. No column stores whether a student is placed. Placement is always computed from `DriveApplication.status = SELECTED` via `features/students/utils/placement-status.ts`. Introducing a stored placement column, or comparing the status string inline somewhere else, is not allowed.
 11. When a student's entry type makes a field meaningless — a diploma student's 12th percentage, a regular student's diploma percentage — that column is `NULL`. No code path substitutes `0` for a record the student does not have.
 12. Self-asserted registration details are never written into `Student` before a department admin approves them. They live in `StudentAccessRequest` until then, so an unapproved sign-up can never appear in a department roster, in `totalStudents`, or in the placement-rate denominator. Approving is what creates the `Student` row, and it takes the department from the reviewing admin, not from the applicant.

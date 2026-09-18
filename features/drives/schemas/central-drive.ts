@@ -1,60 +1,30 @@
 import { z } from "zod";
+import {
+  driveCoreShape,
+  deadlineBeforeDriveDate,
+  maxActiveBacklogsField,
+  optionalUrl,
+} from "./drive-core";
 
 /**
- * The URL inputs let admins type a bare host ("careers.acme.com/apply").
- * Add the scheme before validation so that isn't rejected as malformed.
- */
-const optionalUrl = (message: string) =>
-  z.preprocess(
-    (value) => {
-      if (typeof value !== "string") return value;
-
-      const trimmed = value.trim();
-      if (trimmed === "") return "";
-
-      return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    },
-    z.string().url(message).optional().or(z.literal(""))
-  );
-
-/**
- * Central Drive Schema
+ * Central (master) Drive Schema
  *
  * A central drive is posted by the Super Admin and belongs to no single
- * department. It reuses the same field constraints as `driveSchema` but
- * omits departmentId (there is no owning department) and drops the fields a
- * department admin supplies during the full drive-creation flow
- * (selection rounds, apply method) — those are derived server-side.
+ * department. It shares `driveCoreShape` with the department drive schema and
+ * declares only what differs: the package is free text (the numeric column is
+ * parsed from it server-side), the apply method is derived from whether a
+ * company portal URL was given, and selection rounds / application fields are
+ * configured after creation rather than on the form.
  */
 export const createCentralDriveSchema = z
   .object({
-    companyName: z
-      .string()
-      .min(1, "Company name is required")
-      .max(200, "Company name too long")
-      .trim(),
-    roleName: z
-      .string()
-      .min(1, "Role name is required")
-      .max(200, "Role name too long")
-      .trim(),
+    ...driveCoreShape,
+    maxActiveBacklogs: maxActiveBacklogsField(0),
     packageDisplay: z
       .string()
       .min(1, "Package / CTC is required")
       .max(100, "Package text too long")
       .trim(),
-    minCGPA: z
-      .number()
-      .min(0, "CGPA cannot be negative")
-      .max(10, "CGPA cannot exceed 10"),
-    maxActiveBacklogs: z
-      .number()
-      .int("Backlogs must be a whole number")
-      .min(0, "Backlogs cannot be negative")
-      .max(10, "Backlogs limit seems unrealistic")
-      .default(0),
-    driveDate: z.string().min(1, "Drive date is required"),
-    applicationDeadline: z.string().min(1, "Application deadline is required"),
     externalApplyUrl: optionalUrl("Invalid company portal URL"),
     pptLink: optionalUrl("Invalid pre-placement talk URL"),
     jobDescriptionText: z
@@ -62,31 +32,8 @@ export const createCentralDriveSchema = z
       .max(5000, "Job description too long")
       .optional()
       .or(z.literal("")),
-    eligibleDepartments: z
-      .array(z.string().min(1))
-      .min(1, "At least one eligible department is required")
-      .max(50, "Too many departments"),
-    // Blob URL returned by /api/admin/drives/logo. Optional — drive cards
-    // fall back to a text tile built from the company name.
-    companyLogoUrl: z.string().url("Invalid logo URL").nullish(),
-    venue: z.string().max(500).optional(),
-    reportingTime: z.string().max(100).optional(),
-    contactPerson: z.string().max(200).optional(),
-    contactPhone: z.string().max(50).optional(),
   })
-  .refine(
-    (data) => {
-      try {
-        return new Date(data.applicationDeadline) < new Date(data.driveDate);
-      } catch {
-        return false;
-      }
-    },
-    {
-      message: "Application deadline must be before the drive date",
-      path: ["applicationDeadline"],
-    }
-  );
+  .refine(deadlineBeforeDriveDate.check, deadlineBeforeDriveDate.message);
 
 export type CreateCentralDriveInput = z.infer<typeof createCentralDriveSchema>;
 

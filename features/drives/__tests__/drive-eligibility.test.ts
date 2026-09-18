@@ -76,6 +76,7 @@ function createMockDrive(
     departmentId: "dept-admin-cs",
     createdByUserId: null,
     isCentralDrive: false,
+    lifecycleStatus: "PUBLISHED",
     companyName: "Tech Corp",
     roleName: "Software Engineer",
     jobDescriptionUrl: null,

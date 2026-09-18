@@ -12,8 +12,16 @@ export type StudentWithEligibilityInfo = Student & {
   academic: StudentAcademic | null;
 };
 
-/** A drive with its eligible-department rows loaded — required for every check below. */
-export type DriveWithEligibility = Drive & HasEligibleDepartmentLinks;
+/**
+ * A drive with its eligible-department rows loaded — required for every
+ * check below. `packageOffered` is widened to `unknown`: none of these
+ * checks touch it, and pinning it to `Decimal` would force every caller to
+ * hand over a raw, unserialized drive even after the caller has already
+ * converted it for a Client Component (see serialize-drive.ts).
+ */
+export type DriveWithEligibility = Omit<Drive, "packageOffered"> & {
+  packageOffered: unknown;
+} & HasEligibleDepartmentLinks;
 
 /**
  * Check if a student is eligible for a specific drive
