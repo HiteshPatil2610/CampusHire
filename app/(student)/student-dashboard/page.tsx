@@ -19,6 +19,8 @@ import {
   getIneligibilityReasons,
 } from '@/features/drives/queries/drive-eligibility';
 import { buildApplicationReviewData } from '@/features/applications/utils/application-review-fields';
+import { prisma } from '@/lib/prisma';
+import { ACTIVE_PLACEMENT_WHERE } from '@/features/students/utils/placement-status';
 import { RegistrationForm } from '@/components/students/RegistrationForm';
 import AwaitingApproval from '@/components/students/AwaitingApproval';
 import { getMyAccessRequest } from '@/features/students/queries/get-my-access-request';
@@ -92,9 +94,23 @@ export default async function StudentDashboardPage() {
   // Pull a wider slice than we render so the widget can rank by urgency
   // rather than showing whichever three arrived most recently — an offer must
   // not be pushed off the dashboard by three announcements.
-  const [eligible, notificationPool] = await Promise.all([
+  const [eligible, notificationPool, placements] = await Promise.all([
     getEligibleDrives({ status: 'all', pageSize: 100 }),
     getNotifications(user.id, { page: 1, pageSize: 15 }),
+    // Active placements — what the evaluator checks first.
+    // Shown to the student read-only; nothing here lets them change it.
+    prisma.studentPlacement.findMany({
+      where: { studentId: profile.student.id, ...ACTIVE_PLACEMENT_WHERE },
+      orderBy: { placedAt: 'desc' },
+      select: {
+        id: true,
+        revokedAt: true,
+        companyName: true,
+        roleName: true,
+        packageDisplay: true,
+        placedAt: true,
+      },
+    }),
   ]);
   const dashboard = await getStudentDashboardData(
     profile.student.id,
@@ -118,7 +134,14 @@ export default async function StudentDashboardPage() {
 
   // The submission card re-states eligibility, and the apply action re-checks
   // it server-side before writing.
-  const eligibilityStudent = { ...profile.student, academic: profile.academic };
+  const eligibilityStudent = {
+    ...profile.student,
+    academic: profile.academic,
+    skills: profile.skills,
+    placements,
+  };
+  // The same evaluator `applyToDrive` uses — standing (approved, placed,
+  // opted in) first — so the card never offers an Apply the server refuses.
   const eligibilityFor = (drive: (typeof eligible.data)[number]) =>
     isStudentEligibleForDrive(eligibilityStudent, drive);
 
@@ -179,6 +202,29 @@ export default async function StudentDashboardPage() {
         </div>
       </div>
 
+      {/* Placement — read-only for the student */}
+      {placements.length > 0 && (
+        <div className="card" style={{ marginBottom: 16, borderLeft: '3px solid var(--green, var(--accent))' }}>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>
+            🎉 You are placed
+          </div>
+          {placements.map((placement) => (
+            <div key={placement.id} style={{ fontSize: 13, marginTop: 4 }}>
+              <strong>{placement.companyName}</strong> — {placement.roleName}
+              {placement.packageDisplay ? ` · ${placement.packageDisplay}` : ''}
+              <span className="text-muted" style={{ fontSize: 11 }}>
+                {' '}· {formatDriveDate(placement.placedAt)}
+              </span>
+            </div>
+          ))}
+          <p className="text-muted" style={{ fontSize: 12, margin: '6px 0 0' }}>
+            Placed students are no longer eligible for new placement drives. Your
+            existing applications stay as they are. Contact your department
+            admin if this is wrong.
+          </p>
+        </div>
+      )}
+
       {/* Your drives */}
       <section>
         <div className="dash-section-head">
@@ -222,7 +268,9 @@ export default async function StudentDashboardPage() {
                   departmentCodes={item.departmentCodes}
                   reviewFields={buildApplicationReviewData(
                     profile,
-                    item.drive.applicationFields
+                    // This department's resolved form — the same one
+                    // `applyToDrive` rebuilds and validates against.
+                    item.drive.applicationForm
                   )}
                   eligible={eligible}
                   ineligibilityReasons={

@@ -1,0 +1,46 @@
+import { z } from "zod";
+
+/**
+ * A placement a department admin records by hand — an offer made outside
+ * CampusHire (off-campus, pool drive run elsewhere). Placements from a
+ * CampusHire drive are created by selecting the application instead.
+ *
+ * Only facts are taken from the client. Who recorded it, when, and which
+ * department the student belongs to are decided on the server.
+ */
+export const recordPlacementSchema = z.object({
+  studentId: z.string().min(1, "Student is required"),
+  companyName: z.string().trim().min(1, "Company is required").max(200, "Company name too long"),
+  roleName: z.string().trim().min(1, "Role is required").max(200, "Role too long"),
+  packageDisplay: z.string().trim().max(100, "Package text too long").optional().or(z.literal("")),
+  /** LPA, as the drives record it. */
+  packageOffered: z
+    .number()
+    .min(0, "Package cannot be negative")
+    .max(10_000, "Package looks wrong")
+    .optional(),
+  placedAt: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), "Invalid placement date")
+    .refine(
+      (value) => new Date(value).getTime() <= Date.now() + 864e5,
+      "Placement date cannot be in the future"
+    ),
+});
+
+export type RecordPlacementInput = z.input<typeof recordPlacementSchema>;
+
+/**
+ * Revoking a placement is how a mistake is corrected — never by editing or
+ * deleting it. The reason is stored with the record and in the audit log.
+ */
+export const revokePlacementSchema = z.object({
+  placementId: z.string().min(1, "Placement is required"),
+  reason: z
+    .string()
+    .trim()
+    .min(5, "Give a reason of at least 5 characters")
+    .max(1000, "Reason too long"),
+});
+
+export type RevokePlacementInput = z.input<typeof revokePlacementSchema>;

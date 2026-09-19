@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getDepartments } from "@/features/departments/queries/get-departments";
 import { SuperAdminStudentsClient } from "./super-admin-students-client";
 import {
+  ACTIVE_PLACEMENT_WHERE,
   PLACED_STUDENT_FILTER,
   UNPLACED_STUDENT_FILTER,
   resolvePlacementState,
@@ -71,9 +72,10 @@ export default async function SuperAdminStudentsPage({
       include: {
         department: true,
         academic: true,
-        applications: {
-          where: { status: 'SELECTED' },
-          select: { drive: { select: { companyName: true } } },
+        // Active placements — company as recorded.
+        placements: {
+          where: ACTIVE_PLACEMENT_WHERE,
+          select: { companyName: true },
         },
       },
     }),
@@ -83,14 +85,14 @@ export default async function SuperAdminStudentsPage({
 
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  const studentRows = students.map(({ applications, ...student }) => ({
+  const studentRows = students.map(({ placements, ...student }) => ({
     ...student,
     placementState: resolvePlacementState({
       isPending: student.isPending,
       optedIn: student.optedIn,
-      isPlaced: applications.length > 0,
+      isPlaced: placements.length > 0,
     }),
-    placedCompanies: applications.map((a) => a.drive.companyName),
+    placedCompanies: placements.map((placement) => placement.companyName),
   }));
 
   return (

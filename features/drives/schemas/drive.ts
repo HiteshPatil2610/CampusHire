@@ -38,6 +38,15 @@ export const driveSchema = z
         "Package can have at most 2 decimal places"
       ),
     packageDisplay: z.string().max(100).optional(),
+    /**
+     * The batches this drive is open to, stored as the drive's BATCH_YEAR
+     * eligibility rule. Required: a department drive is published the moment
+     * it is posted, and must not open to every batch by default.
+     */
+    batchYears: z
+      .array(z.string().regex(/^\d{4}$/, "Invalid batch year"))
+      .min(1, "Select at least one eligible batch")
+      .max(10, "Too many batches"),
     selectionRounds: z
       .array(z.string().min(1, "Round name cannot be empty"))
       .min(1, "At least one selection round is required")

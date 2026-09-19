@@ -18,6 +18,32 @@ export interface ApplicationFieldDef {
   defaultRequired: boolean;
 }
 
+/**
+ * Which catalog fields a department may let students edit on the application.
+ *
+ * Exactly the set that was hard-coded as `EDITABLE_FIELD_KEYS` before field
+ * permissions became configurable, and each defaults to EDITABLE — so every
+ * existing drive behaves identically until a department changes it.
+ *
+ * Every other catalog field is read-only, full stop: registrar-owned records
+ * (roll number, CGPA, backlogs, department, 10th/12th) because the applicant
+ * must not be able to restate them, and structured or verified records
+ * (projects, certifications, photo, date of birth, gender) because a free-text
+ * edit box cannot represent them faithfully.
+ */
+export const EDITABLE_CAPABLE_KEYS: ReadonlySet<string> = new Set([
+  "name",
+  "email",
+  "personalEmail",
+  "phone",
+  "linkedin",
+  "github",
+  "portfolio",
+  "skills",
+  "softSkills",
+  "address",
+]);
+
 export const AVAILABLE_STUDENT_FIELDS: ApplicationFieldDef[] = [
   {
     key: "name",

@@ -1,6 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+import { placedStudentSql } from "@/features/students/utils/placement-status";
 import { requireSuperAdmin } from "@/lib/auth";
 
 export interface SystemStats {
@@ -12,7 +14,7 @@ export interface SystemStats {
   totalAdmins:       number;
   totalDrives:       number;
   openDrives:        number;  // applicationDeadline > now
-  placedStudents:    number;  // holds at least one SELECTED application
+  placedStudents:    number;  // holds an active placement
   optedOutStudents:  number;  // registered but not participating in placement
   overallPlacementRate: number; // percentage 0–100
 }
@@ -24,9 +26,8 @@ export interface SystemStats {
  * them separately cost nine network hops and, with `connection_limit=5`, ran
  * as two serial batches rather than truly in parallel.
  *
- * `placedStudents` mirrors PLACED_STUDENT_FILTER: at least one SELECTED
- * application. Keep the two definitions in step — placement is derived, never
- * stored, and this is the one place it is expressed as raw SQL.
+ * `placedStudents` uses `placedStudentSql` — the same definition as
+ * PLACED_STUDENT_FILTER (an active StudentPlacement), from the same module.
  */
 export async function getSystemStats(): Promise<SystemStats> {
   await requireSuperAdmin();
@@ -42,9 +43,7 @@ export async function getSystemStats(): Promise<SystemStats> {
       (SELECT COUNT(*) FROM "DepartmentAdmin")                            AS "totalAdmins",
       (SELECT COUNT(*) FROM "Drive")                                      AS "totalDrives",
       (SELECT COUNT(*) FROM "Drive" WHERE "applicationDeadline" > NOW())  AS "openDrives",
-      (SELECT COUNT(*) FROM "Student" s WHERE EXISTS (
-         SELECT 1 FROM "DriveApplication" da
-         WHERE da."studentId" = s."id" AND da."status" = 'SELECTED'))     AS "placedStudents",
+      (SELECT COUNT(*) FROM "Student" s WHERE ${Prisma.raw(placedStudentSql('s'))}) AS "placedStudents",
       (SELECT COUNT(*) FROM "Student"
         WHERE "isPending" = false AND "optedIn" = false)                  AS "optedOutStudents"
   `;

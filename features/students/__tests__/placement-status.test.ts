@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  placedStudentSql,
   PLACED_STUDENT_FILTER,
   PLACEMENT_STATE_BADGES,
   UNPLACED_STUDENT_FILTER,
@@ -62,15 +63,22 @@ describe("resolvePlacementState", () => {
 });
 
 describe("Placement query filters", () => {
-  it("defines placed as holding a SELECTED application", () => {
+  it("defines placed as holding an active (unrevoked) placement", () => {
     expect(PLACED_STUDENT_FILTER).toEqual({
-      applications: { some: { status: "SELECTED" } },
+      placements: { some: { revokedAt: null } },
     });
   });
 
   it("defines unplaced as the exact inverse", () => {
     expect(UNPLACED_STUDENT_FILTER).toEqual({
-      applications: { none: { status: "SELECTED" } },
+      placements: { none: { revokedAt: null } },
     });
+  });
+
+  it("expresses the same definition as SQL for the raw reports", () => {
+    const sql = placedStudentSql("s");
+    expect(sql).toContain('FROM "StudentPlacement"');
+    expect(sql).toContain('"studentId" = s."id"');
+    expect(sql).toContain('"revokedAt" IS NULL');
   });
 });

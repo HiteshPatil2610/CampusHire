@@ -8,7 +8,7 @@ CampusHire is a campus placement management platform for a single college with m
 
 1. A student can register with their college email, complete their placement profile, and see only the drives they are eligible for — with zero manual filtering by staff.
 2. A department admin can onboard an entire batch of students in one bulk Excel upload, with clear row-level validation before anything is committed.
-3. A department admin can post a drive with explicit eligibility rules (CGPA, backlogs, departments) and have the system auto-filter which students can see and apply to it.
+3. Drives run as a **Master Drive → Department Drive** workflow: the Super Admin defines a company drive once and assigns it to chosen departments; each department admin configures and publishes their own department's version; the system auto-filters which students can see and apply to it through one eligibility rule engine.
 4. A super admin can manage departments and department-admin accounts, and see a system-wide audit trail of key actions.
 5. Every role-restricted action is enforced server-side — no role, department scope, or eligibility check ever depends on client-side logic.
 
@@ -25,9 +25,10 @@ CampusHire is a campus placement management platform for a single college with m
 **Department Admin** (account created by super admin — no public sign-up)
 1. Department admin logs in and lands on their department dashboard (student count, avg profile completion, avg readiness, upcoming drives).
 2. Department admin bulk-adds students via Excel upload: download template → upload file → review row-level validation (valid / duplicate / missing field) → import only valid rows.
-3. Department admin posts a new drive: company, role, job description, eligibility criteria (min CGPA, max backlogs, eligible departments), package, rounds, drive date, application deadline, apply method.
-4. Eligible students are notified in-app; the drive appears only in the eligible students' drive list. Once the deadline passes, the drive auto-closes for everyone.
-5. Department admin can search/filter their student roster and view/edit individual student records.
+3. Department admin receives drives the Super Admin assigned to their department and configures each in seven steps: drive details, student auto-fill fields, eligibility criteria, eligible batches, recruitment stage review, a final student preview, and publish. Progress saves as a draft at any step and can be resumed. A department can still post a drive of its own.
+4. Publishing is validated on the server. Eligible students of that department (and only those) are notified in-app; the drive appears only in their list. Once the deadline passes, the drive auto-closes. After publishing, the department's configuration is read-only.
+5. Department admin runs the recruitment: moves applicants through the drive's configured stages, records outcomes, and can record an off-campus placement. A placed student is permanently excluded from new drives.
+6. Department admin can search/filter their student roster and view/edit individual student records.
 
 A department can have more than one department admin (e.g. a primary and a backup) — all admins assigned to a department have identical access to that department's data; there is no sub-role hierarchy among department admins.
 
@@ -35,7 +36,8 @@ A department can have more than one department admin (e.g. a primary and a backu
 1. Super admin logs in and lands on a system-wide dashboard (total students, department count, admin count, overall placement %).
 2. Super admin adds/manages departments (name, code, active/inactive status).
 3. Super admin adds/manages department-admin accounts, assigning each admin to exactly one department — a department itself may have several admins assigned to it.
-4. Super admin reviews the audit log of key actions taken across the system (imports, drive postings, department/admin changes).
+4. Super admin creates a Master Drive in five steps (master details, which details departments may edit, recruitment stages, review, department assignment), approves or rejects department requests to change recruitment stages, and can cancel a drive or extend a published drive's deadline.
+5. Super admin reviews the audit log of key actions taken across the system (imports, drive postings, cancellations, deadline extensions, approvals, department/admin changes).
 
 ## Features
 
@@ -56,9 +58,12 @@ A department can have more than one department admin (e.g. a primary and a backu
 - View and edit individual student records
 
 ### Drives & Eligibility Matching
-- Post a drive with company, role, job description (upload or paste), eligibility rules (min CGPA, max backlogs, eligible departments), package, selection rounds, drive date, application deadline, and apply method (in-app or external link)
-- Server-side eligibility filtering — a student only ever sees drives they qualify for
-- A student can apply to an eligible drive exactly once. Applications are final — no edit, no withdrawal, no reapplying. This keeps applicant counts and admin reporting trustworthy without needing an amendment workflow in V1.
+- **Master Drive** (Super Admin): company, logo, package, role, job description, dates, apply method, the master recruitment pipeline, and which details departments may edit (locked unless opened). Assigned only to the departments selected.
+- **Department Drive** (department admin): the department's own version — allowed overrides of the master, logistics, a per-department application form (which student fields appear, auto-fill, are editable or mandatory), an eligibility rule set including batch targeting, and its recruitment stages. Lifecycle: assigned → configured → published → closed/archived, or cancelled.
+- Configurable, versioned **recruitment pipelines** per department drive (typed stages, stage history). Department changes to a Super Admin drive's stages go through Super Admin approval.
+- One server-side **eligibility rule engine** (department, placement status, batch, academics, skills and more) decides what a student sees, whether they may apply, and who is notified.
+- A student can apply to an eligible, published drive exactly once. The server decides everything about the submission and stores an immutable snapshot of what the student saw and submitted. Applications are final — no edit, no withdrawal, no reapplying — and survive cancellation of the drive.
+- **Placement is explicit and permanent:** a placement record (created when an application is marked selected, or recorded for an off-campus offer) excludes the student from new drives. A mistake is revoked with a reason, never deleted.
 - A drive auto-closes the moment its application deadline passes: it's removed from every eligible student's *active* drive list and moves to their application history (if they applied) or simply stops appearing (if they didn't). It remains visible to admins in the "active & past drives" table with a "Closed" status — nothing is deleted.
 - Active/past drives list with applicant counts and status
 
@@ -74,6 +79,11 @@ A department can have more than one department admin (e.g. a primary and a backu
 - Role-based access for Student, Department Admin, Super Admin
 - Full student profile management (all tabs from the prototype)
 - Excel/CSV bulk student upload with validation
+- Master Drive → Department Drive workflow with Super Admin edit permissions, department assignment, per-department configuration and server-validated publishing
+- Configurable, versioned recruitment pipelines with Super Admin approval of department changes
+- Immutable, server-decided applications with a submission snapshot
+- Explicit placement records and permanent exclusion of placed students
+- Drive cancellation and controlled deadline extension, both audited
 - Drive posting with eligibility criteria and server-side eligibility matching
 - Department and department-admin management for the super admin
 - Audit logging of key admin actions
@@ -101,4 +111,6 @@ A department can have more than one department admin (e.g. a primary and a backu
 7. A department admin cannot view or edit a student outside their own department, verified by attempting cross-department access and confirming it is rejected.
 8. Two admins assigned to the same department have identical read/write access to that department's students and drives — verified by testing actions from both accounts.
 9. The super admin can add a department and a department admin, and that admin can immediately log in and see only their assigned department's data.
-10. `npm run build` passes and there are no TypeScript or console errors across all three role dashboards.
+10. A department admin cannot publish an incomplete drive, and cannot change a master field the Super Admin locked — verified by attempting both directly against the server action.
+11. A cancelled drive accepts no applications and disappears for students who did not apply, while every existing application, snapshot and stage history is preserved.
+12. `npm run build` passes and there are no TypeScript or console errors across all three role dashboards.

@@ -1,41 +1,66 @@
-import type { Drive, Student, StudentAcademic } from "@prisma/client";
+import type { Student, StudentAcademic } from "@prisma/client";
 import { getDriveStatus } from "../utils/drive-status";
 import {
   eligibleDepartmentIdsOf,
   type HasEligibleDepartmentLinks,
 } from "../utils/eligible-departments";
+import {
+  evaluateEligibility,
+  toEligibilitySubject,
+  type EligibilityEvaluation,
+} from "../domain/eligibility-evaluator";
+import type { EligibilityRuleInput } from "../domain/eligibility-rules";
 
 /**
- * Student with required academic and department information for eligibility check
+ * The eligibility facade.
+ *
+ * These are the functions every read and write path calls — the student's
+ * drive list, the detail page, the dashboard, `applyToDrive`, the
+ * notification fan-out and the department admin's eligible-student list. They
+ * add the drive-level checks (academic record present, deadline open) and
+ * delegate everything about the student — standing (approved, placed, opted
+ * in), department, and every rule — to the single pure evaluator in
+ * `domain/eligibility-evaluator.ts`. There is no other place eligibility is
+ * computed.
+ *
+ * The student and the rules are both typed as *required* inputs: a caller that
+ * forgot to load the student's skills or the drive's rule set does not compile,
+ * rather than silently evaluating against nothing.
+ */
+
+/**
+ * A student as the eligibility check needs them — server-loaded rows only.
+ * `placements` are their active placements (`ACTIVE_PLACEMENTS_SELECT`).
  */
 export type StudentWithEligibilityInfo = Student & {
   academic: StudentAcademic | null;
+  skills: { skillName: string }[];
+  placements: { revokedAt: Date | null }[];
 };
 
 /**
- * A drive with its eligible-department rows loaded — required for every
- * check below. `packageOffered` is widened to `unknown`: none of these
- * checks touch it, and pinning it to `Decimal` would force every caller to
- * hand over a raw, unserialized drive even after the caller has already
- * converted it for a Client Component (see serialize-drive.ts).
+ * A drive as the eligibility check needs it: its deadline, the departments it
+ * is assigned to, and the rule set already resolved for the student's
+ * department (see `resolveDepartmentDriveWithRules`).
  */
-export type DriveWithEligibility = Omit<Drive, "packageOffered"> & {
-  packageOffered: unknown;
+export type DriveWithEligibility = {
+  applicationDeadline: Date;
+  eligibilityRules: EligibilityRuleInput[];
 } & HasEligibleDepartmentLinks;
 
+/** The rule-by-rule result, for checklists that show every criterion. */
+export function evaluateStudentForDrive(
+  student: StudentWithEligibilityInfo,
+  drive: DriveWithEligibility
+): EligibilityEvaluation {
+  return evaluateEligibility(toEligibilitySubject(student), drive.eligibilityRules, {
+    departmentEligible: eligibleDepartmentIdsOf(drive).includes(student.departmentId),
+  });
+}
+
 /**
- * Check if a student is eligible for a specific drive
- * 
- * Eligibility criteria:
- * 1. Student must have academic record
- * 2. Drive must be open (deadline not passed)
- * 3. Student's department must be in eligible departments list
- * 4. Student's CGPA must meet minimum requirement
- * 5. Student's active backlogs must not exceed maximum
- * 
- * @param student - Student with academic information
- * @param drive - Drive to check eligibility for
- * @returns true if student is eligible, false otherwise
+ * Eligible on everything except the deadline — for listings that also show
+ * drives whose window has closed.
  */
 export function isStudentAcademicallyEligibleForDrive(
   student: StudentWithEligibilityInfo,
@@ -45,31 +70,18 @@ export function isStudentAcademicallyEligibleForDrive(
     return false;
   }
 
-  if (!eligibleDepartmentIdsOf(drive).includes(student.departmentId)) {
-    return false;
-  }
-
-  if (student.academic.currentCGPA < drive.minCGPA) {
-    return false;
-  }
-
-  if (student.academic.activeBacklogs > drive.maxActiveBacklogs) {
-    return false;
-  }
-
-  return true;
+  // Standing (approved → placed → opted in → department), then every rule.
+  return evaluateStudentForDrive(student, drive).eligible;
 }
 
 export function isStudentEligibleForDrive(
   student: StudentWithEligibilityInfo,
   drive: DriveWithEligibility
 ): boolean {
-  // Must have academic record
   if (!student.academic) {
     return false;
   }
 
-  // Drive must be open
   if (getDriveStatus(drive.applicationDeadline) !== "open") {
     return false;
   }
@@ -78,16 +90,20 @@ export function isStudentEligibleForDrive(
 }
 
 /**
- * Get reason why student is not eligible (for debugging/display)
- * 
- * @param student - Student with academic information
- * @param drive - Drive to check
- * @returns Array of reasons student is not eligible (empty if eligible)
+ * Every reason a student cannot apply, in the order they should fix them.
  */
 export function getIneligibilityReasons(
   student: StudentWithEligibilityInfo,
   drive: DriveWithEligibility
 ): string[] {
+  const evaluation = evaluateStudentForDrive(student, drive);
+
+  // A standing block is the whole answer. A placed student is ineligible
+  // because they are placed — nothing else is evaluated or reported.
+  if (evaluation.blockedBy) {
+    return evaluation.reasons;
+  }
+
   const reasons: string[] = [];
 
   // Surfaced before the academic check so a lateral-entry student who has
@@ -99,26 +115,14 @@ export function getIneligibilityReasons(
 
   if (!student.academic) {
     reasons.push("Academic information not completed");
-    return reasons; // Can't check other criteria without academic info
+    return reasons; // Every academic rule would repeat this; say it once.
   }
 
   if (getDriveStatus(drive.applicationDeadline) !== "open") {
     reasons.push("Drive is closed");
   }
 
-  if (!eligibleDepartmentIdsOf(drive).includes(student.departmentId)) {
-    reasons.push("Your department is not eligible");
-  }
-
-  if (student.academic.currentCGPA < drive.minCGPA) {
-    reasons.push(`CGPA requirement: ${drive.minCGPA} (You: ${student.academic.currentCGPA})`);
-  }
-
-  if (student.academic.activeBacklogs > drive.maxActiveBacklogs) {
-    reasons.push(
-      `Maximum backlogs: ${drive.maxActiveBacklogs} (You: ${student.academic.activeBacklogs})`
-    );
-  }
+  reasons.push(...evaluation.reasons);
 
   return reasons;
 }

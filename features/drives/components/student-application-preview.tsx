@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { buildPreviewReviewRows } from "../utils/preview-review-rows";
 import type { PreviewReviewRow } from "../utils/preview-review-rows";
-import type { StoredApplicationField } from "../utils/application-fields";
+import type { ApplicationFieldConfig } from "../domain/application-form";
 
 export interface PreviewLogistics {
   venue: string;
@@ -26,7 +26,7 @@ export interface StudentApplicationPreviewProps {
   applicationDeadline: Date;
   departmentCode: string;
   logistics: PreviewLogistics;
-  fields: StoredApplicationField[];
+  fields: ApplicationFieldConfig[];
 }
 
 function isoDate(value: Date): string {
@@ -183,6 +183,51 @@ export function DepartmentLogisticsBox({
   );
 }
 
+/**
+ * The two facts an admin must be able to read off every row at a glance:
+ * whether the student has to provide it, and whether they may change it.
+ * Spelled out as words, not a lone asterisk.
+ */
+export function FieldBadges({
+  required,
+  permission,
+}: {
+  required: boolean;
+  permission: PreviewReviewRow["permission"];
+}) {
+  const base: React.CSSProperties = {
+    fontSize: 9,
+    fontWeight: 600,
+    padding: "1px 6px",
+    borderRadius: 999,
+    marginLeft: 6,
+    whiteSpace: "nowrap",
+  };
+
+  return (
+    <>
+      <span
+        style={{
+          ...base,
+          background: required ? "var(--accent-light)" : "var(--surface-2)",
+          color: required ? "var(--accent-dark)" : "var(--text-muted)",
+        }}
+      >
+        {required ? "Required" : "Optional"}
+      </span>
+      <span
+        style={{
+          ...base,
+          background: permission === "EDITABLE" ? "var(--teal-light)" : "var(--surface-2)",
+          color: permission === "EDITABLE" ? "var(--teal)" : "var(--text-muted)",
+        }}
+      >
+        {permission === "EDITABLE" ? "Editable" : "Read-only"}
+      </span>
+    </>
+  );
+}
+
 /** Registrar-owned values, rendered as read-only tiles. */
 function LockedRecords({
   rows,
@@ -224,6 +269,7 @@ function LockedRecords({
           >
             <div className="text-muted" style={{ fontSize: 10 }}>
               {row.label}
+              <FieldBadges required={row.required} permission={row.permission} />
             </div>
             <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
               {row.value} 🔒
@@ -272,10 +318,8 @@ function EditableRecords({
           >
             <div style={{ minWidth: 0 }}>
               <div className="text-muted" style={{ fontSize: 10 }}>
-                {row.label} (Auto-filled, Editable)
-                {row.required && (
-                  <span style={{ color: "var(--accent)" }}> *</span>
-                )}
+                {row.label}
+                <FieldBadges required={row.required} permission={row.permission} />
               </div>
               <div
                 style={{
@@ -285,7 +329,12 @@ function EditableRecords({
                   overflowWrap: "anywhere",
                 }}
               >
-                {row.icon} {row.value}
+                {row.icon}{" "}
+                {row.value || (
+                  <span className="text-muted" style={{ fontWeight: 400 }}>
+                    {row.description || "Student answers here"}
+                  </span>
+                )}
               </div>
             </div>
             <span
@@ -317,10 +366,8 @@ function EditableRecords({
           >
             <div style={{ minWidth: 0 }}>
               <div className="text-muted" style={{ fontSize: 10 }}>
-                {row.label} (Auto-filled)
-                {row.required && (
-                  <span style={{ color: "var(--accent)" }}> *</span>
-                )}
+                {row.label}
+                <FieldBadges required={row.required} permission={row.permission} />
               </div>
               <div
                 style={{

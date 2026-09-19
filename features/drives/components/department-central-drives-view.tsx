@@ -3,23 +3,55 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getDriveStatus } from "../utils/drive-status";
-import { resolveSelectedApplicationFields } from "../utils/application-fields";
+import {
+  DEPARTMENT_DRIVE_BUCKETS,
+  departmentDriveBucket,
+  type DepartmentDriveBucket,
+} from "../domain/department-drive-bucket";
 import { DepartmentDriveConfigPanel } from "./department-drive-config-panel";
+import type { DepartmentBatchYear } from "@/features/students/queries/department-batch-years";
+import { DepartmentDriveLifecyclePanel } from "./department-drive-lifecycle-panel";
 import type { DepartmentCentralDrive } from "../queries/get-department-central-drives";
 
 import { formatPackage } from "../utils/format-package";
-type SetupFilter = "all" | "ready" | "pending";
+type SetupFilter = "all" | DepartmentDriveBucket;
 
 interface DepartmentCentralDrivesViewProps {
   drives: DepartmentCentralDrive[];
   departmentCodesById: Record<string, string>;
   departmentCode: string;
   studentCount: number;
+  batchYears: DepartmentBatchYear[];
 }
 
-/** A drive is "ready" once the department has supplied venue and reporting time. */
+/**
+ * A drive is set up once every configuration step is complete (the server's
+ * readiness check), or once it has been published.
+ */
 function isConfigured(drive: DepartmentCentralDrive): boolean {
-  return Boolean(drive.config?.venue && drive.config?.reportingTime);
+  return drive.readiness.ready || drive.readiness.published;
+}
+
+/** The "My Drives" bucket, from the lifecycle, the server's readiness and the deadline. */
+function bucketOf(drive: DepartmentCentralDrive): DepartmentDriveBucket {
+  return departmentDriveBucket({
+    status: drive.config?.status ?? null,
+    ready: drive.readiness.ready,
+    deadlineOpen: getDriveStatus(new Date(drive.resolved.applicationDeadline)) === "open",
+  });
+}
+
+/** A short status for the list, from the lifecycle and the saved configuration. */
+function setupBadge(drive: DepartmentCentralDrive): { text: string; tone: string } {
+  const status = drive.config?.status;
+  if (status === "CANCELLED") return { text: "Cancelled", tone: "badge-red" };
+  if (status === "ARCHIVED") return { text: "Archived", tone: "badge-gray" };
+  if (status === "CLOSED") return { text: "Closed", tone: "badge-gray" };
+  if (drive.readiness.published) return { text: "✓ Published", tone: "badge-green" };
+  if (drive.readiness.ready) return { text: "✓ Ready to publish", tone: "badge-teal" };
+  const done = drive.readiness.steps.filter((step) => step.id !== "publish" && step.complete).length;
+  const total = drive.readiness.steps.length - 1;
+  return { text: `⚠ ${done}/${total} steps done`, tone: "badge-amber" };
 }
 
 function KpiTile({
@@ -68,6 +100,7 @@ export function DepartmentCentralDrivesView({
   departmentCodesById,
   departmentCode,
   studentCount,
+  batchYears,
 }: DepartmentCentralDrivesViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(
     drives[0]?.id ?? null
@@ -89,6 +122,11 @@ export function DepartmentCentralDrivesView({
   }, [drives]);
 
   const configuredCount = drives.filter(isConfigured).length;
+  const bucketCounts = new Map<DepartmentDriveBucket, number>();
+  for (const drive of drives) {
+    const bucket = bucketOf(drive);
+    bucketCounts.set(bucket, (bucketCounts.get(bucket) ?? 0) + 1);
+  }
   const totalApplicants = drives.reduce(
     (sum, drive) => sum + drive.departmentApplicantCount,
     0
@@ -98,12 +136,11 @@ export function DepartmentCentralDrivesView({
     const term = search.trim().toLowerCase();
 
     return drives.filter((drive) => {
-      if (filter === "ready" && !isConfigured(drive)) return false;
-      if (filter === "pending" && isConfigured(drive)) return false;
+      if (filter !== "all" && bucketOf(drive) !== filter) return false;
       if (!term) return true;
       return (
         drive.companyName.toLowerCase().includes(term) ||
-        drive.roleName.toLowerCase().includes(term)
+        drive.resolved.roleName.toLowerCase().includes(term)
       );
     });
   }, [drives, search, filter]);
@@ -178,9 +215,9 @@ export function DepartmentCentralDrivesView({
           caption="Central placement drives"
         />
         <KpiTile
-          label="Logistics Configured"
+          label="Set Up"
           value={configuredCount}
-          caption="Ready with venue & instructions"
+          caption="Every step complete, or published"
           tone="teal"
         />
         <KpiTile
@@ -254,26 +291,33 @@ export function DepartmentCentralDrivesView({
               }}
             />
 
-            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-              {(
-                [
-                  ["all", "All"],
-                  ["ready", "Ready"],
-                  ["pending", "Needs Setup"],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setFilter(value)}
-                  className={`btn btn-sm ${
-                    filter === value ? "btn-primary" : "btn-ghost"
-                  }`}
-                  style={{ fontSize: 11 }}
-                >
-                  {label}
-                </button>
-              ))}
+            <div
+              role="group"
+              aria-label="Filter drives"
+              style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}
+            >
+              {[
+                { id: "all" as const, label: "All", count: drives.length },
+                ...DEPARTMENT_DRIVE_BUCKETS.map((bucket) => ({
+                  id: bucket.id,
+                  label: bucket.label,
+                  count: bucketCounts.get(bucket.id) ?? 0,
+                })),
+              ]
+                // An empty bucket is not offered, except the one in use.
+                .filter((chip) => chip.id === "all" || chip.count > 0 || chip.id === filter)
+                .map((chip) => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => setFilter(chip.id)}
+                    aria-pressed={filter === chip.id}
+                    className={`btn btn-sm ${filter === chip.id ? "btn-primary" : "btn-ghost"}`}
+                    style={{ fontSize: 11 }}
+                  >
+                    {chip.label} ({chip.count})
+                  </button>
+                ))}
             </div>
 
             <div
@@ -303,13 +347,15 @@ export function DepartmentCentralDrivesView({
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
                 {visibleDrives.map((drive) => {
+                  // This department's own deadline, which may override the
+                  // master's.
                   const status = getDriveStatus(
-                    new Date(drive.applicationDeadline)
+                    new Date(drive.resolved.applicationDeadline)
                   );
                   const selected = drive.id === selectedId;
                   const ready = isConfigured(drive);
-                  const fieldCount = resolveSelectedApplicationFields(
-                    drive.config?.applicationFields
+                  const fieldCount = drive.applicationForm.filter(
+                    (field) => field.isEnabled
                   ).length;
 
                   return (
@@ -396,7 +442,7 @@ export function DepartmentCentralDrivesView({
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {drive.roleName} ·{" "}
+                        {drive.resolved.roleName} ·{" "}
                         {formatPackage(drive)}
                       </div>
 
@@ -410,10 +456,10 @@ export function DepartmentCentralDrivesView({
                         }}
                       >
                         <span
-                          className={`badge ${ready ? "badge-teal" : "badge-amber"}`}
+                          className={`badge ${setupBadge(drive).tone}`}
                           style={{ fontSize: 10 }}
                         >
-                          {ready ? "✓ Configured" : "⚠ Needs Setup"}
+                          {setupBadge(drive).text}
                         </span>
                         <span className="text-muted" style={{ fontSize: 10 }}>
                           {fieldCount} fields required
@@ -428,12 +474,27 @@ export function DepartmentCentralDrivesView({
 
           {/* Detail / configuration panel */}
           {selectedDrive && (
-            <DepartmentDriveConfigPanel
-              key={selectedDrive.id}
-              drive={selectedDrive}
-              departmentCodesById={departmentCodesById}
-              departmentCode={departmentCode}
-            />
+            // One grid child, so the master-detail layout is unchanged.
+            <div style={{ minWidth: 0 }}>
+              {/* Every assignment carries an instance (assignment creates it
+                  and the backfill covered pre-existing ones); the guard keeps a
+                  stray instance-less drive from rendering a meaningless control. */}
+              {selectedDrive.config && (
+                <DepartmentDriveLifecyclePanel
+                  driveId={selectedDrive.id}
+                  status={selectedDrive.config.status}
+                  publishedAt={selectedDrive.config.publishedAt}
+                  cancellationReason={selectedDrive.config.cancellationReason}
+                />
+              )}
+              <DepartmentDriveConfigPanel
+                key={selectedDrive.id}
+                drive={selectedDrive}
+                departmentCodesById={departmentCodesById}
+                departmentCode={departmentCode}
+                batchYears={batchYears}
+              />
+            </div>
           )}
         </div>
       )}

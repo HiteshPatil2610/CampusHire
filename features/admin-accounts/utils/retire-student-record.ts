@@ -11,9 +11,11 @@ import type { AccessRequestStatus, Prisma } from "@prisma/client";
  *
  * A `DriveApplication` cascades on `Student` delete, so removing the row
  * would also destroy that person's application history. That history is
- * referenced by drive reports and is the source of truth for placement, so
- * the record is only retired when it carries no applications; otherwise the
- * caller is told to resolve it deliberately.
+ * referenced by drive reports, so the record is only retired when it carries
+ * no applications; otherwise the caller is told to resolve it deliberately.
+ * A `StudentPlacement` cascades the same way and is the placement history
+ * itself — an off-campus placement can exist with no application at all — so
+ * a record holding any placement (active or revoked) is refused too.
  */
 
 export type RetirementDecision =
@@ -30,6 +32,8 @@ export type RetirementDecision =
 export function decideStudentRetirement(input: {
   hasStudentRecord: boolean;
   applicationCount: number;
+  /** Placement records, revoked ones included — they are history too. */
+  placementCount?: number;
 }): RetirementDecision {
   if (!input.hasStudentRecord) {
     return { action: "none", reason: "Account has no student record." };
@@ -45,9 +49,19 @@ export function decideStudentRetirement(input: {
     };
   }
 
+  if ((input.placementCount ?? 0) > 0) {
+    return {
+      action: "refuse",
+      reason:
+        `Student record has ${input.placementCount} placement record(s). ` +
+        `Deleting it would cascade and destroy that placement history. ` +
+        `Resolve manually before promoting this account.`,
+    };
+  }
+
   return {
     action: "delete",
-    reason: "Student record carries no applications and can be retired.",
+    reason: "Student record carries no applications or placements and can be retired.",
   };
 }
 
@@ -65,12 +79,17 @@ export async function retireStudentRecord(
 ): Promise<RetirementResult> {
   const student = await prisma.student.findUnique({
     where: { userId },
-    select: { id: true, rollNumber: true, _count: { select: { applications: true } } },
+    select: {
+      id: true,
+      rollNumber: true,
+      _count: { select: { applications: true, placements: true } },
+    },
   });
 
   const decision = decideStudentRetirement({
     hasStudentRecord: Boolean(student),
     applicationCount: student?._count.applications ?? 0,
+    placementCount: student?._count.placements ?? 0,
   });
 
   if (decision.action !== "delete" || !student) {

@@ -2,11 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin } from "@/lib/auth";
-import { UNPLACED_STUDENT_FILTER } from "../utils/placement-status";
+import { UNPLACED_STUDENT_FILTER, placedStudentSql } from "../utils/placement-status";
+import { Prisma } from "@prisma/client";
 
 export interface AdminDashboardStats {
   totalStudents: number;
-  placedStudents: number; // holds at least one SELECTED application
+  placedStudents: number; // holds an active placement
   optedOutStudents: number; // registered but not participating in placement
   pendingStudents: number; // bulk-imported, not yet registered
   openDrivesCount: number; // drives with deadline in the future
@@ -33,9 +34,8 @@ export interface AdminDashboardStats {
  * `COUNT(*) FILTER` is for. The attention list is a separate query because it
  * returns rows rather than a number, and it runs alongside rather than after.
  *
- * `placedStudents` mirrors PLACED_STUDENT_FILTER: at least one SELECTED
- * application. Placement is derived, never stored — keep this in step with
- * that filter.
+ * `placedStudents` uses `placedStudentSql` — the same definition as
+ * PLACED_STUDENT_FILTER (an active StudentPlacement), from the same module.
  */
 export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   const { department } = await requireDepartmentAdmin();
@@ -53,10 +53,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     >`
       SELECT
         COUNT(*)                                                       AS "totalStudents",
-        COUNT(*) FILTER (WHERE EXISTS (
-          SELECT 1 FROM "DriveApplication" da
-          WHERE da."studentId" = s."id" AND da."status" = 'SELECTED'
-        ))                                                             AS "placedStudents",
+        COUNT(*) FILTER (WHERE ${Prisma.raw(placedStudentSql('s'))}) AS "placedStudents",
         COUNT(*) FILTER (WHERE s."isPending" = false
                            AND s."optedIn" = false)                    AS "optedOutStudents",
         COUNT(*) FILTER (WHERE s."isPending" = true)                   AS "pendingStudents",

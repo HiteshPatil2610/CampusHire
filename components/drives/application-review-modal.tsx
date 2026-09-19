@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { Drive } from '@prisma/client';
 import { applyToDrive } from '@/features/applications/actions/apply-to-drive';
+import { APPLICATION_DECLARATION } from '@/features/applications/utils/application-declaration';
 import type {
   ApplicationReviewData,
   ReviewField,
@@ -92,14 +93,25 @@ export default function ApplicationReviewModal({
   const missingRequired = fields.editable.filter(
     (field) => field.required && !values[field.key]?.trim()
   );
+  // A required field the student cannot edit here can only be fixed on their
+  // profile. Shown up front so they are not refused on submit — the server
+  // makes the same check and is what actually enforces it.
+  const missingFromProfile = [...fields.locked, ...fields.readOnly].filter(
+    (field) => field.required && !field.value.trim()
+  );
   const canSubmit =
-    consent && eligible && missingRequired.length === 0 && !isPending;
+    consent &&
+    eligible &&
+    missingRequired.length === 0 &&
+    missingFromProfile.length === 0 &&
+    !isPending;
 
   function handleSubmit() {
     startTransition(async () => {
       const result = await applyToDrive(drive.id, {
         submittedDetails: values,
         consent,
+        declarationVersion: APPLICATION_DECLARATION.version,
       });
 
       if (result.success) {
@@ -174,7 +186,9 @@ export default function ApplicationReviewModal({
                 </>
               ) : (
                 <span className="asc-empty">
-                  {field.required ? 'Required — add a value' : 'Not provided'}
+                  {field.description ||
+                    (field.required ? 'Required — add a value' : 'Not provided')}
+                  {field.description && field.required ? ' (required)' : ''}
                 </span>
               )}
             </div>
@@ -318,7 +332,8 @@ export default function ApplicationReviewModal({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="asc-locked-label">{field.label}</div>
                       <div className="asc-locked-value">
-                        {field.value || '—'}
+                        {field.value ||
+                          (field.required ? 'Required — missing from profile' : '—')}
                       </div>
                     </div>
                     <Lock
@@ -377,7 +392,11 @@ export default function ApplicationReviewModal({
                       </div>
                       <div className="asc-field-value">
                         {field.value || (
-                          <span className="asc-empty">Not provided</span>
+                          <span className="asc-empty">
+                            {field.required
+                              ? 'Required — add it to your profile first'
+                              : 'Not provided'}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -396,12 +415,7 @@ export default function ApplicationReviewModal({
             checked={consent}
             onChange={(e) => setConsent(e.target.checked)}
           />
-          <span>
-            I confirm that my verified academic data and auto-filled/updated
-            profile details are accurate and ready for recruiter screening, and
-            I understand this application cannot be edited or withdrawn once
-            submitted.
-          </span>
+          <span>{APPLICATION_DECLARATION.text}</span>
         </label>
 
         {/* Footer */}
@@ -413,6 +427,14 @@ export default function ApplicationReviewModal({
               {ineligibilityReasons.length > 0
                 ? ineligibilityReasons.join(' ')
                 : `Min CGPA ≥ ${drive.minCGPA}, Max Backlogs ≤ ${drive.maxActiveBacklogs}.`}
+            </span>
+          )}
+
+          {eligible && missingFromProfile.length > 0 && (
+            <span className="asc-warning">
+              <AlertTriangle size={12} aria-hidden />
+              Complete your profile first:{' '}
+              {missingFromProfile.map((field) => field.label).join(', ')}.
             </span>
           )}
 

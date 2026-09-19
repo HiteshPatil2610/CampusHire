@@ -61,6 +61,8 @@ const masterDrive = {
   pptLink: "https://example.com/master-ppt",
   applicationFields: '[{"key":"name"}]',
   lifecycleStatus: "PUBLISHED" as const,
+  requirements: "Strong DSA fundamentals",
+  skills: '["Java","SQL"]',
   createdAt: new Date("2026-10-01"),
   updatedAt: new Date("2026-10-01"),
   eligibleDepartmentLinks: [{ departmentId: DEPT_A }],
@@ -75,6 +77,15 @@ const departmentInstance = {
   publishedAt: null,
   publishedByUserId: null,
   lockedAt: null,
+  roleName: null,
+  jobDescriptionText: null,
+  requirements: null,
+  skills: null,
+  driveDate: null,
+  applicationDeadline: null,
+  selectionRounds: null,
+  minCGPA: null,
+  maxActiveBacklogs: null,
   venue: "CS Block Seminar Hall",
   reportingTime: "10:30",
   coordinatorName: "Dept Coordinator",
@@ -254,6 +265,7 @@ const departmentInput = {
   roleName: "Software Engineer",
   packageOffered: 12,
   selectionRounds: ["Aptitude", "Technical"],
+  batchYears: ["2026"],
   driveDate: "2026-12-01",
   applicationDeadline: "2026-11-01",
   applyMethod: "IN_APP" as const,
@@ -284,7 +296,10 @@ describe("drive write payloads", () => {
     expect(data.isCentralDrive).toBe(false);
     expect(data.departmentId).toBe(DEPT_A);
     expect(data.selectionRounds).toBe(JSON.stringify(["Aptitude", "Technical"]));
-    expect(data.applicationFields).toBe('[{"key":"name"}]');
+    // The form is not part of the column payload: it is validated and written
+    // to `DriveApplicationField` rows (with the JSON mirrored) by
+    // `writeMasterForm`, so the two can never be written separately.
+    expect(data).not.toHaveProperty("applicationFields");
   });
 
   it("stamps a central drive as central and department-less", () => {

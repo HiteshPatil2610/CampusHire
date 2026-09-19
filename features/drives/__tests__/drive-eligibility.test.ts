@@ -1,11 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { isStudentEligibleForDrive, getIneligibilityReasons } from "../queries/drive-eligibility";
 import type { HasEligibleDepartmentLinks } from "../utils/eligible-departments";
+import { legacyMasterRules, type EligibilityRuleInput } from "../domain/eligibility-rules";
 import { Prisma } from "@prisma/client";
 import type { Drive, Student, StudentAcademic } from "@prisma/client";
 
 // Helper to create mock student
-function createMockStudent(overrides?: Partial<Student & { academic: StudentAcademic }>): Student & { academic: StudentAcademic } {
+function createMockStudent(
+  overrides?: Partial<Student & { academic: StudentAcademic }>
+): Student & {
+  academic: StudentAcademic;
+  skills: { skillName: string }[];
+  placements: { revokedAt: Date | null }[];
+} {
   const baseStudent: Student = {
     id: "student-1",
     userId: "user-1",
@@ -58,6 +65,9 @@ function createMockStudent(overrides?: Partial<Student & { academic: StudentAcad
     ...baseStudent,
     ...overrides,
     academic: overrides?.academic || baseAcademic,
+    skills: [],
+    // Not placed: standing passes and the rules are evaluated.
+    placements: [],
   };
 }
 
@@ -65,7 +75,7 @@ function createMockStudent(overrides?: Partial<Student & { academic: StudentAcad
 // `eligibleDepartmentLinks` relation the eligibility functions read.
 function createMockDrive(
   overrides?: Partial<Drive> & { eligibleDepartmentIds?: string[] }
-): Drive & HasEligibleDepartmentLinks {
+): Drive & HasEligibleDepartmentLinks & { eligibilityRules: EligibilityRuleInput[] } {
   const futureDate = new Date();
   futureDate.setDate(futureDate.getDate() + 30);
   const { eligibleDepartmentIds, ...driveOverrides } = overrides ?? {};
@@ -77,6 +87,13 @@ function createMockDrive(
     createdByUserId: null,
     isCentralDrive: false,
     lifecycleStatus: "PUBLISHED",
+    departmentEditableFields: [] as string[],
+    masterPipeline: null,
+    cancelledAt: null,
+    cancelledById: null,
+    cancellationReason: null,
+    requirements: null,
+    skills: null,
     companyName: "Tech Corp",
     roleName: "Software Engineer",
     jobDescriptionUrl: null,
@@ -101,10 +118,14 @@ function createMockDrive(
     updatedAt: new Date(),
   };
 
+  const drive = { ...baseDrive, ...driveOverrides };
+
   return {
-    ...baseDrive,
-    ...driveOverrides,
+    ...drive,
     eligibleDepartmentLinks: deptIds.map((departmentId) => ({ departmentId })),
+    // The rule set these tests' CGPA / backlog columns imply — exactly what the
+    // backfill writes for a drive with no other rules.
+    eligibilityRules: legacyMasterRules(drive.minCGPA, drive.maxActiveBacklogs),
   };
 }
 
@@ -311,9 +332,14 @@ describe("Drive Eligibility", () => {
       eligibleDepartmentIds: ["dept-cs", "dept-it"],
     });
 
-    const reasons = getIneligibilityReasons(student, drive);
+    // A department that is not assigned stops evaluation, like placement:
+    // the drive's rules are not this student's to meet, so they are not listed.
+    expect(getIneligibilityReasons(student, drive)).toEqual([
+      "Your department is not eligible for this drive.",
+    ]);
 
-    expect(reasons).toContain("Your department is not eligible");
+    // In an assigned department, every failing rule is reported.
+    const reasons = getIneligibilityReasons({ ...student, departmentId: "dept-cs" }, drive);
     expect(reasons.some((r) => r.includes("CGPA requirement"))).toBe(true);
     expect(reasons.some((r) => r.includes("Maximum backlogs"))).toBe(true);
   });

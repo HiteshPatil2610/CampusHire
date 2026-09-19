@@ -8,6 +8,9 @@ import { resolveDeptAdminEligibleDepartments } from "../utils/department-scope";
 import { buildDepartmentDriveData } from "../domain/drive-write-data";
 import { assertDeadlineInFuture } from "../domain/drive-window";
 import { createDriveWithEligibility } from "../domain/persist-drive";
+import { legacyMasterRules } from "../domain/eligibility-rules";
+import { withTargetedBatchYears } from "../domain/batch-targeting";
+import { parseSubmittedFormJson } from "../domain/application-form-schema";
 
 export interface CreateDriveResult {
   success: boolean;
@@ -38,6 +41,14 @@ export async function createDrive(input: DriveInput): Promise<CreateDriveResult>
       return { success: false, error: scope.error };
     }
 
+    // The form arrives as the legacy JSON string. It is validated strictly —
+    // an unknown key or a disallowed permission refuses the whole post rather
+    // than being stored or silently dropped.
+    const form = parseSubmittedFormJson(validated.applicationFields);
+    if (!form.ok) {
+      return { success: false, error: form.error };
+    }
+
     const deadline = assertDeadlineInFuture(
       new Date(validated.applicationDeadline)
     );
@@ -52,7 +63,15 @@ export async function createDrive(input: DriveInput): Promise<CreateDriveResult>
     const drive = await createDriveWithEligibility(
       buildDepartmentDriveData(validated, department.id),
       scope.eligibleDepartments,
-      "PUBLISHED"
+      // The form's CGPA and backlog fields become the drive's rules (the
+      // legacy columns are written alongside as mirrors), and its batches the
+      // BATCH_YEAR rule.
+      {
+        legacy: legacyMasterRules(validated.minCGPA, validated.maxActiveBacklogs),
+        extras: withTargetedBatchYears([], validated.batchYears),
+      },
+      "PUBLISHED",
+      form.fields
     );
 
     // Tell the students who can actually apply. Best-effort: a failed

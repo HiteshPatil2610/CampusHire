@@ -1,66 +1,43 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { applyToDrive } from '@/features/applications/actions/apply-to-drive';
-import { formatDriveDate, formatDeadline } from '@/lib/drive-date-helpers';
-import { useToast } from '@/hooks/use-toast';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { useState } from 'react';
+import type { Drive } from '@prisma/client';
+import ApplicationReviewModal from '@/components/drives/application-review-modal';
+import type { ApplicationReviewData } from '@/features/applications/utils/application-review-fields';
+import type { WithSerializedPackage } from '@/features/drives/utils/serialize-drive';
 
 interface ApplySectionProps {
-  driveId: string;
-  companyName: string;
-  roleName: string;
-  driveDate: Date;
-  applicationDeadline: Date;
+  /** This department's resolved drive, package serialised for the client. */
+  drive: WithSerializedPackage<Drive>;
   driveStatus: 'open' | 'closed';
   hasApplied: boolean;
-  applyMethod: 'IN_APP' | 'EXTERNAL';
-  externalApplyUrl?: string | null;
-  studentName: string;
-  studentCGPA: number;
-  studentBacklogs: number;
-  studentDepartment: string;
-  studentRollNumber: string;
+  /**
+   * This department's application form with the student's profile values —
+   * the same form `applyToDrive` rebuilds and validates against.
+   */
+  reviewFields: ApplicationReviewData;
+  eligible: boolean;
+  ineligibilityReasons: string[];
 }
 
 /**
- * Apply Section - handles apply button and confirmation dialog
- * 
- * State machine:
- * - idle: Show appropriate button based on status
- * - confirm: Dialog open, waiting for user confirmation
- * - submitting: Calling applyToDrive server action
- * - applied: Application submitted successfully
+ * Apply Section - the apply button, and the application card it opens.
+ *
+ * The card is the same `ApplicationReviewModal` the dashboard uses, so a
+ * student sees this department's configured form wherever they apply from:
+ * its fields, which are required, and which they may edit. None of that is
+ * trusted here — the server re-derives and enforces it on submit.
  */
 export function ApplySection({
-  driveId,
-  companyName,
-  roleName,
-  driveDate,
-  applicationDeadline,
+  drive,
   driveStatus,
   hasApplied,
-  applyMethod,
-  externalApplyUrl,
-  studentName,
-  studentCGPA,
-  studentBacklogs,
-  studentDepartment,
-  studentRollNumber,
+  reviewFields,
+  eligible,
+  ineligibilityReasons,
 }: ApplySectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [consent, setConsent] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const router = useRouter();
-  const { toast } = useToast();
+  const { applyMethod, externalApplyUrl } = drive;
 
   function handleApplyClick() {
     if (applyMethod === 'EXTERNAL' && externalApplyUrl) {
@@ -69,43 +46,9 @@ export function ApplySection({
       return;
     }
 
-    // Open confirmation dialog for in-app application
-    setConsent(false);
     setIsDialogOpen(true);
   }
 
-  function handleConfirmApply() {
-    startTransition(async () => {
-      try {
-        // `consent` is required by the server — an application is final, so it
-        // is only taken once the student has ticked the declaration.
-        const result = await applyToDrive(driveId, { consent });
-
-        if (result.success) {
-          toast({
-            title: 'Application Submitted',
-            description: `Your application to ${roleName} at ${companyName} has been submitted successfully.`,
-            variant: 'default',
-          });
-          setIsDialogOpen(false);
-          // Refresh the page to update UI
-          router.refresh();
-        } else {
-          toast({
-            title: 'Application Failed',
-            description: result.error,
-            variant: 'destructive',
-          });
-        }
-      } catch (error) {
-        toast({
-          title: 'Error',
-          description: 'An unexpected error occurred. Please try again.',
-          variant: 'destructive',
-        });
-      }
-    });
-  }
 
   // Already applied
   if (hasApplied) {
@@ -235,7 +178,6 @@ export function ApplySection({
         <button
           type="button"
           onClick={handleApplyClick}
-          disabled={isPending}
           style={{
             width: '100%',
             padding: '12px 20px',
@@ -243,160 +185,23 @@ export function ApplySection({
             fontWeight: 600,
             borderRadius: 6,
             border: 'none',
-            background: isPending ? 'var(--surface-2)' : 'var(--accent)',
+            background: 'var(--accent)',
             color: 'white',
-            cursor: isPending ? 'not-allowed' : 'pointer',
-            opacity: isPending ? 0.6 : 1,
+            cursor: 'pointer',
           }}
         >
-          {isPending ? 'Submitting...' : 'Apply Now'}
+          Apply Now
         </button>
       </div>
 
-      {/* Confirmation Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent style={{ maxWidth: 480 }}>
-          <DialogHeader>
-            <DialogTitle>Confirm Application</DialogTitle>
-            <DialogDescription>
-              Please review your application details before submitting
-            </DialogDescription>
-          </DialogHeader>
-
-          <div
-            style={{
-              padding: 16,
-              borderRadius: 8,
-              background: 'var(--surface-1)',
-              border: '1px solid var(--border)',
-              fontSize: 13,
-            }}
-          >
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-                Applying to:
-              </div>
-              <div style={{ color: 'var(--text-secondary)' }}>
-                {roleName} at {companyName}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-                Drive Details:
-              </div>
-              <div style={{ color: 'var(--text-secondary)' }}>
-                Drive date: {formatDriveDate(driveDate)}
-                <br />
-                Deadline: {formatDeadline(applicationDeadline)}
-              </div>
-            </div>
-
-            <div
-              style={{
-                borderTop: '1px solid var(--border)',
-                paddingTop: 12,
-                marginTop: 12,
-              }}
-            >
-              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
-                Your application will include:
-              </div>
-              <ul
-                style={{
-                  margin: 0,
-                  paddingLeft: 20,
-                  color: 'var(--text-secondary)',
-                  lineHeight: 1.6,
-                }}
-              >
-                <li>Name: {studentName}</li>
-                <li>Roll Number: {studentRollNumber}</li>
-                <li>Department: {studentDepartment}</li>
-                <li>CGPA: {studentCGPA}</li>
-                <li>Active Backlogs: {studentBacklogs}</li>
-              </ul>
-            </div>
-          </div>
-
-          <div
-            style={{
-              padding: 12,
-              borderRadius: 6,
-              background: 'var(--amber-surface)',
-              border: '1px solid var(--amber)',
-              fontSize: 12,
-              color: 'var(--text-secondary)',
-            }}
-          >
-            ⚠️ <strong>Important:</strong> Applications are final — you cannot withdraw or edit
-            after submitting.
-          </div>
-
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 8,
-              fontSize: 12,
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={consent}
-              onChange={(e) => setConsent(e.target.checked)}
-              disabled={isPending}
-              style={{ marginTop: 2 }}
-            />
-            <span>
-              I have checked the details above and understand that this
-              application cannot be edited or withdrawn once submitted.
-            </span>
-          </label>
-
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setIsDialogOpen(false)}
-              disabled={isPending}
-              style={{
-                padding: '8px 16px',
-                fontSize: 13,
-                fontWeight: 500,
-                borderRadius: 6,
-                border: '1px solid var(--border)',
-                background: 'var(--surface-0)',
-                color: 'var(--text-primary)',
-                cursor: isPending ? 'not-allowed' : 'pointer',
-                opacity: isPending ? 0.6 : 1,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmApply}
-              disabled={isPending || !consent}
-              style={{
-                padding: '8px 16px',
-                fontSize: 13,
-                fontWeight: 600,
-                borderRadius: 6,
-                border: 'none',
-                background:
-                  isPending || !consent ? 'var(--surface-2)' : 'var(--accent)',
-                color: 'white',
-                cursor: isPending || !consent ? 'not-allowed' : 'pointer',
-                opacity: isPending || !consent ? 0.6 : 1,
-              }}
-            >
-              {isPending ? 'Submitting...' : 'Confirm & Submit'}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ApplicationReviewModal
+        open={isDialogOpen}
+        onClose={() => setIsDialogOpen(false)}
+        drive={drive}
+        fields={reviewFields}
+        eligible={eligible}
+        ineligibilityReasons={ineligibilityReasons}
+      />
     </>
   );
 }

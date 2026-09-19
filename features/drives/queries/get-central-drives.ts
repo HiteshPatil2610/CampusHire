@@ -9,10 +9,25 @@ import {
 } from "../utils/eligible-departments";
 import { serializePackageOffered, type WithSerializedPackage } from "../utils/serialize-drive";
 import type { Drive } from "@prisma/client";
+import {
+  DEPT_STATUS_SELECT,
+  summarizeDepartmentStatuses,
+  type DriveDeptStatusSummary,
+} from "../utils/dept-status-summary";
+
+export type { DriveDeptStatusSummary };
 
 export type CentralDriveListItem = WithSerializedPackage<Drive> &
   HasEligibleDepartmentLinks & {
     _count: { applications: number };
+    /** One summary per assigned department, ordered by code. */
+    deptStatusSummary: DriveDeptStatusSummary[];
+    /** Quick counters derived from deptStatusSummary. */
+    assignedCount: number;
+    configuredCount: number;
+    publishedCount: number;
+    /** Closed, cancelled or archived department drives. */
+    closedCount: number;
   };
 
 export interface CentralDrivesParams {
@@ -30,6 +45,9 @@ export interface CentralDrivesResult {
 /**
  * List central drives for the Super Admin, open drives first so the most
  * actionable ones sit at the top of the master list.
+ *
+ * Now includes a per-department status summary so the list can show the
+ * "CSE — Assigned · IT — Published" hierarchy without a second query.
  *
  * Authorization: SUPER_ADMIN only.
  */
@@ -54,6 +72,7 @@ export async function getCentralDrives(
       include: {
         _count: { select: { applications: true } },
         ...eligibleDepartmentLinksInclude,
+        departmentConfigs: DEPT_STATUS_SELECT,
       },
     }),
   ]);
@@ -72,7 +91,10 @@ export async function getCentralDrives(
   });
 
   return {
-    data: sorted.map((drive) => serializePackageOffered(drive)),
+    data: sorted.map(({ departmentConfigs, ...drive }) => ({
+      ...serializePackageOffered(drive),
+      ...summarizeDepartmentStatuses(departmentConfigs),
+    })),
     page,
     pageSize,
     totalCount,

@@ -3,14 +3,16 @@
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AuditAction } from "@/lib/audit";
-import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
 import {
   createCentralDriveSchema,
   type CreateCentralDriveInput,
 } from "../schemas/central-drive";
-import { withEligibleDepartmentLinks } from "../utils/eligible-departments";
 import { buildCentralDriveData } from "../domain/drive-write-data";
 import { assertDeadlineInFuture } from "../domain/drive-window";
+import { legacyMasterRules } from "../domain/eligibility-rules";
+import { normalizeEditableFields } from "../domain/drive-lifecycle";
+import { roundsOf, validatePipelineStages } from "@/features/recruitment/domain/pipeline";
+import { serializeMasterPipeline } from "@/features/recruitment/domain/master-pipeline";
 import {
   auditDriveWrite,
   createDriveWithEligibility,
@@ -66,9 +68,38 @@ export async function createCentralDrive(
 
     const eligibleDepartmentIds = departments.map((d) => d.id);
 
+    // The master pipeline, if the Super Admin configured one: validated here,
+    // never stored as sent. Its rounds become the master's selection rounds.
+    let pipelineColumns = {};
+    if (data.recruitmentStages !== undefined) {
+      const pipeline = validatePipelineStages(data.recruitmentStages);
+      if (!pipeline.ok) {
+        return {
+          success: false,
+          error: `Recruitment stages: ${pipeline.errors.join("; ")}`,
+        };
+      }
+      pipelineColumns = {
+        masterPipeline: serializeMasterPipeline(pipeline.stages),
+        selectionRounds: JSON.stringify(roundsOf(pipeline.stages)),
+      };
+    }
+
     const drive = await createDriveWithEligibility(
-      { ...buildCentralDriveData(data), createdByUserId: superAdmin.id },
-      eligibleDepartmentIds
+      {
+        ...buildCentralDriveData(data),
+        ...pipelineColumns,
+        // Locked unless the Super Admin opened it to departments.
+        departmentEditableFields: normalizeEditableFields(data.departmentEditableFields),
+        createdByUserId: superAdmin.id,
+      },
+      eligibleDepartmentIds,
+      // Master defaults every department inherits unless it sets its own rule
+      // of the same type.
+      {
+        legacy: legacyMasterRules(data.minCGPA, data.maxActiveBacklogs),
+        extras: data.eligibilityRules,
+      }
     );
 
     await auditDriveWrite({
@@ -80,11 +111,10 @@ export async function createCentralDrive(
       eligibleDepartmentCodes: departments.map((d) => d.code),
     });
 
-    // Tell the students who can actually apply, across every eligible
-    // department. Best-effort: never fails the drive creation.
-    await notifyEligibleStudentsOfDrive(
-      withEligibleDepartmentLinks(drive, eligibleDepartmentIds)
-    );
+    // No student notification here, deliberately. A new central drive is a
+    // DRAFT whose department instances are all ASSIGNED — invisible to
+    // students. Each department's `publishDepartmentDrive` is what announces
+    // it, to that department only, once its admin has configured it.
 
     return { success: true, driveId: drive.id };
   } catch (error) {

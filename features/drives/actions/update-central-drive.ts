@@ -9,6 +9,8 @@ import {
 } from "../schemas/central-drive";
 import { isCentralDrive } from "../domain/drive-kind";
 import { findLockedMasterFieldChanges } from "../domain/drive-lifecycle";
+import { legacyMasterRules, ruleSetKey } from "../domain/eligibility-rules";
+import { masterExtraRules } from "../domain/persist-eligibility-rules";
 import { toCentralDriveUpdateData } from "../domain/drive-write-data";
 import {
   auditDriveWrite,
@@ -65,10 +67,22 @@ export async function updateCentralDrive(
     });
 
     if (publishedCount > 0) {
-      const changed = findLockedMasterFieldChanges(
+      const changed: string[] = findLockedMasterFieldChanges(
         existing as unknown as Record<string, unknown>,
         toCentralDriveUpdateData(data) as unknown as Record<string, unknown>
       );
+
+      // The master's extra default rules are frozen for the same reason as
+      // its CGPA bar: a department inheriting them has already judged
+      // applicants against them.
+      if (data.eligibilityRules !== undefined) {
+        const stored = await prisma.driveEligibilityRule.findMany({
+          where: { driveId },
+        });
+        if (ruleSetKey(masterExtraRules(stored)) !== ruleSetKey(data.eligibilityRules)) {
+          changed.push("eligibilityRules");
+        }
+      }
 
       if (changed.length > 0) {
         return {
@@ -96,7 +110,11 @@ export async function updateCentralDrive(
     const outcome = await updateDriveWithEligibility(
       driveId,
       toCentralDriveUpdateData(data),
-      departments.map((d) => d.id)
+      departments.map((d) => d.id),
+      {
+        legacy: legacyMasterRules(data.minCGPA, data.maxActiveBacklogs),
+        extras: data.eligibilityRules,
+      }
     );
 
     // Deselecting a department that already has applicants would orphan their

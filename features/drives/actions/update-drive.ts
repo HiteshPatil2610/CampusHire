@@ -7,6 +7,11 @@ import { resolveDeptAdminEligibleDepartments } from "../utils/department-scope";
 import { isCentralDrive } from "../domain/drive-kind";
 import { toDepartmentDriveUpdateData } from "../domain/drive-write-data";
 import { updateDriveWithEligibility } from "../domain/persist-drive";
+import { legacyMasterRules } from "../domain/eligibility-rules";
+import { withTargetedBatchYears } from "../domain/batch-targeting";
+import { parseSubmittedFormJson } from "../domain/application-form-schema";
+import { applicationFormKey } from "../domain/application-form";
+import { resolveDepartmentApplicationForm } from "../domain/resolve-department-drive";
 
 export interface UpdateDriveResult {
   success: boolean;
@@ -28,6 +33,7 @@ export async function updateDrive(
 
     const existingDrive = await prisma.drive.findUnique({
       where: { id: driveId },
+      include: { formFields: true, _count: { select: { applications: true } } },
     });
 
     if (!existingDrive) {
@@ -65,11 +71,55 @@ export async function updateDrive(
       return { success: false, error: scope.error };
     }
 
+    // Selection rounds are the recruitment pipeline once it exists — changing
+    // them here would bypass the Super Admin's approval of pipeline changes.
+    const roundsChanged =
+      JSON.stringify(validated.selectionRounds) !== existingDrive.selectionRounds;
+    if (roundsChanged) {
+      const pipelines = await prisma.recruitmentPipelineVersion.count({
+        where: { departmentDrive: { driveId }, status: "ACTIVE" },
+      });
+      if (pipelines > 0) {
+        return {
+          success: false,
+          error:
+            "Selection rounds are managed by this drive's recruitment pipeline. Propose a change from the drive's Recruitment page. No changes were saved.",
+        };
+      }
+    }
+
+    const form = parseSubmittedFormJson(validated.applicationFields);
+    if (!form.ok) {
+      return { success: false, error: form.error };
+    }
+
+    // A department-owned drive is published the moment it is posted, so its
+    // form freezes on the first application rather than on publish: students
+    // have answered it. Resubmitting the same form with other edits is fine —
+    // only what a student would see is compared.
+    if (
+      form.fields &&
+      existingDrive._count.applications > 0 &&
+      applicationFormKey(form.fields) !==
+        applicationFormKey(resolveDepartmentApplicationForm(existingDrive, null).fields)
+    ) {
+      return {
+        success: false,
+        error:
+          "Students have already applied to this drive, so its application form can no longer change. No changes were saved.",
+      };
+    }
+
     const outcome = await updateDriveWithEligibility(
       driveId,
       toDepartmentDriveUpdateData(validated),
       scope.eligibleDepartments,
-      "PUBLISHED"
+      {
+        legacy: legacyMasterRules(validated.minCGPA, validated.maxActiveBacklogs),
+        extras: withTargetedBatchYears([], validated.batchYears),
+      },
+      "PUBLISHED",
+      form.fields
     );
 
     // A department drive always reaches exactly its own department, so there

@@ -1,18 +1,25 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { ACTIVE_PLACEMENT_WHERE } from "@/features/students/utils/placement-status";
 import { requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
 import type {
+  ApplicationStatus,
   DriveApplication,
   Student,
   StudentAcademic,
   Department,
+  RecruitmentStageType,
 } from "@prisma/client";
 
 export type DriveApplicationItem = DriveApplication & {
+  /** The recruitment stage the application is in. */
+  currentStage: { id: string; name: string; stageType: RecruitmentStageType; pipelineVersionId: string } | null;
   student: Student & {
     academic: StudentAcademic | null;
     department: Pick<Department, "id" | "name" | "code">;
+    /** Active placements — to mark an applicant placed elsewhere. */
+    placements: { id: string; applicationId: string | null; companyName: string }[];
   };
 };
 
@@ -20,7 +27,16 @@ export interface GetDriveApplicationsParams {
   driveId: string;
   page?: number;
   pageSize?: number;
+  /** Matches name, roll number or email. */
+  search?: string;
+  /** A batch year, e.g. 2027. */
+  batchYear?: number;
+  /** A stage of this department's pipeline for the drive. */
+  stageId?: string;
+  status?: ApplicationStatus;
 }
+
+const APPLICATION_STATUSES: ApplicationStatus[] = ["IN_PROGRESS", "SELECTED", "REJECTED", "WITHDRAWN"];
 
 export interface DriveApplicationsResult {
   data: DriveApplicationItem[];
@@ -66,15 +82,42 @@ export async function getDriveApplications(
     );
   }
 
-  const page = params.page ?? 1;
+  // A page number from a URL: whole and at least 1, never NaN.
+  const page = Number.isFinite(params.page) ? Math.max(1, Math.floor(params.page!)) : 1;
   const pageSize = Math.min(params.pageSize ?? 25, 100);
   const skip = (page - 1) * pageSize;
 
+  // Filters come from a URL, so each is checked before it reaches the query.
+  const search = params.search?.trim().slice(0, 100) || undefined;
+  const batchYear =
+    Number.isInteger(params.batchYear) && params.batchYear! > 1900 && params.batchYear! < 3000
+      ? params.batchYear
+      : undefined;
+  const status =
+    params.status && APPLICATION_STATUSES.includes(params.status) ? params.status : undefined;
+  const stageId = params.stageId?.trim().slice(0, 64) || undefined;
+
   // Own drive: every applicant is already in-department. Central drive:
-  // scope explicitly to this department's students only.
-  const where = ownsDrive
-    ? { driveId: params.driveId }
-    : { driveId: params.driveId, student: { departmentId: department.id } };
+  // scope explicitly to this department's students only. Either way the
+  // department scope is always present, whatever filters are added.
+  const where = {
+    driveId: params.driveId,
+    ...(status ? { status } : {}),
+    ...(stageId ? { currentStageId: stageId } : {}),
+    student: {
+      ...(ownsDrive ? {} : { departmentId: department.id }),
+      ...(batchYear ? { batchYear } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" as const } },
+              { rollNumber: { contains: search, mode: "insensitive" as const } },
+              { email: { contains: search, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    },
+  };
 
   // The total and the page are independent queries, so they go out
   // together rather than paying two serial round trips for one screen.
@@ -86,10 +129,20 @@ export async function getDriveApplications(
       take: pageSize,
       orderBy: { appliedAt: "desc" },
       include: {
+        currentStage: {
+          select: { id: true, name: true, stageType: true, pipelineVersionId: true },
+        },
         student: {
           include: {
             academic: true,
             department: { select: { id: true, name: true, code: true } },
+            // Active placements, so an in-progress applicant who has since
+            // been placed elsewhere is visible as such. Their application is
+            // left as it is — only new applications are blocked.
+            placements: {
+              where: ACTIVE_PLACEMENT_WHERE,
+              select: { id: true, applicationId: true, companyName: true },
+            },
           },
         },
       },

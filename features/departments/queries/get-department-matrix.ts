@@ -1,6 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+import { placedStudentSql } from "@/features/students/utils/placement-status";
 import { requireSuperAdmin } from "@/lib/auth";
 
 export interface DepartmentMatrixRow {
@@ -24,9 +26,8 @@ export interface DepartmentMatrixRow {
  * every department added. The counts are now lateral aggregates over the same
  * scan, which is one round trip no matter how many departments exist.
  *
- * `placedStudents` mirrors PLACED_STUDENT_FILTER: at least one SELECTED
- * application. Placement is derived, never stored, and this is one of the two
- * places it is expressed as raw SQL — keep it in step with that filter.
+ * `placedStudents` uses `placedStudentSql` — the same definition as
+ * PLACED_STUDENT_FILTER (an active StudentPlacement), from the same module.
  */
 export async function getDepartmentMatrix(): Promise<DepartmentMatrixRow[]> {
   await requireSuperAdmin();
@@ -60,10 +61,7 @@ export async function getDepartmentMatrix(): Promise<DepartmentMatrixRow[]> {
         st."departmentId" AS did,
         COUNT(*)                                            AS "totalStudents",
         COUNT(*) FILTER (WHERE st."isPending" = false)      AS "registeredStudents",
-        COUNT(*) FILTER (WHERE EXISTS (
-          SELECT 1 FROM "DriveApplication" da
-          WHERE da."studentId" = st."id" AND da."status" = 'SELECTED'
-        ))                                                  AS "placedStudents"
+        COUNT(*) FILTER (WHERE ${Prisma.raw(placedStudentSql('st'))}) AS "placedStudents"
       FROM "Student" st
       GROUP BY st."departmentId"
     ) s ON s.did = d."id"

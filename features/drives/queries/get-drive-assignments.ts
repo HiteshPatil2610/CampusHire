@@ -24,6 +24,10 @@ export interface DepartmentAssignmentRow {
   departmentDriveId: string | null;
   status: DepartmentDriveStatus | null;
   assignedAt: Date | null;
+  /** This department's deadline and drive date (its override, else the master's). */
+  applicationDeadline: Date | null;
+  driveDate: Date | null;
+  cancellationReason: string | null;
   isAssigned: boolean;
   /** Applications to this drive from this department's students. */
   applicationCount: number;
@@ -55,6 +59,8 @@ export async function getDriveAssignments(
       companyName: true,
       roleName: true,
       isCentralDrive: true,
+      applicationDeadline: true,
+      driveDate: true,
     },
   });
 
@@ -73,6 +79,9 @@ export async function getDriveAssignments(
         departmentId: true,
         status: true,
         assignedAt: true,
+        applicationDeadline: true,
+        driveDate: true,
+        cancellationReason: true,
       },
     }),
     // Applications grouped by the applicant's department. There is no
@@ -103,6 +112,11 @@ export async function getDriveAssignments(
       departmentDriveId: instance?.id ?? null,
       status: instance?.status ?? null,
       assignedAt: instance?.assignedAt ?? null,
+      applicationDeadline: instance
+        ? instance.applicationDeadline ?? drive.applicationDeadline
+        : null,
+      driveDate: instance ? instance.driveDate ?? drive.driveDate : null,
+      cancellationReason: instance?.cancellationReason ?? null,
       isAssigned: instance !== null,
       applicationCount,
       canUnassign: instance !== null && applicationCount === 0,

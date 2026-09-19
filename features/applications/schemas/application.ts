@@ -20,6 +20,12 @@ export const applyToDriveSchema = z.object({
    * final — there is no edit and no withdrawal afterwards.
    */
   consent: z.boolean().optional().default(false),
+  /**
+   * Which declaration text the student was shown. Optional for callers that
+   * predate it; when sent, it must be the current one (see
+   * `APPLICATION_DECLARATION`).
+   */
+  declarationVersion: z.string().max(50).optional(),
 });
 
 export type ApplyToDriveInput = z.infer<typeof applyToDriveSchema>;
@@ -37,8 +43,14 @@ export type ApplyToDriveInput = z.infer<typeof applyToDriveSchema>;
  */
 export const updateApplicationStageSchema = z.object({
   applicationId: z.string().cuid("Invalid application ID"),
-  stage: z.enum(["APPLIED", "APTITUDE", "INTERVIEW", "OFFER"]),
+  /**
+   * The recruitment stage to move to — an id, checked on the server against
+   * this drive's own pipeline. Never trusted as-is.
+   */
+  stageId: z.string().min(1, "Choose a stage").max(64),
   status: z.enum(["IN_PROGRESS", "SELECTED", "REJECTED"]),
+  /** Optional note kept in the stage history. */
+  note: z.string().trim().max(500, "Note too long").optional(),
 });
 
 export type UpdateApplicationStageInput = z.infer<

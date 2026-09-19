@@ -51,20 +51,668 @@ Update this file after every meaningful implementation change.
 ## Current Goal
 
 - All V1 frontend integration units complete ✅
-- Ready for deployment or additional feature development
+- ARCH-FIX2 units 1–4 complete and applied to production (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Units 7–11 in `context/arch-fix/` are not started.
+- Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
+- Current baseline: 736 tests pass, 27 pre-existing failures (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
 
 ## Completed
 
-- **Department assignment + full drive lifecycle (C2, C4) (CODE COMPLETE — MIGRATION NOT YET APPLIED):**
-  - **⚠️ Migration `20260918000000_drive_lifecycle_and_department_assignment`
-    is written but deliberately NOT applied.** `DATABASE_URL` points at the Neon
-    **production** branch, so it awaits explicit approval. Until it runs, the
-    code does not match the database and the app will fail at runtime against
-    the live DB. Apply order:
-    1. Neon snapshot
-    2. `npx prisma migrate deploy`
-    3. `npx tsx scripts/backfill-department-drive-instances.ts --dry-run`
-    4. `npx tsx scripts/backfill-department-drive-instances.ts`
+- **Department recruitment & placement workspace — ARCH-FIX2 unit-6 (COMPLETE — no database change):**
+  - **Found:** the applications page, per-row stage control, pipeline panel,
+    eligible-students card and placement records all existed. Missing: a drive
+    workspace, filters, eligible/registered student lists, bulk moves, stage
+    history, a drive-level placement view, activity, the Super Admin's global
+    placements, and a confirmation before a student is placed (the stage
+    control placed on Save).
+  - **Added:**
+    - Route `/admin-dashboard/drives/[id]` with eight tabs (URL-driven, only the
+      open tab loads), with loading, error and permission-denied states. The old
+      `/applications` route redirects.
+    - `moveApplication` extracted from `updateApplicationStage` (with `dryRun`);
+      `bulk-update-application-stage.ts` (validate, then apply, per-application
+      results, one audit entry, max 100, SELECTED refused).
+    - Queries: `getDriveStudents`, `getApplicationStageHistory`,
+      `getDrivePlacements`, `getDriveOperationsActivity`,
+      `getGlobalPlacements`; `getDriveApplications` gained search, batch, stage
+      and status filters.
+    - Components: `drive-applications-workspace`, `bulk-stage-move-dialog`,
+      `stage-history`, `application-stage-control` (moved from the route,
+      now confirming a selection), `placement-confirm-dialog`,
+      `drive-placement-tab`, `drive-students-table`, `drive-workspace-overview`,
+      `drive-activity-list`, shared `permission-denied`.
+    - Super Admin `/super-admin-dashboard/placements` and a sidebar entry.
+  - **Also:** `exportToCsv` now defuses text a spreadsheet would run as a formula
+    (a student's name is typed by the student).
+  - **Tests:** `bulk-stage-move` (11), `move-application` (5),
+    `drive-workspace` (16). Mutation checks: 13 of 14 caught; the miss (a date
+    regex) is an equivalent mutant, since the following `NaN` check rejects the
+    same inputs. Full suite 736 passed / 27 failed (the known 27).
+    `tsc`, lint and `next build` clean.
+  - **Open:** not browser-verified (needs signed-in accounts); the students list
+    is capped at 3,000 per department and says so; CSV exports cover the current
+    page only and say so; recording an off-campus placement is still from the
+    student's record, not from the drive.
+- **Unit-5 review (frontend for the Master → Department workflow) — fixes made
+  after a review of work done outside the assistant:**
+  - Found and fixed: the Super Admin applications drill-down passed a
+    department **code** in the URL but filtered by department **id**, so every
+    drill-down showed nothing; three links pointed at `/super-admin-dashboard/
+    audit-logs`, which does not exist (the route is `/audit-logs`); the Activity
+    tab was invented from current statuses and is now the real audit trail
+    (`getDriveActivity`); status counters ignored closed, cancelled and archived
+    department drives; the list and detail queries duplicated their summary code
+    (now `summarizeDepartmentStatuses`); a bad `?page=` made the query fail;
+    cancelled and archived departments could not be opened from the applications
+    tab; tabs lacked tab semantics.
+  - Added what the unit asked for and was missing: the department admin's My
+    Drives buckets (Assigned, Configuring, Ready to Publish, Active, Closed,
+    Completed) from one pure function (`departmentDriveBucket`), and draft saving
+    for the master-drive create wizard (kept in this browser; resumes where it
+    was; discardable).
+  - Tests: `drive-console.test.ts` (15). The extra failure seen once in the
+    suite was an excel-import test reaching the real database and timing out.
+- **Master Drive → Department Drive workflow — ARCH-FIX2 unit-4 (COMPLETE — applied to production 2026-09-25):**
+  - **Found:** the drive lifecycle, overrides, eligibility engine, form system
+    and pipelines already existed. Missing: Super Admin edit permissions (every
+    override was open to every department), a master-level pipeline, per-step
+    completion, publish validation beyond deadline + batch, cancellation and
+    deadline extension. The create modal assigned every active department, the
+    Super Admin still toggled application fields, and the admin preview was
+    built client-side from draft state.
+  - **Decided with the user:** stage changes to a Super Admin drive always go
+    through approval (a department's own drive keeps direct edits before
+    publishing); the Super Admin and the department admin (own drive) can
+    cancel; only the Super Admin extends deadlines.
+  - **Model** (migrations `20260925000000_drive_workflow`,
+    `20260925000001_drive_cancellation_checks`):
+    - `Drive.departmentEditableFields` (TEXT[], CHECK: known keys only),
+      `Drive.masterPipeline` (TEXT, CHECK: JSON array).
+    - `CANCELLED` on both lifecycle enums; `cancelledAt`, `cancelledById`,
+      `cancellationReason` on `Drive` and `DriveDepartmentConfig`, with CHECKs
+      (recorded when cancelled, absent otherwise).
+    - Existing central drives migrated with all six fields editable (today's
+      behaviour). Nothing dropped.
+  - **Code:**
+    - Domain: `drive-lifecycle.ts` (CANCELLED transitions,
+      `DEPARTMENT_EDITABLE_FIELDS`, `findLockedOverrideAttempts`),
+      `department-drive-readiness.ts`, `student-drive-view.ts`,
+      `recruitment/domain/master-pipeline.ts`, `ensureActivePipelineFrom`.
+    - Actions: `manage-master-drive.ts` (`setDepartmentEditPermissions`,
+      `saveMasterPipeline`, `extendDepartmentDriveDeadline`),
+      `cancel-drive.ts`; `createCentralDrive` takes permissions + stages;
+      `saveDriveDepartmentConfig` enforces permissions and saves drafts;
+      `publishDepartmentDrive` validates with the readiness function;
+      `manage-pipeline.ts` proposal-only for master drives.
+    - Reads: `getDepartmentDrivePreview`; readiness + pipeline on
+      `getDepartmentCentralDrives`; cancelled handling in the student list,
+      drive page, applications list, apply and stage moves.
+    - UI: five-step master wizard; Super Admin permissions + stages panel,
+      cancel and extend-deadline in the assignment console; seven-step
+      department wizard (stepper from server readiness, save draft / save &
+      continue, stage review + proposal, server preview, publish checklist);
+      cancel on the department lifecycle panel; "Cancelled" for students.
+    - Removed: the master application-fields toggle and its action
+      (`update-central-drive-application-fields.ts`,
+      `central-drive-fields-toggle.tsx`) and the client-side portal preview.
+  - **Tests:** new `features/drives/__tests__/drive-workflow.test.ts` (32);
+    additions to department-overrides (+4), recruitment-pipeline (+4),
+    application-history (+1); fixtures updated. Full suite 689 passed / 27
+    failed — the same 27 pre-existing failures. 11 mutations, all caught.
+    `tsc` clean, lint clean (2 old warnings), `next build` 23/23 (with
+    `NODE_ENV=production`; the shell inherits `development`).
+  - **Database:** rehearsed on a fresh branch from production (15/15 checks,
+    no drift), backup `pre-workflow-backup-20260925`, deployed, read-only
+    verification on production passed (19 central drives open, 40 department
+    drives none, 8/8 constraints, no drift). Branches `integrity-test` and
+    `placement-test` deleted with the user's approval.
+  - **Open:** logistics (venue, coordinator…) remain editable after publish
+    (the existing lock design) although the unit lists "configuration becomes
+    read-only"; a stage's schedule is part of the pipeline version so
+    rescheduling after publish needs approval; not browser-verified.
+
+- **Configurable recruitment pipelines — ARCH-FIX2 unit-3 (COMPLETE — applied to production 2026-09-24):**
+  - **Found:** recruitment was a fixed 4-step `ApplicationStage` enum. Rounds
+    existed only as display text (`selectionRounds`), there was no stage
+    history table, and both the admin control and the student track
+    hard-coded the four steps.
+  - **Decided with the user:** before publishing, a department admin edits
+    the pipeline directly; after publishing, changes need approval.
+    Applicants mid-pipeline keep their stage and join a new version on their
+    next move.
+  - **Model** (migration `20260924000000_recruitment_pipeline`):
+    - Tables `RecruitmentPipelineVersion`, `RecruitmentStage`,
+      `ApplicationStageEvent` and `PipelineChangeRequest`.
+    - Enums `RecruitmentStageType` (11 types), `PipelineVersionStatus` and
+      `PipelineChangeStatus`.
+    - A new column, `DriveApplication.currentStageId`.
+    - Integrity:
+      - partial unique indexes: one ACTIVE version, one PENDING request;
+      - triggers: versions only go ACTIVE → SUPERSEDED; stages, events and
+        decided requests are immutable; a SELECTED application's stage is
+        frozen;
+      - CHECKs: no self-review, complete reviews, reason present, proposal is
+        a JSON array.
+  - **Code** (`features/recruitment/`):
+    - Pure domain in `pipeline.ts`: validation, stage-type inference,
+      legacy mapping, diff and transition rules.
+    - Writer: `persist-pipeline.ts`.
+    - Actions: `saveDraftPipeline`, `proposePipelineChange`,
+      `reviewPipelineChange`, `setPipelineAsSuperAdmin`.
+    - Queries: `getDriveRecruitment` (dynamic counts), `getPipelineRequests`.
+  - **Existing code changed:**
+    - `updateApplicationStage` takes a `stageId`, checked against this
+      department drive's active pipeline, and writes history.
+    - `applyToDrive` enters the Application stage and writes a history event.
+    - Publishing and posting a department drive create version 1.
+    - The drive forms and config panel refuse selection-rounds changes once a
+      pipeline exists, so approval can't be bypassed.
+  - **UI:**
+    - Recruitment panel on the drive applications page: counts, pipeline,
+      editor, proposals, history.
+    - Stage control lists the drive's stages, with an optional note.
+    - Super Admin **Pipeline Requests** page (in the sidebar).
+    - Student applications page shows the stage (hidden stages as "In
+      progress"); the drive page lists the visible stages.
+  - **Backfill:** `scripts/backfill-recruitment-pipelines.ts` (idempotent,
+    one transaction, batched). On production it created 97 pipelines
+    (485 stages) and placed 2,877 applications, with 1 history event each.
+  - **Fixed along the way:**
+    - A round literally named "Application"/"Offer" would have clashed with
+      the bookend stage and broken pipeline creation.
+    - The Write tool had turned regex `\u` escapes into raw control bytes
+      again; they were rewritten, and a scan shows no other file affected.
+    - A tsc output filter I'd been using hid errors in `app/(…)` paths. The
+      builds did type-check everything, so nothing slipped through.
+  - **Rollout:**
+    1. Rehearsed on `placement-test`, reset to production. Results:
+       - Schema parity: no diff.
+       - Backfill: 97 pipelines, 2,877 applications placed; re-run is a
+         no-op.
+       - 0 applications in another department's or drive's pipeline.
+       - 0 disagreements with the legacy stage.
+       - 0 selection rounds turned into overrides.
+       - All 14 probes passed.
+    2. Backup `pre-pipeline-backup-20260924` → production deploy → backfill.
+    3. Verified read-only on production: identical numbers, plus 4 triggers,
+       2 partial indexes and the no-self-review CHECK present.
+  - **Tests:** new `recruitment-pipeline.test.ts` (41), covering:
+    - Custom pipelines and all stage types; ordering; invalid pipelines.
+    - Round inference; legacy mapping; diffs.
+    - Versioning; applications after a change.
+    - Direct edit vs published; proposals; one pending.
+    - Super Admin approve/reject; no self-approval; stale refusal.
+    - Moves: invalid stage id, cross-department, other department's admin,
+      superseded stage; history rows.
+    - Dynamic counts; migration content; no student write path.
+
+    Also a student read-only stage test in the history suite. Existing suites
+    were updated with a shared pipeline fixture.
+
+    Mutation-checked, each failing tests:
+    - cross-department check removed;
+    - old-version stages allowed;
+    - published direct edit allowed;
+    - self-review allowed;
+    - stale approval allowed;
+    - history not written.
+  - **Verification:** `tsc` clean ✅ · lint only the two pre-existing `<img>`
+    warnings ✅ · build 23/23 ✅ · full suite 648 passed / 27 failed — the same 27
+    pre-existing failures.
+  - **Not browser-verified** with signed-in sessions.
+  - **Open:**
+    - No UI for the Super Admin's direct pipeline edit (the action exists and
+      is tested).
+    - A stage's schedule/location is part of the version, so changing it
+      after publishing also needs approval.
+    - Neon is at 10 of 10 branches: `integrity-test`, `placement-test` and 8
+      backups (`pre-*`).
+
+- **Placement exclusion + batch targeting — ARCH-FIX2 unit-2 (COMPLETE — applied to production 2026-09-23):**
+  - **Found:** placement was derived from any SELECTED application, and about
+    12 readers expressed it that way, 3 of them in raw SQL. There was no
+    record of company, date or recorder, and no off-campus placements.
+    - An admin could un-select a SELECTED application.
+    - The evaluator had no notion of standing: unit-1's placed/opt-out check
+      lived in `applyToDrive` and the pages, not in the engine.
+    - Batch targeting already existed as the `BATCH_YEAR` rule, but was typed
+      as free text.
+    - A promoted student with no applications would be deleted along with any
+      placement history.
+  - **Decided with the user:**
+    - Placements are created automatically on SELECTED, and admins can record
+      off-campus ones manually.
+    - A placement can be revoked with a reason.
+    - A student's in-progress applications are left untouched.
+    - Batches are required before publishing.
+  - **Model:** `StudentPlacement` + enum `PlacementSource`. Migration
+    `20260923000000_student_placement` adds:
+    - 5 CHECK constraints: source matches reference; company and role present;
+      package ≥ 0; revocation complete, with a reason of at least 5 characters.
+    - A history trigger: only a one-time revocation is allowed.
+    - The application trigger replaced so that SELECTED is final.
+    - An in-migration backfill of one placement per SELECTED application.
+
+    Foreign keys to the application and drive are NO ACTION, so the existing
+    Student cascade still works.
+  - **Engine:**
+    - `EligibilitySubject` gained `approved`, `placed` and `optedIn`.
+    - `evaluateEligibility` checks standing first (approved → placed → opted
+      in → department) and stops with `blockedBy`, before any rule.
+    - `toEligibilitySubject` requires placements, so every caller was found
+      at compile time: list, detail, dashboard, apply, notifications, and the
+      new admin eligible list.
+    - Unit-1's `applicant-standing.ts` was deleted, since the evaluator is the
+      only implementation now.
+    - Notifications also narrow placed students out in SQL.
+  - **Placement:**
+    - `updateApplicationStage` creates the placement on SELECTED in one
+      transaction, and refuses changes to a SELECTED application.
+    - `recordManualPlacement` is DEPT_ADMIN, own students only.
+    - `revokePlacement` is DEPT_ADMIN for own students, or SUPER_ADMIN; a
+      conditional update with a reason.
+    - `getStudentPlacements` is role-scoped.
+    - All are audited (new entity `StudentPlacement`, action `REVOKE`).
+    - Every placed reader moved to `placement-status.ts`, and the raw reports
+      use `placedStudentSql`.
+    - Retiring a promoted student is refused while they have placement
+      history.
+  - **UI:**
+    - Dept admin student dialog: placement history, record off-campus, revoke
+      with reason.
+    - Student dashboard: a read-only placement card.
+    - Applications table: a "Placed elsewhere" marker.
+    - Batch picker, fed by `getDepartmentBatchYears`, in the dept config panel
+      and in the dept-owned post/edit forms.
+    - Dept config panel: an eligible-students card showing the evaluator's
+      list, reasons, and the placed-excluded count.
+  - **Batch rule:** `publishDepartmentDrive` requires an effective
+    `BATCH_YEAR` rule, and `driveSchema.batchYears` requires ≥ 1 for
+    dept-owned drives. Impact on current data:
+    - The 97 already-published instances have no batch rule and keep
+      publishing to all batches.
+    - 40 dept-owned drives will ask for batches on their next edit.
+  - **Rollout:**
+    1. Rehearsed on `placement-test`. The probes caught a real bug: a
+       reasonless revocation passed, because a CHECK over a NULL evaluates to
+       NULL, which Postgres accepts. Fixed in the migration file.
+    2. Reset the branch from production and re-rehearsed:
+       - Schema parity: no diff.
+       - All 12 probes passed.
+       - Backfill: 235 placements covering exactly the same 193 students as
+         the old definition (0 differ), with the dept role override applied.
+    3. Backup `pre-placement-backup-20260923` → production deploy.
+    4. Production verified read-only: parity; 235 placements / 193 students /
+       0 differing; all 3 triggers and 5 CHECKs present.
+  - **Tests:** new `placement-exclusion.test.ts` (33), covering:
+    - The placement short-circuit (no rule evaluated or reported).
+    - Approval checked before placement.
+    - Unplaced students continue to the rules; a revoked placement doesn't
+      exclude.
+    - Correct, wrong and unknown batch; the batch helpers.
+    - Department isolation, including the admin eligible list.
+    - List and apply agree (3 cases); notifications use the evaluator plus
+      SQL narrowing.
+    - Record/revoke authorization (own dept, other dept, super admin, reason,
+      double revoke, no student path).
+    - Selecting creates the placement; SELECTED is final; revoking leaves the
+      application.
+    - Migration and trigger content; retirement refusal.
+
+    Also added 2 publish-batch tests in the lifecycle suite. Existing suites
+    were updated for standing fields, `batchYears` and the new placement
+    definition. One behaviour change is pinned: a wrong department now stops
+    evaluation rather than listing rule reasons.
+
+    Mutation-checked:
+    - Placement check removed: 8 tests fail.
+    - Short-circuit removed: 9 fail.
+    - Publish batch check removed: 1 fails.
+    - Record's department check removed: 1 fails.
+    - No placement on select: 1 fails.
+    - Notification narrowing removed: 1 fails.
+  - **Verification:** `tsc` clean ✅ · lint only the two pre-existing `<img>`
+    warnings ✅ · build 23/23 ✅ · full suite 606 passed / 27 failed — the same 27
+    pre-existing failures.
+  - **Not browser-verified** with signed-in sessions.
+  - **Neon branches outstanding:** `integrity-test`, `placement-test`,
+    `pre-lifecycle-backup-20260918`, `pre-overrides-backup-20260919`,
+    `pre-rules-backup-20260920`, `pre-form-backup-20260921`,
+    `pre-integrity-backup-20260922`, `pre-placement-backup-20260923` (8 of
+    the plan's 10).
+
+- **Application integrity — ARCH-FIX2 unit-1 (COMPLETE — applied to production 2026-09-22):**
+  - **Found:** `applyToDrive` was already the only student write path and only
+    inserted; there was a `(studentId, driveId)` unique constraint, and no
+    withdrawal. Missing:
+    - Opt-out wasn't enforced, although the schema comment said opted-out
+      students are not offered drives.
+    - Registration approval (`isPending`) wasn't checked.
+    - Nothing stopped a placed student from applying again.
+    - There was no snapshot beyond the inline CGPA, backlogs and details
+      columns.
+    - Immutability rested only on the absence of an update path.
+    - The APPLY audit row was written outside any transaction.
+  - **Policy decided by the user:** a student with any SELECTED application is
+    placed and cannot apply again.
+  - **Model:** new `DriveApplicationSnapshot` (1:1, cascade with its
+    application; columns `origin` SUBMISSION|BACKFILL, `schemaVersion`,
+    `capturedAt`, three hashes, TEXT JSON `payload`) and enum
+    `ApplicationSnapshotOrigin`. Migration `20260922000000_application_integrity`
+    also adds:
+    - CHECK constraints: payload is a JSON object; `schemaVersion ≥ 1`; a
+      SUBMISSION snapshot carries all three hashes.
+    - A trigger refusing any update to a submitted application's
+      student/drive/applied-at/CGPA/backlogs/details/consent/created-at
+      columns. Stage and status stay writable.
+    - A trigger refusing any update to a snapshot.
+  - **Code:**
+    - `applyToDrive` enforces standing (approved, opted in, not placed), the
+      instance lifecycle, eligibility including batch, the deadline,
+      duplicates, the consent value and declaration version, and the form. It
+      writes application + snapshot + two audit rows in one transaction.
+    - New utils: `applicant-standing.ts`, `application-declaration.ts`
+      (shared by the modal and the server), and `application-snapshot.ts`
+      (builders, hashes, reader with legacy fallback).
+    - New query `getApplicationRecord` (role-scoped).
+    - New audit entity type `DriveApplicationSnapshot`.
+    - The student dashboard and drive detail page show standing reasons
+      instead of offering an Apply the server would refuse.
+    - An invalid consent value no longer reports "Invalid drive ID".
+  - **Backfill:** `scripts/backfill-application-snapshots.ts` (`--dry-run`,
+    `--database-url`, batches of 500, idempotent). It builds BACKFILL
+    snapshots from the inline columns only and lists what was not captured.
+    It never reconstructs from today's data.
+  - **Rollout:**
+    1. Rehearsed on the `integrity-test` branch:
+       - Schema parity: no diff.
+       - All 15 trigger and constraint probes passed, including a raw-SQL edit
+         refused and stage/status still writable.
+       - A real rollback was confirmed when the snapshot insert fails after
+         the application insert.
+       - The backfill wrote 2,877 snapshots, and a re-run is a no-op.
+    2. Neon's 10-branch limit was hit. With the user's approval, deleted
+       `lifecycle-test`, `overrides-test`, `rules-test` and `form-test`; all
+       backups were kept.
+    3. Backup `pre-integrity-backup-20260922` → production deploy (schema
+       parity: no diff) → backfill of 2,877 snapshots → re-run finds 0
+       missing.
+
+    The trigger probes were run on the branch, not against production.
+  - **Data note:** 2,876 of the 2,877 applications are `seed-perf-data`
+    inserts with no CGPA, answers or consent recorded. Their BACKFILL
+    snapshots correctly record nothing more.
+  - **Tests:** new `application-integrity.test.ts` (46), covering:
+    - Valid application; snapshot contents; nothing extra stored; audit rows
+      inside the transaction.
+    - Duplicate and race; unpublished, closed and archived drives; expired
+      deadline; placed, opted-out and unapproved students; wrong department
+      and unassigned department; wrong batch; ineligible student.
+    - Forged eligibility; forged read-only fields; missing required field;
+      required read-only value missing; four invalid acknowledgements.
+    - Unauthenticated caller; student id taken from the session only.
+    - Snapshot failure rolls back; immutability triggers; no withdraw path.
+    - Record-reader authorization; backfill payload; legacy fallback.
+
+    Mutation-checked:
+    - Removing the standing check fails 3 tests.
+    - Creating outside the transaction fails 12.
+    - Ignoring the declaration version fails 1.
+    - Skipping the instance-status check fails 4.
+
+    Four suites' `$transaction` mocks now run the callback. One eligibility
+    test had been passing vacuously.
+  - **Verification:** `tsc` clean ✅ · lint only the two pre-existing `<img>`
+    warnings ✅ · build 23/23 ✅ · full suite 570 passed / 27 failed — the same 27
+    pre-existing failures.
+  - **Not browser-verified** with signed-in sessions. No UI reads
+    `getApplicationRecord` yet.
+  - **Legacy fields that can later be removed:** `DriveApplication.snapshotCgpa`
+    and `snapshotBacklogs`, which are duplicated in the snapshot. Before
+    dropping them, move the admin applications table and the student
+    applications list onto `getApplicationRecord`, and relax the trigger.
+    `submittedDetails` and `consentAcceptedAt` are also duplicated but are the
+    only record for pre-snapshot applications, so keep them.
+  - **Neon branches outstanding:** `integrity-test`,
+    `pre-lifecycle-backup-20260918`, `pre-overrides-backup-20260919`,
+    `pre-rules-backup-20260920`, `pre-form-backup-20260921`,
+    `pre-integrity-backup-20260922`.
+
+- **Per-department application form (C8) (COMPLETE — applied to production 2026-09-21):**
+  - **Model:** new `DriveApplicationField` table (owned by a master `Drive` *or*
+    a `DriveDepartmentConfig`) with `fieldKey`, `label`, `source`, `category`,
+    `description`, `isRequired`, `isEnabled`, `sortOrder`, `permission`; enums
+    `ApplicationFieldSource` and `ApplicationFieldPermission`. Unique
+    `(owner, fieldKey)`, cascade from both owners. Five CHECK constraints in the
+    migration SQL: exactly one owner, safe key pattern, custom ⇒ student input
+    and editable, label present, non-negative order. Migration
+    `20260921000000_drive_application_fields` (file-to-file `prisma migrate
+    diff`, no shadow database). The legacy JSON columns are kept.
+  - **Domain:** `domain/application-form.ts` (pure: vocabulary, permission
+    policy, defensive legacy parser, whole-form resolution, lock key),
+    `domain/application-form-schema.ts` (strict write validation),
+    `domain/persist-application-form.ts` (replace rows + dual-write JSON).
+  - **Server-side enforcement:** new `applications/utils/validate-submission.ts`.
+    `applyToDrive` rebuilds the department's form from the DB and the student's
+    profile; required and read-only are enforced there, never taken from the
+    browser. Before this, required fields were checked only in the modal, the
+    editable set was a global constant, and custom questions were silently
+    dropped on submit. `submittedDetails` now holds every enabled editable
+    field's effective value (nothing read it before, so the change is safe).
+  - **Writes:** `saveDriveDepartmentConfig` (dept form, locked at publish),
+    `publishDepartmentDrive` (snapshots an inherited form into the dept's rows),
+    `updateCentralDriveApplicationFields` (master default, refused once any
+    department has published), `createDrive` / `updateDrive` (dept-owned drives:
+    strict parse, form frozen on first application). An unknown key or a
+    disallowed permission now refuses the write; nothing is silently dropped.
+  - **UI:** new `application-form-editor.tsx` in the department config panel —
+    presets, catalog picker, custom questions, shown / required / permission
+    per field (only allowed permissions offered), reordering, Required /
+    Optional and Editable / Read-only badges, live validation with the server's
+    schema, read-only once locked. The preview (portal + application modal)
+    shows the same badges and grouping as the student card. The admin fields
+    panel for department-owned drives gained a permission toggle. The student
+    drive detail page's hard-coded 5-row confirm dialog was replaced by the
+    shared `ApplicationReviewModal` fed by the department's resolved form; the
+    modal now blocks on required read-only values missing from the profile and
+    shows custom-question hints.
+  - **Removed:** `buildStoredApplicationFields` and
+    `effectiveApplicationFieldsKey` (department-overrides.ts),
+    `EDITABLE_FIELD_KEYS` (replaced by per-field permission). A raw
+    control-character regex in `cleanText` was rewritten as escapes.
+  - **Backfill:** `scripts/backfill-application-fields.ts` (`--dry-run`,
+    `--database-url`, idempotent, one transaction). It converts legacy JSON to
+    rows, reports dropped keys, leaves the JSON untouched, and snapshots the
+    form of already-published central-drive instances.
+  - **Rollout:** `form-test` branch → backup `pre-form-backup-20260921` →
+    production. The results were identical on both:
+    - Schema parity: `migrate diff` against `schema.prisma` is empty.
+    - Legacy JSON: 0 forms to convert, 0 keys dropped.
+    - Snapshots: 399 rows written for 57 published central instances.
+    - Forms: all 97 instances resolve to the same form before and after.
+    - Applications: all 2,877 are untouched.
+    - A re-run of the backfill is a no-op.
+    - On the branch, all 9 constraint-violating inserts were rejected, with 0
+      rows left behind.
+  - **Tests:** new `application-form.test.ts` (35), covering:
+    - Legacy parsing and backfill safety: unsafe, unknown and duplicate keys;
+      stored permissions; a JSON round trip.
+    - The permission policy and strict schema.
+    - Resolution precedence and department isolation.
+    - The lock key.
+    - Server validation: required editable, required read-only missing,
+      tampered read-only, unknown or disabled keys, formats.
+    - Preview and student card grouping identically.
+
+    Also added tests for publish snapshotting and for a department form written
+    only to its own rows. Existing suites were updated for the new relations
+    and the richer `submittedDetails`. A mutation check that trusts read-only
+    submissions fails 6 tests.
+  - **Verification:** `tsc` clean ✅ · lint only the two pre-existing `<img>`
+    warnings ✅ · build ✅ · full suite 524 passed / 27 failed — the same 27
+    pre-existing failures.
+  - **Not browser-verified** with signed-in sessions.
+  - **Neon branches outstanding:** `lifecycle-test`, `overrides-test`,
+    `rules-test`, `form-test`, `pre-lifecycle-backup-20260918`,
+    `pre-overrides-backup-20260919`, `pre-rules-backup-20260920`,
+    `pre-form-backup-20260921`.
+
+- **Eligibility rule engine (C8) (COMPLETE — applied to production 2026-09-20):**
+  - **Model:** new `DriveEligibilityRule` table (owned by a master `Drive` *or* a
+    `DriveDepartmentConfig`), enums `EligibilityRuleType` (11 types) and
+    `EligibilityOperator`. Relational: `numberValue` for thresholds,
+    `listValue TEXT[]` for set membership and skills. Two CHECK constraints in
+    the migration SQL — exactly one owner, exactly one value — plus unique
+    `(owner, ruleType, operator)`. Migration `20260920000000_drive_eligibility_rules`
+    generated from a schema file-to-file `prisma migrate diff` (no shadow
+    database), with the backfill in the same migration so table and data land
+    atomically.
+  - **Rule types (all backed by real Student columns):** CGPA ≥, ACTIVE_BACKLOGS ≤,
+    PAST_BACKLOGS ≤, TENTH / TWELFTH / DIPLOMA / PRE_COLLEGE_PERCENTAGE ≥,
+    CURRENT_SEMESTER ≥ ≤ =, BATCH_YEAR in, ENTRY_TYPE in, SKILL all-of / any-of.
+    Not included on purpose: gender (policy call, not technical) and
+    per-semester SGPA (verification semantics unsettled).
+  - **One evaluator:** `domain/eligibility-evaluator.ts`, pure. The facade in
+    `queries/drive-eligibility.ts` keeps its function names so call sites were
+    unchanged in shape, but every one now delegates to it: `getEligibleDrives`,
+    `getDriveDetail`, `applyToDrive`, `notifyEligibleStudentsOfDrive`, the
+    student dashboard, and the drive detail page.
+  - **A second hard-coded implementation removed:** the student drive detail
+    page computed its own `cgpaCheck` / `backlogsCheck` inline. Its checklist
+    now renders the evaluator's per-rule results, so it shows every rule and can
+    never disagree with the decision that let the student onto the page.
+  - **Compile-time enforcement:** the facade requires the student's `skills`
+    and the drive's resolved `eligibilityRules`; making them required surfaced
+    all six call sites that did not load them, which is how each was found and
+    fixed. `resolveDepartmentDriveWithRules` requires both rule sets for the
+    same reason.
+  - **Resolution:** master defaults + per-type department override
+    (`resolveEligibilityRules`), each effective rule tagged MASTER / DEPARTMENT.
+  - **Writes:** `writeMasterRules` / `writeDepartmentRules` inside the owning
+    transaction. The drive forms' CGPA and backlog fields now write rules *and*
+    the legacy columns together; central drives accept optional extra master
+    defaults (API only — no UI yet). `saveDriveDepartmentConfig` takes an
+    `eligibilityRules` set, refuses changes once published, and mirrors
+    CGPA/backlogs into the instance columns. The `minCGPA` / `maxActiveBacklogs`
+    *overrides* from the previous phase were removed from the override schema so
+    there is exactly one way to set a department's eligibility.
+  - **Admin UI:** new `eligibility-rules-editor.tsx` in the department config
+    panel — the effective rule set as badges (inherited vs department), the
+    department's own rules as type / operator / value rows, validated live with
+    the server's own zod schema, read-only once locked. Replaced the two CGPA /
+    backlog override inputs.
+  - **Rollout:** `rules-test` branch → backup `pre-rules-backup-20260920` →
+    production. Verified identical on both: 118 master rules backfilled (59 CGPA
+    + 59 ACTIVE_BACKLOGS), 0 department rules (none had been set), 0 rules
+    disagreeing with their legacy columns, **decision equivalence 4997 old vs
+    4997 new with 0 disagreements** across every visible (student, drive) pair,
+    both CHECK constraints present (and on the branch, all four violating
+    inserts rejected), `db pull` vs `schema.prisma` no diff across 362
+    signatures.
+  - **Tests:** `eligibility-engine.test.ts` (59) — eligible student, CGPA and
+    backlog failures, multiple failures reported, missing academic data (never
+    treated as zero), diploma/regular branch, semester / batch / skills,
+    human-readable descriptions, strict validation, per-type resolution and
+    legacy fallback, department isolation, the list + apply + notifications
+    agreeing on a SKILL rule, client input never evaluated, SQL narrowing shape,
+    and published rule-set immutability. Mutation-checked twice: skipping the
+    evaluator fails 5 (the list, apply and notification tests together);
+    ignoring department rules fails 9. Existing suites updated to the new
+    relations.
+  - **Verification:** `tsc` clean ✅ · lint only the two pre-existing `<img>`
+    warnings ✅ · build 23/23 ✅ · full suite 487 passed / 27 failed — the same 27
+    pre-existing failures.
+  - **Not browser-verified** with signed-in sessions.
+  - **Neon branches outstanding:** `lifecycle-test`, `overrides-test`,
+    `rules-test`, `pre-lifecycle-backup-20260918`,
+    `pre-overrides-backup-20260919`, `pre-rules-backup-20260920`.
+
+- **Department-specific drive configuration (C3, C8 partial) (COMPLETE — applied to production 2026-09-19):**
+  - **Model:** nullable override columns on `DriveDepartmentConfig` — `roleName`,
+    `jobDescriptionText`, `requirements`, `skills`, `driveDate`,
+    `applicationDeadline`, `selectionRounds`, `minCGPA`, `maxActiveBacklogs`
+    (logistics and `applicationFields` were already overridable). New master
+    defaults `Drive.requirements` / `Drive.skills`. NULL = inherit; the master
+    is never duplicated. Migration `20260919000000_department_drive_overrides`,
+    additive only, no backfill.
+  - **Rollout:** `overrides-test` branch first, then backup branch
+    `pre-overrides-backup-20260919`, then production. Verified identical on
+    both: 97 instances / 59 drives / 2877 applications unchanged, 0 instances
+    with any override set, 4997 visible (student, drive) pairs computed with
+    `COALESCE(override, master)` — same as before — and `db pull` vs
+    `schema.prisma` shows no diff across 330 signatures.
+  - **Resolver:** `resolveDepartmentDrive` now covers content fields via one
+    `OVERRIDABLE_FIELDS` map shared by the resolver, the lock and the UI;
+    `overriddenFields()` drives the Inherited/Overridden markers. Structurally
+    typed so the admin panel runs it client-side for the live preview.
+  - **Read paths moved to resolved values:** `getEligibleDrives` (SQL master
+    prefilter on CGPA/backlogs/deadline/role **removed** — it would under-match
+    a department that lowers the bar; exact checks now run on resolved values),
+    `getDriveDetail` (resolves *before* the eligibility check), `applyToDrive`,
+    `notifyEligibleStudentsOfDrive` (per-department bar and role title),
+    `getMyApplications`, `updateApplicationStage` notification text,
+    `getDepartmentCentralDrives` (new `resolved` field), the admin applicants
+    page, and the student detail page (now shows JD text, requirements and
+    skills; selection rounds rendered as a list instead of raw JSON).
+  - **Write path:** `saveDriveDepartmentConfig` takes three-state overrides
+    (absent / null / value), validates dates on resolved values, writes only the
+    session department's row, never the master. Lock extended to every content
+    override. Pure helpers in `domain/department-overrides.ts`.
+  - **Admin UI:** new "<DEPT> version of this drive" card in the config panel —
+    each field shows the master value, this department's input, an
+    Inherited/Overridden badge and Reset to master; disabled once locked. The
+    header, meta row and both student previews now render the resolved preview.
+    Central drive modal gained optional Requirements and Skills.
+  - **Pre-existing bugs fixed on the way:**
+    - `applyToDrive` never checked the lifecycle — a direct call could apply to
+      an ASSIGNED or CLOSED drive. Now requires this department's instance to be
+      PUBLISHED and the master not ARCHIVED.
+    - `createCentralDrive` still notified students at creation, when every
+      instance is ASSIGNED and invisible to them. Removed; publishing is the
+      single trigger, and the fan-out now only counts PUBLISHED instances.
+    - The admin applicants page rejected every central drive (null
+      `departmentId` check — same bug class as `getDriveDetail`), so no
+      department admin could open a central drive's applicant list.
+    - A logistics-only save on any backfilled published instance was refused,
+      because its NULL form was compared against the catalog defaults the
+      panel submits. The comparison now uses the effective form students see.
+    - The central modal's success toast still said "now live across all
+      departments" after drives began being created as DRAFT.
+    - `publishDepartmentDrive` now refuses a drive whose resolved deadline has
+      already passed.
+  - **Tests:** `department-overrides.test.ts` (37) around the ABC example —
+    per-department resolution, inheritance, zero overrides, isolation (editing
+    CSE never changes IT; master never mutated), a 7.2 student eligible for IT
+    and ECE but not CSE, three-state input, save isolation (smuggled
+    `departmentId` ignored, master never written), lock on overrides, the
+    backfilled-instance logistics save, and resolved-value decisions in the
+    listing (no SQL prefilter on master values), apply and notifications.
+    Mutation-checked: judging `applyToDrive` against the master fails 2 tests in
+    both directions. Existing suites updated to the new query shapes.
+  - **Verification:** `tsc` clean ✅ · lint only the two pre-existing `<img>`
+    warnings ✅ · `npm run build` 23/23 ✅ · full suite 429 passed / 27 failed —
+    the same 27 pre-existing failures.
+  - **Not browser-verified with a signed-in admin or student** (Clerk sessions).
+  - **Neon branches now outstanding:** `lifecycle-test`, `overrides-test`,
+    `pre-lifecycle-backup-20260918`, `pre-overrides-backup-20260919`.
+
+- **Department assignment + full drive lifecycle (C2, C4) (COMPLETE — applied to production 2026-09-18):**
+  - **Rollout, as approved:** migration + backfill first applied to a Neon test
+    branch (`lifecycle-test`) and verified there, then a restore-point branch
+    `pre-lifecycle-backup-20260918` was cut from production, then production was
+    migrated and backfilled. Both branches still exist; delete them once
+    satisfied (`neon branches delete lifecycle-test`, and the backup when no
+    longer needed).
+  - **Verified identical on the branch and on production:** 97 assignments →
+    97 instances, all PUBLISHED; 0 assignments without a PUBLISHED instance;
+    visible (student, drive) pairs **4997 before gating → 4997 after**, so the
+    new visibility gate removed nothing students could already see; 59 master
+    drives all PUBLISHED; backfill re-run creates 0 (idempotent);
+    `prisma migrate status` up to date.
+  - **Near-miss worth remembering:** the backfill script (like every script
+    here) loads `.env` with `override: true`, so exporting `DATABASE_URL` in the
+    shell to target a test branch is **silently ignored and it runs against
+    production**. Added an explicit `--database-url <url>` flag; use it for any
+    non-default target.
   - **The backfill is required, not optional.** Student visibility is gated on
     `DriveDepartmentConfig.status = 'PUBLISHED'`, and the instance table was
     empty (97 assignments, 0 instances). Without the backfill every drive
@@ -131,9 +779,23 @@ Update this file after every meaningful implementation change.
   - **Verification:** `tsc --noEmit` clean ✅ · lint only the two pre-existing
     `<img>` warnings ✅ · `npm run build` successful, 23/23 pages ✅ · full suite
     389 passed / 27 failed — the same 27 pre-existing failures.
-  - **Known gap:** no UI yet for assignment, publish, close or archive. The
-    server actions and query exist; the super-admin assignment console and the
-    department admin's publish control are not built.
+  - **UI:** `drive-assignment-panel.tsx` in the Super Admin's central-drive
+    detail panel — every department with instance status and application
+    count, assign (multi-select) / unassign (disabled with an explanation when
+    applications exist), and master Publish / Archive. `department-drive-lifecycle-panel.tsx`
+    above the department admin's config panel — status badge, lock notice with
+    publish date, Publish / Close applications / Archive. Both mirror the
+    server rules for clarity only; the actions enforce them.
+  - **Archived masters:** archiving a master drive now withdraws it everywhere —
+    `getEligibleDrives` excludes `lifecycleStatus = ARCHIVED`, `getDriveDetail`
+    refuses it (except to a student who already applied), and
+    `publishDepartmentDrive` refuses to publish an instance of one. DRAFT masters
+    are deliberately *not* hidden: each department's own publish is what
+    releases the drive.
+  - **Not browser-verified with a signed-in admin:** the consoles sit behind
+    Clerk SUPER_ADMIN / DEPT_ADMIN sessions. Verified only that the three
+    affected routes compile and correctly redirect unauthenticated requests to
+    `/sign-in` with no server errors.
 
 - **Unified drive domain model (C9) (COMPLETE):**
   - **The problem:** central and department drives were two parallel

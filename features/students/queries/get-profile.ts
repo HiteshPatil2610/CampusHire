@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { CompleteProfile } from "./profile-completion";
+import { ACTIVE_PLACEMENT_WHERE } from "../utils/placement-status";
 
 /**
  * Both queries below pull nine relations in one go. Prisma's default
@@ -35,18 +36,17 @@ export async function getStudentProfile(studentId: string): Promise<CompleteProf
       semesterMarks: {
         orderBy: { semester: "asc" },
       },
-      applications: {
-        where: { status: "SELECTED" },
-        orderBy: { appliedAt: "desc" },
+      // The student's active placements — company, role and package as
+      // recorded, whether from a CampusHire drive or recorded by hand.
+      placements: {
+        where: ACTIVE_PLACEMENT_WHERE,
+        orderBy: { placedAt: "desc" },
         select: {
-          drive: {
-            select: {
-              id: true,
-              companyName: true,
-              roleName: true,
-              packageDisplay: true,
-            },
-          },
+          id: true,
+          driveId: true,
+          companyName: true,
+          roleName: true,
+          packageDisplay: true,
         },
       },
       department: {
@@ -72,11 +72,12 @@ export async function getStudentProfile(studentId: string): Promise<CompleteProf
     experiences: student.experiences,
     certifications: student.certifications,
     preferences: student.preferences,
-    selectedOffers: student.applications.map((a) => ({
-      driveId: a.drive.id,
-      companyName: a.drive.companyName,
-      roleName: a.drive.roleName,
-      packageDisplay: a.drive.packageDisplay,
+    selectedOffers: student.placements.map((placement) => ({
+      placementId: placement.id,
+      driveId: placement.driveId,
+      companyName: placement.companyName,
+      roleName: placement.roleName,
+      packageDisplay: placement.packageDisplay,
     })),
   };
 }
@@ -107,18 +108,17 @@ export async function getStudentProfileByUserId(userId: string): Promise<Complet
       semesterMarks: {
         orderBy: { semester: "asc" },
       },
-      applications: {
-        where: { status: "SELECTED" },
-        orderBy: { appliedAt: "desc" },
+      // The student's active placements — company, role and package as
+      // recorded, whether from a CampusHire drive or recorded by hand.
+      placements: {
+        where: ACTIVE_PLACEMENT_WHERE,
+        orderBy: { placedAt: "desc" },
         select: {
-          drive: {
-            select: {
-              id: true,
-              companyName: true,
-              roleName: true,
-              packageDisplay: true,
-            },
-          },
+          id: true,
+          driveId: true,
+          companyName: true,
+          roleName: true,
+          packageDisplay: true,
         },
       },
       department: {
@@ -144,11 +144,12 @@ export async function getStudentProfileByUserId(userId: string): Promise<Complet
     experiences: student.experiences,
     certifications: student.certifications,
     preferences: student.preferences,
-    selectedOffers: student.applications.map((a) => ({
-      driveId: a.drive.id,
-      companyName: a.drive.companyName,
-      roleName: a.drive.roleName,
-      packageDisplay: a.drive.packageDisplay,
+    selectedOffers: student.placements.map((placement) => ({
+      placementId: placement.id,
+      driveId: placement.driveId,
+      companyName: placement.companyName,
+      roleName: placement.roleName,
+      packageDisplay: placement.packageDisplay,
     })),
   };
 }

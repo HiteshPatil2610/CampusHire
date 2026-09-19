@@ -23,8 +23,11 @@ export interface CompleteProfile {
 }
 
 /** One drive the student was selected for. */
+/** An active placement of the student (see StudentPlacement). */
 export interface SelectedOffer {
-  driveId: string;
+  placementId: string;
+  /** Null for a placement recorded by hand, outside CampusHire. */
+  driveId: string | null;
   companyName: string;
   roleName: string;
   packageDisplay: string | null;

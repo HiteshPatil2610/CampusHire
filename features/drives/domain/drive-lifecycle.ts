@@ -6,6 +6,10 @@ import type { DepartmentDriveStatus, MasterDriveStatus } from "@prisma/client";
  *   MASTER DRIVE      DRAFT → PUBLISHED → ARCHIVED
  *   DEPARTMENT DRIVE  ASSIGNED → CONFIGURED → PUBLISHED → CLOSED → ARCHIVED
  *
+ * and, from any live state, → CANCELLED → ARCHIVED. Cancelling is not
+ * closing: CLOSED stops intake on a drive that still happens; CANCELLED says
+ * the drive is off. Neither deletes anything.
+ *
  * **Administrative CLOSED is not "the deadline passed."** Whether a drive is
  * open is still derived at read time from `applicationDeadline` via
  * `getDriveStatus()` and is never stored — that rule is untouched. CLOSED is a
@@ -22,8 +26,9 @@ import type { DepartmentDriveStatus, MasterDriveStatus } from "@prisma/client";
 // ---------------------------------------------------------------------------
 
 const MASTER_TRANSITIONS: Record<MasterDriveStatus, MasterDriveStatus[]> = {
-  DRAFT: ["PUBLISHED", "ARCHIVED"],
-  PUBLISHED: ["ARCHIVED"],
+  DRAFT: ["PUBLISHED", "CANCELLED", "ARCHIVED"],
+  PUBLISHED: ["CANCELLED", "ARCHIVED"],
+  CANCELLED: ["ARCHIVED"],
   // Terminal. Re-opening an archived drive would resurrect it underneath the
   // departments that already stopped running it.
   ARCHIVED: [],
@@ -35,12 +40,14 @@ const DEPARTMENT_TRANSITIONS: Record<
 > = {
   // A department may publish straight from ASSIGNED — configuration is
   // encouraged, not mandatory, and the publish action validates what it needs.
-  ASSIGNED: ["CONFIGURED", "PUBLISHED", "ARCHIVED"],
-  CONFIGURED: ["PUBLISHED", "ARCHIVED"],
+  ASSIGNED: ["CONFIGURED", "PUBLISHED", "CANCELLED", "ARCHIVED"],
+  CONFIGURED: ["PUBLISHED", "CANCELLED", "ARCHIVED"],
   // Never back to CONFIGURED: the content is locked and students have seen it.
-  PUBLISHED: ["CLOSED", "ARCHIVED"],
+  PUBLISHED: ["CLOSED", "CANCELLED", "ARCHIVED"],
   ARCHIVED: [],
-  CLOSED: ["ARCHIVED"],
+  CLOSED: ["CANCELLED", "ARCHIVED"],
+  // Terminal but for archiving: a cancelled drive is never revived.
+  CANCELLED: ["ARCHIVED"],
 };
 
 export type TransitionCheck =
@@ -104,11 +111,109 @@ export function isDepartmentDriveLocked(instance: {
 /**
  * Instance fields frozen once published.
  *
- * `applicationFields` is the application form itself — students have already
- * answered it, and a submitted application stores its answers by field key, so
- * changing the form after the fact would silently re-interpret history.
+ * - `applicationFields` is the application form itself — students have already
+ *   answered it, and a submitted application stores its answers by field key,
+ *   so changing the form after the fact would silently re-interpret history.
+ * - The content overrides are this department's version of the offer: its
+ *   role title, JD, requirements, skills, dates, selection rounds and
+ *   eligibility bar. Changing one after publication would alter what this
+ *   department's students already applied for — or make an applicant
+ *   retroactively ineligible.
+ *
+ * Instance column names; they match the master's for every content field.
  */
-export const LOCKED_DEPARTMENT_DRIVE_FIELDS = ["applicationFields"] as const;
+export const LOCKED_DEPARTMENT_DRIVE_FIELDS = [
+  "applicationFields",
+  "roleName",
+  "jobDescriptionText",
+  "requirements",
+  "skills",
+  "driveDate",
+  "applicationDeadline",
+  "selectionRounds",
+  "minCGPA",
+  "maxActiveBacklogs",
+] as const;
+
+export type LockedDepartmentDriveField =
+  (typeof LOCKED_DEPARTMENT_DRIVE_FIELDS)[number];
+
+/**
+ * Which locked instance fields a proposed save would actually change. Compared
+ * value by value (dates by instant) so resubmitting an unchanged form on a
+ * published drive — to update the venue, say — is not mistaken for an edit.
+ */
+export function findLockedInstanceFieldChanges(
+  current: Record<string, unknown>,
+  proposed: Record<string, unknown>
+): LockedDepartmentDriveField[] {
+  return LOCKED_DEPARTMENT_DRIVE_FIELDS.filter((field) => {
+    if (!(field in proposed)) return false;
+    return !isSameValue(current[field], proposed[field]);
+  });
+}
+
+/**
+ * Master content fields the Super Admin may open to department overrides —
+ * the `Drive.departmentEditableFields` vocabulary (a CHECK in the migration
+ * keeps the column to these). A field not listed on a drive is LOCKED: its
+ * department instances always show the master's value. Before publishing only;
+ * once published everything here is frozen anyway (LOCKED_DEPARTMENT_DRIVE_FIELDS).
+ *
+ * Eligibility, batches, application fields and logistics are not here: they
+ * are the department's own configuration, never the master's.
+ */
+export const DEPARTMENT_EDITABLE_FIELDS = [
+  "roleName",
+  "jobDescriptionText",
+  "requirements",
+  "skills",
+  "driveDate",
+  "applicationDeadline",
+] as const;
+
+export type DepartmentEditableField = (typeof DEPARTMENT_EDITABLE_FIELDS)[number];
+
+export const DEPARTMENT_EDITABLE_FIELD_LABELS: Record<DepartmentEditableField, string> = {
+  roleName: "Role / job title",
+  jobDescriptionText: "Job description",
+  requirements: "Requirements",
+  skills: "Skills",
+  driveDate: "Drive date",
+  applicationDeadline: "Application deadline",
+};
+
+/** Only known keys, each once, in the canonical order. */
+export function normalizeEditableFields(input: unknown): DepartmentEditableField[] {
+  const requested = new Set(Array.isArray(input) ? input.map(String) : []);
+  return DEPARTMENT_EDITABLE_FIELDS.filter((field) => requested.has(field));
+}
+
+/**
+ * Which override columns a department may not set on this drive: every
+ * submitted, non-null override of a field the Super Admin did not open, unless
+ * it only repeats what is already stored. Clearing an override (null) is
+ * always allowed — it means "use the master's value".
+ */
+export function findLockedOverrideAttempts(
+  editable: readonly string[],
+  current: Record<string, unknown> | null,
+  proposed: Record<string, unknown>
+): DepartmentEditableField[] {
+  const open = new Set(editable);
+  return DEPARTMENT_EDITABLE_FIELDS.filter((field) => {
+    if (open.has(field)) return false;
+    if (!(field in proposed)) return false;
+    const value = proposed[field];
+    if (value === null || value === undefined) return false;
+    return !isSameValue(current?.[field], value);
+  });
+}
+
+/** A department drive that has been called off or retired: nothing moves in it. */
+export function isDepartmentDriveInactive(status: DepartmentDriveStatus): boolean {
+  return status === "CANCELLED" || status === "ARCHIVED";
+}
 
 /**
  * Instance fields that stay editable after publication, and why.
@@ -146,6 +251,8 @@ export const LOCKED_MASTER_FIELDS = [
   "roleName",
   "jobDescriptionText",
   "jobDescriptionUrl",
+  "requirements",
+  "skills",
   "minCGPA",
   "maxActiveBacklogs",
   "applicationDeadline",

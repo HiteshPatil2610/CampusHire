@@ -44,6 +44,24 @@
 - Put the derivation in one exported function and route every screen through it, so two panels cannot disagree about what the same word means.
 - Where a decision is genuinely a rule rather than a lookup — whether a stage transition is legal, whether a student record can be retired, whether a sign-up matches the roster — write it as a pure function taking plain arguments, and unit test it. The server action stays thin around it.
 
+## Domain Logic, Single Writers and the Database
+
+- The rules of a workflow are pure functions in `features/<x>/domain/`: eligibility (`eligibility-evaluator.ts`), lifecycle transitions and locking (`drive-lifecycle.ts`), pipeline validation (`recruitment/domain/pipeline.ts`), step completion and publish readiness (`department-drive-readiness.ts`), the student's view of a drive (`student-drive-view.ts`). Actions are thin wiring around them, and the UI calls the same functions for guidance. Never re-implement a rule in a component or a second action.
+- **One place decides, and everyone calls it.** The preview a department admin sees is built by the code the student page uses; the publish action runs the function the wizard's step bar uses. If two screens must agree, they share the function, not a copy.
+- **One writer per protected column.** A column with a rule (application stage and status, placement, pipeline versions, a drive's editable-field list) is written by exactly one action or domain function. Where the rule is an invariant, back it with a database trigger or CHECK as well — the code path and the constraint agree, and a bug in one does not corrupt data.
+- **Never trust the client.** IDs, department ids, role claims, editable/read-only flags, eligibility results and field values from the client are inputs to validate, not facts. The department always comes from the session; permissions are read from stored data, not from what a form displayed.
+- **History is kept, not edited.** Applications, snapshots, pipeline versions, stage events, placements and audit rows are append-only or versioned. Stopping something (cancelling a drive, revoking a placement, closing a pipeline version) is a recorded transition with who, when and why — never a delete.
+- Every mutation that changes protected state writes an audit row in the same transaction (`createAuditLogInTransaction`); `lib/audit.ts` holds the action and entity vocabulary.
+- Notifications are resolved on the server from the database, never from a recipient the caller supplies, and never fail the change that triggered them.
+
+### Migrations
+
+- The schema is the source of truth. Generate DDL with `prisma migrate diff --from-schema-datamodel <previous> --to-schema-datamodel prisma/schema.prisma --script` (no shadow database), then add CHECK constraints, triggers and partial indexes by hand.
+- **Never run `prisma migrate dev`, a reset, or a destructive flag against the connected Neon database.** Prefer additive migrations; never drop tables, columns or data automatically.
+- Process: rehearse on a fresh Neon branch from production (probes that always roll back, plus a drift check) → get the user's confirmation → create a `pre-<name>-backup-YYYYMMDD` branch → `prisma migrate deploy` → backfill script if needed (`--dry-run`, then run) → read-only verification on production. A new enum value cannot be used in the migration that adds it — put constraints that mention it in the next migration.
+- A destructive or irreversible change needs an impact report and explicit confirmation first.
+- `next build` needs `NODE_ENV=production`; a shell that exports `NODE_ENV=development` breaks prerendering of `/404`.
+
 ## Route Rendering
 
 - A route segment whose data is scoped to the signed-in user (anything calling `requireStudent`, `requireDepartmentAdmin`, or `requireSuperAdmin`) declares `export const dynamic = 'force-dynamic'`. Without it Next tries to prerender the page at build time, where there is no session, and the build fails. These pages have no meaning without a session, so there is nothing to cache.
@@ -69,6 +87,8 @@
 - Business logic that needs testing is written as small, pure functions with no direct database or Clerk calls (e.g. `isStudentEligibleForDrive(student, drive)`, `validateStudentRow(row)`, `calculateProfileCompletion(profile)`), then called from the server action. The server action itself handles auth/DB wiring and stays thin enough not to need its own test — the pure function underneath it is what's tested.
 - Tests live alongside the code they test inside the relevant `features/` folder (`*.test.ts`), not in a separate mirrored tree.
 - A feature that changes eligibility rules or validation logic is not done until its tests are updated and passing.
+- Guard tests prove a rule can fail: after adding a guard, break it on purpose (mutation check) and confirm a test catches it. Fixtures mirror the real Prisma row shape — when a column is added, update every fixture rather than casting around the type.
+- Some suites have pre-existing failures unrelated to current work (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth). Compare against that baseline instead of assuming a red run is new; the count must not grow.
 - End-to-end testing (Playwright or similar) is explicitly out of scope for V1 — do not install or configure it without an explicit instruction to do so.
 
 ## File Organization (feature-based)
@@ -78,7 +98,10 @@
 - `features/auth/` — Sign-up/sign-in flows, role assignment, Clerk webhook handling.
 - `features/students/` — Student profile CRUD, profile-completion calculation, department-scoped student queries.
 - `features/excel-upload/` — Template generation, row parsing/validation, bulk-import transaction logic.
-- `features/drives/` — Drive CRUD, eligibility-matching logic, applications.
+- `features/drives/` — Master and department drive actions, lifecycle, overrides, eligibility engine, application-form configuration, batch targeting, readiness, preview.
+- `features/applications/` — Applying (server-decided), snapshots, stage moves, a student's application history.
+- `features/recruitment/` — Pipeline domain, versions, change requests and approval, master pipeline, recruitment counts and panels.
+- `features/notifications/` — In-app notifications, including drive announcements, cancellation and deadline-extension fan-out.
 - `features/departments/` — Department CRUD (super admin).
 - `features/admin-accounts/` — Department-admin account CRUD (super admin), audit log writes.
 - `components/ui/` — shadcn/ui components, generated via CLI, not hand-edited beyond that.

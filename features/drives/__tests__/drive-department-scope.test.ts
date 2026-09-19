@@ -17,7 +17,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     drive: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
+    // A department's own drive gets its pipeline when posted.
+    driveDepartmentConfig: { findMany: vi.fn(async () => []) },
     department: { findMany: vi.fn() },
+    driveEligibilityRule: { deleteMany: vi.fn(), createMany: vi.fn() },
+    // Recruitment pipeline models (see pipeline-fixtures.ts).
+    recruitmentPipelineVersion: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      createMany: vi.fn(),
+      updateMany: vi.fn(),
+      count: vi.fn(),
+    },
+    recruitmentStage: { findUnique: vi.fn() },
+    applicationStageEvent: { create: vi.fn(), createMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -56,6 +70,10 @@ vi.mock("../domain/department-assignment", async (importOriginal) => ({
 }));
 
 import { prisma } from "@/lib/prisma";
+import { withActivePipeline } from "@/features/recruitment/__tests__/pipeline-fixtures";
+
+// Every department drive here already has an active recruitment pipeline.
+beforeEach(() => withActivePipeline(prisma));
 import { requireDepartmentAdmin, requireSuperAdmin } from "@/lib/auth";
 import {
   ensureDepartmentsAssigned,
@@ -87,6 +105,7 @@ const baseDriveInput = {
   roleName: "Software Engineer",
   packageOffered: 12,
   selectionRounds: ["Aptitude", "Technical"],
+  batchYears: ["2026"],
   driveDate,
   applicationDeadline: deadline,
   applyMethod: "IN_APP" as const,
@@ -100,6 +119,8 @@ const existingDriveOfA = {
   departmentId: DEPT_A,
   isCentralDrive: false,
   companyName: "Acme Corp",
+  // Unchanged by the edits below: rounds belong to the recruitment pipeline.
+  selectionRounds: JSON.stringify(["Aptitude", "Technical"]),
 };
 
 beforeEach(() => {
@@ -112,7 +133,12 @@ beforeEach(() => {
   // `$transaction` is overloaded, so the mock is reached through an untyped
   // handle rather than fighting the overload set in a test.
   (prisma.$transaction as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-    async (fn: (tx: unknown) => Promise<unknown>) => fn({ drive: prisma.drive })
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        drive: prisma.drive,
+        driveEligibilityRule: prisma.driveEligibilityRule,
+        driveDepartmentConfig: prisma.driveDepartmentConfig,
+      })
   );
 
   vi.mocked(prisma.drive.create).mockResolvedValue({

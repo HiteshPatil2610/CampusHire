@@ -132,13 +132,135 @@ code does not require remembering that "config" means "instance".
   and their own instance of a central one, and a department drive reaches only
   the department that posted it.
 
+## The Master Drive → Department Drive workflow
+
+```
+SUPER ADMIN   Master details → Admin edit permissions → Recruitment stages
+              → Review → Department assignment        (post-central-drive-modal)
+DEPT ADMIN    Drive details → Student auto-fill fields → Eligibility criteria
+              → Eligible batches → Recruitment stage review → Student preview
+              → Publish                                (department-drive-config-panel)
+STUDENT       Published + eligible department drive → details → application
+              → snapshot → recruitment pipeline
+```
+
+- **The master is the company-level truth.** Company, logo, package, role, JD,
+  dates, the master recruitment pipeline (`Drive.masterPipeline`, a validated
+  JSON template — see `features/recruitment/domain/master-pipeline.ts`) and
+  which details departments may edit. The Super Admin does **not** configure
+  student application fields; each department does, in the existing
+  `DriveApplicationField` system.
+- **Admin edit permissions are data, enforced on the server.**
+  `Drive.departmentEditableFields` lists the content fields a department may
+  override (`DEPARTMENT_EDITABLE_FIELDS`: role, JD, requirements, skills, drive
+  date, deadline); anything else is LOCKED to the master's value.
+  `saveDriveDepartmentConfig` refuses an override of a locked field
+  (`findLockedOverrideAttempts`) whatever the form sent; clearing an override
+  back to the master is always allowed. Only the Super Admin changes the list
+  (`setDepartmentEditPermissions`, audited); locking a field clears existing
+  overrides of it on unpublished department drives only. A CHECK keeps the
+  column to known keys. Existing central drives were migrated with all six
+  open — what departments could already do.
+- **Only selected departments get the drive.** Creation assigns exactly the
+  departments picked in the last step (none are preselected); a department
+  admin's list is its assignments only.
+- **Recruitment stages start from the master.** A department drive's first
+  pipeline version is copied from the master's stages
+  (`initialDepartmentPipeline`) when it first needs one — a proposal, or
+  publishing. For a Super Admin drive the department admin only *reviews*
+  stages and proposes changes, before and after publishing; the Super Admin
+  approves (unit-3's request flow). A department's own drive is still edited
+  directly until published. When the Super Admin changes the master pipeline,
+  unpublished department drives still running the previous master stages
+  unchanged follow; the others keep their own.
+- **Draft, save, continue.** Every step saves as a draft (venue and reporting
+  time are no longer required to save). `departmentDriveReadiness` computes,
+  from the stored, resolved configuration, which steps are complete — the
+  wizard opens at the first incomplete one — and whether it may be published.
+- **Publish validation is that same function, on the server.**
+  `publishDepartmentDrive` refuses unless `readiness.ready`: role and JD, valid
+  dates, deadline in the future and before the drive date, venue and reporting
+  time, a valid form with at least one field, a valid rule set, batch
+  targeting, a valid pipeline, the assignment, the lifecycle state, and a
+  master that is not cancelled or archived. Every issue is listed at once.
+- **The preview is the student's view.** `buildStudentDriveView`
+  (`domain/student-drive-view.ts`) builds what a department's students
+  receive; `getDriveDetail` (the student page) and
+  `getDepartmentDrivePreview` (the admin's final step) both call it, from the
+  same rows loaded with the same include. There is no preview model.
+
+## The department drive workspace
+
+A department admin runs a drive from one screen, `/admin-dashboard/drives/[id]`,
+with a tab per concern in the URL (`?tab=`): Overview, Eligibility, Eligible
+Students, Registered Students, Applications, Recruitment Pipeline, Placement,
+Activity. Only the open tab's data is loaded, so the eligibility evaluation over
+a department runs only where it is needed. The old `/applications` route
+redirects to the Applications tab.
+
+- **Eligibility is never recomputed in the UI.** `getDriveStudents` judges every
+  student of the department with the central evaluator (standing first, then
+  department, then every rule); the Eligible and Registered tabs only filter
+  what it returns (search, batch, eligibility, placement, application status).
+- **Applications** filter by search, batch, stage and status through
+  `getDriveApplications`, always inside the department scope; a filter value
+  that is not valid is dropped, never passed on. Stages come from the drive's
+  active pipeline — the UI names none of them.
+- **One move implementation.** `moveApplication`
+  (`features/applications/domain/move-application.ts`) holds every rule for
+  moving an application; `updateApplicationStage` and the bulk action are thin
+  callers. It has a `dryRun` that judges exactly like a real move and writes
+  nothing.
+- **Bulk moves** (`bulk-update-application-stage.ts`) are two server steps:
+  `validateBulkStageMove` (dry run: which would move, which would not, and why)
+  then `bulkUpdateApplicationStage` (each application in its own transaction,
+  every success and failure returned, one audit entry for the operation, at most
+  100). Ids are looked up inside the caller's department and the named drive, so
+  an id that is not theirs is "not found". SELECTED is refused in bulk: it
+  creates a permanent placement, so it is made one student at a time.
+- **Placing is confirmed.** Selecting an application creates the placement, and
+  the UI always asks first (`PlacementConfirmDialog`): what is recorded, that it
+  permanently excludes the student from future drives, that history is kept, and
+  an acknowledgement. The Placement tab lists applicants waiting at the Offer
+  stage and the drive's placements (revoked ones included), with revoke.
+- **Stage history** (`getApplicationStageHistory`) and **activity**
+  (`getDriveOperationsActivity`) are read-only and department-scoped; activity
+  is built from the audit log through this department's own applications and
+  placements, so another department's activity on the same master drive never
+  appears.
+- **Super Admin** has `/super-admin-dashboard/placements`
+  (`getGlobalPlacements`): every placement, read-only, filtered by department,
+  company, batch, placement date, drive and student. Its filters arrive in the
+  URL and are validated before they reach the query. The master-drive detail
+  has a real Activity tab (`getDriveActivity`, from the audit log) and an
+  applications drill-down that matches departments by code.
+
 ## Assignment and the drive lifecycle
 
 ```
 MASTER DRIVE      DRAFT → PUBLISHED → ARCHIVED           (Super Admin)
 DEPARTMENT DRIVE  ASSIGNED → CONFIGURED → PUBLISHED → CLOSED → ARCHIVED
                                                           (that department's admin)
+and from any live state → CANCELLED → ARCHIVED
 ```
+
+**Cancellation is a transition, never a deletion.** A department admin cancels
+their own department drive; the Super Admin cancels one department's, or the
+master (which cancels every live department drive of it). A reason is
+required; `cancelledAt`, `cancelledById` and `cancellationReason` are
+recorded (CHECKs require them on a cancelled row and forbid them elsewhere).
+Cancelled drives take no applications, vanish from students' lists, and their
+applications no longer move; applications, snapshots and stage history are
+kept, and a student who applied still sees the drive, marked cancelled.
+Applicants — and department admins, when the Super Admin cancelled — are
+notified; the cancellation is audited.
+
+**Deadline extension is controlled.** Only the Super Admin extends a published
+department drive's deadline (`extendDepartmentDriveDeadline`): later only,
+into the future, before the drive date. It writes that department's deadline
+override, audits old and new with a reason, notifies its applicants and
+eligible students, and never touches application snapshots — each records the
+deadline that applied when it was submitted.
 
 **Assignment is one operation, and it owns both rows.** `assignDriveToDepartments`
 creates, per selected department and inside one transaction, the eligibility
@@ -177,7 +299,8 @@ instance that is later CLOSED or ARCHIVED stays locked. Students applied against
 that content and the record has to keep matching what they were shown. The
 contract, all in `domain/drive-lifecycle.ts`:
 
-- **Instance, frozen after publish:** `applicationFields`. A submitted
+- **Instance, frozen after publish:** the application form
+  (`DriveApplicationField` rows, snapshotted at publish). A submitted
   application stores its answers by field key, so changing the form afterwards
   would silently re-interpret history.
 - **Instance, still editable after publish:** venue, reporting time,
@@ -190,6 +313,10 @@ contract, all in `domain/drive-lifecycle.ts`:
   URL, package, selection rounds. Changing one now would alter an experience
   students already acted on — an applicant could become retroactively
   ineligible. Compared value by value, so a Super Admin can still fix a logo.
+- **Published = read-only for the department** (content, eligibility,
+  batches, application form). The Super Admin keeps audited controls: the
+  pipeline (`setPipelineAsSuperAdmin`), the deadline extension and
+  cancellation. There is no unlock.
 - **Recruitment stages are never locked.** `updateApplicationStage` writes
   `DriveApplication`, not the instance, so a drive can be run to completion
   without unlocking any application content.
@@ -203,6 +330,346 @@ department is not PUBLISHED — with one exception: a student who already applie
 keeps access to their own application's drive after it is administratively
 closed. ASSIGNED and CONFIGURED instances are half-built, and showing them would
 put partially configured data in front of students.
+
+## Department-specific drive configuration
+
+The master holds the institution/company-level defaults. Each department
+instance may override, for its own students only: role title, job
+description, requirements, skills, drive date, application deadline, selection
+rounds, min CGPA, max backlogs, the application form, and logistics.
+
+```
+Master  ABC · Software Engineer · 8 LPA · CGPA 7.0
+CSE     (role inherited)             · CSE JD · CGPA 7.5
+IT      Backend Developer            · IT JD  · CGPA 7.0
+ECE     Embedded Software Engineer   · ECE JD · CGPA 6.5
+```
+
+- **NULL on the instance means "inherit".** Overrides are nullable columns on
+  `DriveDepartmentConfig`; the master row is never copied per department, and a
+  value is stored only where a department deliberately differs. Company and
+  package are not overridable.
+- **`OVERRIDABLE_FIELDS`** in `domain/resolve-department-drive.ts` is the single
+  map of master field → instance column. The resolver, the lock list and the
+  admin UI all read it, so they cannot disagree about what is overridable.
+  Resolution is `override ?? master` — `??`, so a 0-backlog or 0-CGPA override
+  is honoured rather than falling back.
+- **Every department-facing read decides on the resolved drive**: the student
+  list and detail page, `applyToDrive`, the notification fan-out, the student's
+  own applications list, stage-change notifications, the admin's drive list and
+  the admin's live preview (which runs the same resolver client-side on the
+  unsaved form). A path that reads the master instead silently applies the
+  wrong department's bar.
+- **The listing no longer prefilters CGPA, backlogs, deadline or role in SQL.**
+  Those are overridable, so a master-based prefilter would under-match — a
+  department lowering the bar to 6.5 on a 7.0 master would lose its 6.8
+  students before the resolver saw the drive. SQL narrows on exact membership
+  only (assigned to the department, its instance PUBLISHED, master not
+  ARCHIVED); the rest is decided in JS on resolved values, over one
+  department's published drives.
+- **Isolation.** `saveDriveDepartmentConfig` writes one row keyed by
+  `(driveId, <session department>)` and has no path to the master `Drive` row.
+  Override input is three-state: absent leaves the stored value untouched,
+  `null` clears back to inheriting, a value sets it. Dates are validated on
+  resolved values, so an override on one date must agree with the inherited
+  other.
+- **Locking** (from the lifecycle) now freezes every content override, not just
+  the application form. The form comparison uses what students of that
+  department actually see (see "The application form is per department"), so a
+  logistics-only save on a published drive whose form was never customised is
+  not mistaken for a form change.
+- **Historical data is preserved.** The migration is additive; every existing
+  instance has every override NULL and resolves to exactly its previous values.
+
+## Eligibility is a rule engine
+
+Eligibility is a set of relational rules per department instance, evaluated by
+**one** pure function. The drive list, the detail page and its checklist,
+`applyToDrive` and the notification fan-out all decide through it, via the
+facade in `features/drives/queries/drive-eligibility.ts`; there is no second
+implementation anywhere, so a student can never be shown a drive the apply
+action refuses, or notified about one the list hides.
+
+```
+DriveEligibilityRule { driveId? | driveDepartmentConfigId?, ruleType, operator,
+                       numberValue? | listValue[] }
+```
+
+- **The catalogue is the grammar** (`domain/eligibility-rules.ts`). Every rule
+  type maps to a column the Student model actually has: CGPA, active and past
+  backlogs, 10th / 12th / diploma / "12th or diploma" percentage, current
+  semester, batch year, entry type, and skills. Each type has fixed operators
+  and exactly one value kind, so "CGPA ≤ 7" cannot be expressed. Gender and
+  per-semester SGPA are deliberately absent. Department is not a rule — it
+  decides *whose* rule set applies.
+- **Ownership and shape are enforced in the database** by two CHECK constraints
+  (in the migration SQL, since Prisma cannot express them): exactly one owner,
+  exactly one value column. Per-type validity is enforced at the write
+  boundary by `domain/eligibility-rule-schema.ts` — operator allowed for the
+  type, bounds, integers, decimals, real years and entry types, no duplicate
+  `(type, operator)`, coherent semester ranges.
+- **Master defaults, per-type department override.** A department rule of a
+  type replaces the master's rules of that type for that department only; every
+  other master rule is inherited (`resolveEligibilityRules`). A department
+  cannot *delete* a master rule of another type, only override it.
+- **Missing is never zero.** A diploma student has no 12th record; a 12th rule
+  fails with "no 12th record", never with "0% < 60%" (invariant 11).
+- **Subjects come from records only.** `toEligibilitySubject` builds from
+  server-loaded rows; nothing in a request is ever evaluated. The facade types
+  *require* the student's skills and the drive's resolved rule set, so a caller
+  that forgot to load either does not compile.
+- **SQL narrows on membership and lifecycle only** — assigned to the student's
+  department, instance PUBLISHED, master not ARCHIVED — and loads both rule
+  sets in the same query. Every rule is decided in JS on the resolved set.
+- **Locked with the instance.** A published instance's rule set cannot change
+  (compared as a set, order and list-case insensitive); the master's extra
+  default rules freeze once any department has published.
+- **Legacy compatibility.** `Drive.minCGPA` / `maxActiveBacklogs` and their
+  instance overrides are kept and dual-written as mirrors of the CGPA and
+  ACTIVE_BACKLOGS rules, in the same transaction. If a drive somehow has no
+  stored rule of those two types, `withLegacyRules` derives it from the column;
+  a stored rule always wins. Remove both when the columns are dropped.
+
+## The application form is per department
+
+Before publishing, a department admin decides exactly which fields its students
+see on the application, which are required, and which they may edit. The form
+is relational:
+
+```
+DriveApplicationField { driveId? | driveDepartmentConfigId?, fieldKey, label,
+                        source, category, description?, isRequired, isEnabled,
+                        sortOrder, permission (READ_ONLY | EDITABLE) }
+```
+
+- **Whole-form resolution, rows first** (`resolveApplicationForm` in
+  `domain/application-form.ts`): the department's rows → its legacy JSON →
+  the master's rows → the master's legacy JSON → the catalog default form. A
+  department that configured its form owns all of it, as the legacy
+  `config.applicationFields ?? drive.applicationFields` did. Every reader —
+  the student list and detail page, `applyToDrive`, the admin panel and its
+  preview — goes through `resolveDepartmentApplicationForm`, which *requires*
+  both `formFields` relations so a caller that forgot to load them does not
+  compile.
+- **A closed vocabulary.** A key is a catalog key or `custom_<a-z0-9_>`;
+  nothing else is ever stored. Catalog labels, sources and categories come from
+  the catalog, never the client. A catalog field may only take a permission
+  it allows — the registrar records (CGPA, roll number, department, backlogs…)
+  are read-only only; `EDITABLE_CAPABLE_KEYS` in the catalog lists the rest. A
+  custom question is always student input and always editable. Enforced by
+  `applicationFormSchema` at every write and by five CHECK constraints in the
+  migration (one owner, safe key pattern, custom ⇒ student input + editable,
+  label present, non-negative order).
+- **The browser is never trusted.** `applyToDrive` rebuilds the form from the
+  database and the student's own profile and judges the submission with
+  `validateApplicationSubmission`: a read-only value always comes from the
+  profile (anything submitted for it is ignored), a required read-only value
+  missing from the profile refuses the application ("add it to your profile
+  first"), a required editable field must be non-empty, what the student typed
+  must be well-formed (links, emails, phone), and unknown or disabled keys are
+  dropped. `submittedDetails` stores the effective value of every enabled
+  editable field.
+- **Locking.** A department's form freezes when its instance is published
+  (`lockedAt`). `publishDepartmentDrive` snapshots an inherited form into the
+  department's own rows in the same transaction, so a later change to the
+  master's default can never reach students who applied. A central drive's
+  default form freezes once any department has published. A department-owned
+  drive is published the moment it is posted, so its form freezes on the first
+  application instead. Compared with `applicationFormKey` — the enabled fields
+  in order with label, requirement, permission and source — so resubmitting an
+  unchanged form with a logistics edit goes through.
+- **The admin preview is the student card.** `buildPreviewReviewRows` and
+  `buildApplicationReviewData` group by the same rule (configured permission;
+  registrar keys shown as institutional records), and the preview runs on the
+  unsaved form.
+- **Legacy compatibility.** `Drive.applicationFields` /
+  `DriveDepartmentConfig.applicationFields` are kept and dual-written by
+  `writeMasterForm` / `writeDepartmentForm` in the owning transaction (the JSON
+  now carries `permission`). `parseLegacyApplicationFields` reads them
+  defensively: unknown, unsafe or duplicate keys are dropped and reported, a
+  stored permission is honoured only if the key allows it. Remove both with
+  the columns.
+
+## Placement is permanent exclusion
+
+```
+StudentPlacement { studentId, source: APPLICATION | MANUAL, applicationId?,
+                   driveId?, companyName, roleName, packageOffered?,
+                   packageDisplay?, placedAt, recordedById?,
+                   revokedAt?, revokedById?, revokeReason? }
+```
+
+- **Created two ways, both by a department admin.** Marking an application
+  SELECTED (`updateApplicationStage`) creates an APPLICATION placement in the
+  same transaction, with the company, package and the role *as that
+  department ran it*. `recordManualPlacement` records an off-campus offer
+  (MANUAL). Both are scoped to the admin's own students and audited.
+- **Placed stops the evaluator.** `evaluateEligibility` checks standing first,
+  in order — approved, **placed**, opted in, department — and the first
+  failure ends evaluation with `blockedBy` set and no rule evaluated. A
+  placed student is ineligible *because they are placed*; their CGPA, batch
+  and every other rule are never read or reported. `toEligibilitySubject`
+  requires the student's placements, so a caller that forgot to load them
+  does not compile — which is how every path (list, detail, dashboard, apply,
+  notifications, the admin's eligible list) was found and fixed.
+- **Existing applications are untouched.** A student placed while other
+  applications are in progress keeps them, with their snapshots and audit
+  history; the admin applications table marks them "Placed elsewhere". Only
+  new applications are blocked.
+- **History, not state.** A trigger refuses any change to a placement except
+  its one-time revocation (when, by whom, and a reason of at least five
+  characters — a CHECK). A SELECTED application is final (the application
+  trigger refuses moving it), so the only correction is revoking the
+  placement, by the student's department admin or the Super Admin. Nothing
+  deletes a placement; retiring a promoted student's record is refused while
+  it holds any placement history.
+- **Reads.** Department admin: history, record and revoke in the student
+  dialog. Super Admin: placement state and companies across the institution,
+  and revoke. Student: a read-only card on the dashboard. Every count and
+  roster uses `placement-status.ts`, including the raw-SQL reports via
+  `placedStudentSql`.
+- **Migration.** Every SELECTED application was backfilled into a placement in
+  the migration itself, so the placed set was identical before and after
+  (verified: 235 placements, the same 193 students).
+
+## Batch targeting
+
+Which batches a drive is open to is the drive's `BATCH_YEAR IN (…)` eligibility
+rule on `Student.batchYear` — not a second store — evaluated like every other
+rule (`domain/batch-targeting.ts` only reads and writes that rule). The
+picker offers the batch years the department's students actually have, with
+counts (`getDepartmentBatchYears`); nothing is hard-coded.
+
+- **Required before publishing.** `publishDepartmentDrive` refuses a drive
+  whose effective rule set (the department's, else the master's) targets no
+  batch. A department-owned drive is published when posted, so its create and
+  edit forms require at least one batch (`driveSchema.batchYears`).
+  Instances published before this rule keep publishing to every batch.
+- A student whose batch is not on record fails a batch rule — it never passes
+  by default.
+- The department admin's **eligible-student list**
+  (`getDepartmentDriveEligibleStudents`) evaluates every student of the
+  department on the saved configuration through the same evaluator, with the
+  reasons the rest are not eligible and how many are excluded as placed.
+
+## Recruitment pipelines are configured and versioned
+
+```
+DriveDepartmentConfig ── RecruitmentPipelineVersion (v1, v2 …; one ACTIVE)
+                              └── RecruitmentStage (name, stageType, order,
+                                  description, instructions, visibility,
+                                  scheduledAt, location, isEnabled)
+DriveApplication.currentStageId ──► RecruitmentStage
+ApplicationStageEvent (from/to stage, from/to status, version, actor, note)
+PipelineChangeRequest (base version, proposed stages, reason, PENDING →
+                       APPROVED | REJECTED, requester, reviewer)
+```
+
+- **Per department drive, nothing hard-coded.** Each department drive's
+  pipeline is Application → any typed rounds → Offer
+  (`features/recruitment/domain/pipeline.ts`, `validatePipelineStages`).
+  Stage types: APPLICATION, APTITUDE, CODING, GROUP_DISCUSSION,
+  TECHNICAL/HR/MANAGERIAL_INTERVIEW, PRESENTATION, ASSESSMENT, OFFER, CUSTOM.
+  Counts (`getDriveRecruitment`) are grouped by configured stage; no stage
+  name appears in code.
+- **Versions, not edits.** A version and its stages never change (triggers);
+  a change is the next version, the previous one SUPERSEDED, exactly one
+  ACTIVE (partial unique index). `createPipelineVersion` is the only writer,
+  and mirrors stage names into the legacy `selectionRounds`.
+- **Applications keep their history.** An application points at the stage it
+  is in, in whatever version. It may take an outcome where it stands; the next
+  move goes to a stage of the **active** version, and it joins that version.
+  Every move writes an `ApplicationStageEvent` with the version.
+- **Moves are checked on the server** (`updateApplicationStage`,
+  `validatePipelineTransition`): the stage id must belong to this
+  department's instance of this drive, to the active version (or be the
+  current stage), be enabled; SELECTED only at an Offer stage; a selection is
+  final; nothing moves into WITHDRAWN. The legacy `stage` enum is
+  dual-written (`legacyStageFor`).
+- **Who changes a pipeline.** Before publishing: the department admin, directly
+  (`saveDraftPipeline`). After publishing: the department admin can only
+  propose (`proposePipelineChange`, reason required, one PENDING per drive);
+  the Super Admin approves or rejects (`reviewPipelineChange`) — never their
+  own request (also a CHECK), and approval is refused if the pipeline moved on
+  since the proposal. Rejection leaves the pipeline untouched. The Super Admin
+  may also set a pipeline directly (`setPipelineAsSuperAdmin`, audited;
+  no UI yet). Selection rounds cannot be changed around this: the drive forms
+  refuse a rounds change once a pipeline exists.
+- **Creation.** Version 1 is built from the drive's selection rounds
+  (`pipelineFromRounds`) when a department drive is published, when a
+  department posts its own drive, or — as a fallback — when the first
+  application arrives. Existing data was backfilled
+  (`scripts/backfill-recruitment-pipelines.ts`).
+- **Students only read**: the stage name if the stage is visible to students,
+  otherwise "In progress"; the drive page lists the visible stages.
+
+## An application is server-decided, final, and reproducible
+
+`applyToDrive` is the only student write path to `DriveApplication`, and it
+decides everything from the database — nothing in the request but the drive
+id, the editable answers and the consent is read, and those only as input to
+be validated:
+
+1. The input shape (drive id, string answers, boolean consent).
+2. An authenticated student with a profile.
+3. **Standing**, from the evaluator itself (`evaluateStanding`), before the
+   drive is even loaded: registration approved, then **not placed** — a
+   placed student stops here — then opted in. See "Placement is permanent
+   exclusion".
+4. The student's department has an instance of the drive, it is PUBLISHED,
+   and the master is not ARCHIVED.
+5. Eligibility on the department's resolved rule set — department membership,
+   batch (`BATCH_YEAR` rules), CGPA, backlogs, skills — and its own deadline.
+6. No existing application (and the `(studentId, driveId)` unique constraint).
+7. Consent is `true`, and — when the client says which declaration it showed
+   — it is the current `APPLICATION_DECLARATION.version`.
+8. The department's application form, rebuilt from the database
+   (`validateApplicationSubmission`).
+
+**One transaction** then writes the application, its
+`DriveApplicationSnapshot` (nested create) and two audit rows (APPLY, and the
+snapshot's CREATE, via `createAuditLogInTransaction` as the student). Any
+failure rolls all of it back; the notification is sent only after commit.
+
+**The snapshot** (`features/applications/utils/application-snapshot.ts`) is a
+versioned JSON document, one per application:
+- the student facts eligibility read: CGPA, backlogs, percentages, semester,
+  batch, entry type, department, skill names;
+- placement at submission;
+- the effective rule set with its source, and each rule's result;
+- the form (fields, permissions, origin) with the value of every field as
+  recorded, the submitted answers, and the declaration version and time;
+- the drive content as this department ran it, plus the master id, the
+  department-drive id, its status, publish/lock times and `updatedAt`s.
+
+Three hashes — form (`applicationFormKey`), eligibility (`ruleSetKey`) and
+drive content — sit in columns so snapshots can be compared without parsing.
+Nothing the form did not ask for is stored (no date of birth, address or
+contact details unless the department put them on the form).
+
+**Revisions without a revision table.** The snapshot carries the resolved
+content, not a pointer to it, so it stays reproducible whatever later happens
+to the drive, its rules, its batch targeting, its form or the student's
+profile. The publish lock and the snapshotted department form (earlier
+phases) already stop most of that from changing; the snapshot covers the rest.
+
+**Immutable in the database, not only in code.** A trigger refuses any UPDATE
+of a submitted application's `studentId`, `driveId`, `appliedAt`,
+`snapshotCgpa`, `snapshotBacklogs`, `submittedDetails`,
+`consentAcceptedAt` or `createdAt` — from Prisma or raw SQL. `stage`,
+`status`, `stageUpdatedAt` and `stageUpdatedById` stay writable for
+`updateApplicationStage`. A second trigger refuses any UPDATE of a snapshot.
+DELETE is not blocked: an application still goes with its student's cascade.
+CHECKs: payload is a JSON object, `schemaVersion ≥ 1`, and a SUBMISSION
+snapshot must carry all three hashes.
+
+**History before snapshots.** Every application that predates the table has a
+BACKFILL snapshot built from only the inline columns recorded at submission,
+with `notCaptured` listing what was not (rules, form, drive content,
+placement, batch). It never reconstructs those from today's data.
+`getApplicationRecord` reads the snapshot and falls back to the inline
+columns (`origin: LEGACY_COLUMNS`), and is scoped: the student's own, a
+department admin's own applicant on a drive they run, or a Super Admin.
 
 ## Money is NUMERIC, and NUMERIC is not a number
 
@@ -277,11 +744,13 @@ is worth more than any query-level optimisation in this file.
 5. Session and identity always come from Clerk. The app does not implement its own password storage, session cookies, or OTP logic. The one exception is the one-time seed script, which creates the Super Admin directly via Clerk's backend API — it does not bypass Clerk.
 6. Large or binary content (photos, JD PDFs) never gets written into the Postgres database — it goes to Vercel Blob, with only the reference URL stored in Postgres.
 7. A drive's open/closed status is never stored — it is always derived from `applicationDeadline` via the shared `getDriveStatus()` helper. No code path is allowed to introduce a stored status field or compute the comparison inline elsewhere.
-8. A `DriveApplication`'s `stage` and `status` are written by exactly one server action (`updateApplicationStage`), callable only by a department admin, scoped both to a drive they run and to an applicant from their own department. No student-facing path writes either column. Every other column on the row is immutable after creation, and the student has no mutation at all — an application is final once submitted. The `(studentId, driveId)` unique constraint is what enforces that: re-applying is the only vector a student has, and it is refused both in `applyToDrive` and at the database.
-10. No column stores whether a student is placed. Placement is always computed from `DriveApplication.status = SELECTED` via `features/students/utils/placement-status.ts`. Introducing a stored placement column, or comparing the status string inline somewhere else, is not allowed.
+8. A `DriveApplication`'s recruitment stage (`currentStageId`, with the legacy `stage` dual-written) and `status` are written by exactly one server action (`updateApplicationStage`), only to a stage of that department drive's active pipeline, with every move recorded in `ApplicationStageEvent`, callable only by a department admin, scoped both to a drive they run and to an applicant from their own department. No student-facing path writes either column. Every other column on the row is immutable after creation — enforced by a database trigger, not only by the absence of a write path — and the student has no mutation at all; an application is final once submitted. Each application has exactly one `DriveApplicationSnapshot`, written in the same transaction, and never updated. The `(studentId, driveId)` unique constraint is what enforces that: re-applying is the only vector a student has, and it is refused both in `applyToDrive` and at the database.
+10. No flag stores whether a student is placed. A student is placed while they hold a `StudentPlacement` with `revokedAt IS NULL` — an explicit record (company, role, package, date, who) created when an application is marked SELECTED (same transaction) or recorded by a department admin for an off-campus offer. Every reader resolves it through `features/students/utils/placement-status.ts` (`PLACED_STUDENT_FILTER`, `ACTIVE_PLACEMENTS_SELECT`, `placedStudentSql`); a `placed` boolean column, or testing `status = 'SELECTED'` to mean placed anywhere else, is not allowed. Placement is permanent exclusion from new drives, and a placement is never edited or deleted — a mistake is corrected by revoking it with a reason.
 11. When a student's entry type makes a field meaningless — a diploma student's 12th percentage, a regular student's diploma percentage — that column is `NULL`. No code path substitutes `0` for a record the student does not have.
 12. Self-asserted registration details are never written into `Student` before a department admin approves them. They live in `StudentAccessRequest` until then, so an unapproved sign-up can never appear in a department roster, in `totalStudents`, or in the placement-rate denominator. Approving is what creates the `Student` row, and it takes the department from the reviewing admin, not from the applicant.
 15. Being promoted to an admin role ends an account's student-ness in the same transaction as the promotion: its `Student` row is retired and any *pending* `StudentAccessRequest` is deleted, so a promoted account leaves the waiting list and gets its new role's access immediately (`retireStudentAccess`). The pending request is deleted rather than given a terminal status — `REJECTED` would permanently block re-registration if the account is later demoted back to `STUDENT`, and `APPROVED` would claim a `Student` row was created when none was. Approval is independently refused for any applicant who is no longer a `STUDENT`, so a stale queue open in another tab cannot put an admin back in the roster. A student record carrying `DriveApplication` history is never silently deleted: it refuses, and the refusal aborts the promotion.
 13. `Student.rollNumber` is nullable but not optional: a lateral-entry student may register before one is issued, and `applyToDrive` refuses any application without one. It is registrar-owned once set — the student's profile can fill a blank, never overwrite an existing value.
-14. Anything that can be computed is computed, not stored. `getDriveStatus()` derives open/closed from a deadline, `placement-status.ts` derives placement from applications, and `notification-priority.ts` derives urgency from a notification's type and title. A stored equivalent has to be set correctly at every write site, and the first caller that forgets produces a silently wrong value — which is exactly how `placementStatus` came to read zero everywhere.
+14. Anything that can be computed is computed, not stored. `getDriveStatus()` derives open/closed from a deadline, `placement-status.ts` derives placement from active placement records, and `notification-priority.ts` derives urgency from a notification's type and title. A stored equivalent has to be set correctly at every write site, and the first caller that forgets produces a silently wrong value — which is exactly how `placementStatus` came to read zero everywhere.
+17. Eligibility is decided in one place (the evaluator). Screens that list students for a drive show what `getDriveStudents` returns and never re-derive it. An application moves only through `moveApplication`, and a placement is confirmed by a person before it is created; a bulk move never selects.
+16. A department admin may override a master content field only if the Super Admin opened it (`Drive.departmentEditableFields`), checked in `saveDriveDepartmentConfig` against the stored list — never against what the form shows. A department drive is published only when `departmentDriveReadiness` says it is ready, computed on the server from the stored configuration. A drive is never deleted to stop it: it is CANCELLED, with who, when and why recorded, and its applications and snapshots are kept.
 9. A successfully-imported Excel/CSV file does not persist in Blob storage after its rows are committed — cleanup happens in the same transaction/flow as the successful import, not as a separate best-effort job. 

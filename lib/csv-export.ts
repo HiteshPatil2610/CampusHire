@@ -45,8 +45,11 @@ export function exportToCsv(
           if (value === null || value === undefined) {
             return '';
           }
-          // Stringify and escape quotes
-          const stringValue = String(value);
+          // Stringify and escape quotes. A text value that a spreadsheet would
+          // run as a formula (a student typing =HYPERLINK(...) as their name) is
+          // defused with a leading apostrophe; numbers are left alone.
+          const stringValue =
+            typeof value === 'string' && /^[=+\-@\t\r]/.test(value) ? `'${value}` : String(value);
           // If value contains comma, quote, or newline, wrap in quotes and escape internal quotes
           if (
             stringValue.includes(',') ||

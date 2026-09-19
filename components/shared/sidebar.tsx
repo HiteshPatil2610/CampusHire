@@ -125,6 +125,8 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
         { label: 'Institutional Overview', href: '/super-admin-dashboard', icon: '🌐' },
         { label: 'All Students', href: '/super-admin-dashboard/students', icon: '◉' },
         { label: 'Campus Drives', href: '/super-admin-dashboard/drives', icon: '🚀' },
+        { label: 'Placements', href: '/super-admin-dashboard/placements', icon: '🎓' },
+        { label: 'Pipeline Requests', href: '/super-admin-dashboard/pipeline-requests', icon: '🧭' },
         { label: 'Departments', href: '/super-admin-dashboard/departments', icon: '🏛' },
         { label: 'Admin Accounts', href: '/super-admin-dashboard/admins', icon: '👤' },
         { label: 'Global Reports', href: '/super-admin-dashboard/reports', icon: '📊' },

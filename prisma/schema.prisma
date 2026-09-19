@@ -63,10 +63,56 @@ enum ApplyMethod {
 // Existing rows were backfilled to PUBLISHED because they are already live to
 // students. Nothing gates student visibility on this yet — that lands with the
 // lifecycle phase.
+//
+// CANCELLED means the drive was called off for every department: nobody can
+// apply, nobody new sees it, and everything already recorded stays.
 enum MasterDriveStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+  CANCELLED
+}
+
+// What a drive eligibility rule tests. Each maps to a column the Student model
+// actually has — see features/drives/domain/eligibility-rules.ts for the
+// column, the allowed operators and the value bounds of each.
+enum EligibilityRuleType {
+  CGPA
+  ACTIVE_BACKLOGS
+  PAST_BACKLOGS
+  TENTH_PERCENTAGE
+  TWELFTH_PERCENTAGE
+  DIPLOMA_PERCENTAGE
+  PRE_COLLEGE_PERCENTAGE
+  CURRENT_SEMESTER
+  BATCH_YEAR
+  ENTRY_TYPE
+  SKILL
+}
+
+enum EligibilityOperator {
+  GTE
+  LTE
+  EQ
+  IN
+  INCLUDES_ALL
+  INCLUDES_ANY
+}
+
+// Where an application field's value comes from.
+//   PROFILE        the student's profile (pre-filled)
+//   STUDENT_INPUT  typed by the student on the application (custom questions)
+//   UPLOAD         a document the student uploaded to their profile
+enum ApplicationFieldSource {
+  PROFILE
+  STUDENT_INPUT
+  UPLOAD
+}
+
+// Whether the student may change a field's value on the application.
+enum ApplicationFieldPermission {
+  READ_ONLY
+  EDITABLE
 }
 
 // Lifecycle of one department's instance of a drive (`DriveDepartmentConfig`).
@@ -78,12 +124,15 @@ enum MasterDriveStatus {
 // CLOSED     administratively closed, distinct from "deadline passed", which
 //            is still derived and never stored
 // ARCHIVED   historical; the department is done with this drive entirely
+// CANCELLED  called off in this department: no applications, hidden from
+//            students who have not applied; history and snapshots are kept
 enum DepartmentDriveStatus {
   ASSIGNED
   CONFIGURED
   PUBLISHED
   CLOSED
   ARCHIVED
+  CANCELLED
 }
 
 // Selection stage an application has reached.
@@ -117,15 +166,23 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  departmentAdmin  DepartmentAdmin?
-  student          Student?
-  auditLogs        AuditLog[]
-  notifications    Notification[]
-  createdDrives    Drive[]                @relation("DriveCreatedBy")
-  stageUpdates     DriveApplication[]     @relation("ApplicationStageUpdatedBy")
-  accessRequest    StudentAccessRequest?
-  reviewedRequests StudentAccessRequest[] @relation("AccessRequestReviewedBy")
-  publishedDrives  DriveDepartmentConfig[] @relation("DepartmentDrivePublishedBy")
+  departmentAdmin         DepartmentAdmin?
+  student                 Student?
+  auditLogs               AuditLog[]
+  notifications           Notification[]
+  createdDrives           Drive[]                      @relation("DriveCreatedBy")
+  stageUpdates            DriveApplication[]           @relation("ApplicationStageUpdatedBy")
+  accessRequest           StudentAccessRequest?
+  reviewedRequests        StudentAccessRequest[]       @relation("AccessRequestReviewedBy")
+  publishedDrives         DriveDepartmentConfig[]      @relation("DepartmentDrivePublishedBy")
+  recordedPlacements      StudentPlacement[]           @relation("PlacementRecordedBy")
+  revokedPlacements       StudentPlacement[]           @relation("PlacementRevokedBy")
+  pipelineVersionsCreated RecruitmentPipelineVersion[] @relation("PipelineVersionCreatedBy")
+  stageEvents             ApplicationStageEvent[]      @relation("StageEventActor")
+  pipelineRequests        PipelineChangeRequest[]      @relation("PipelineRequestedBy")
+  pipelineReviews         PipelineChangeRequest[]      @relation("PipelineReviewedBy")
+  cancelledDrives         Drive[]                      @relation("DriveCancelledBy")
+  cancelledDeptDrives     DriveDepartmentConfig[]      @relation("DepartmentDriveCancelledBy")
 }
 
 // Department model - represents academic departments
@@ -214,6 +271,7 @@ model Student {
   certifications StudentCertification[]
   applications   DriveApplication[]
   semesterMarks  SemesterMark[]
+  placements     StudentPlacement[]
 
   @@index([departmentId])
   @@index([isPending])
@@ -373,48 +431,73 @@ model StudentPreferences {
 
 // Drive model - represents a placement drive/recruitment opportunity
 model Drive {
-  id                  String      @id @default(cuid())
+  id                       String            @id @default(cuid())
   // Null means the drive was posted centrally by a Super Admin rather than
   // owned by a single department.
-  departmentId        String?
-  createdByUserId     String?
-  isCentralDrive      Boolean     @default(false)
-  companyName         String
-  roleName            String
-  jobDescriptionUrl   String?
-  jobDescriptionText  String?     @db.Text
+  departmentId             String?
+  createdByUserId          String?
+  isCentralDrive           Boolean           @default(false)
+  companyName              String
+  roleName                 String
+  jobDescriptionUrl        String?
+  jobDescriptionText       String?           @db.Text
+  // Institution-level defaults a department instance may override. Plain text
+  // for requirements; skills are a JSON array of tags, matching
+  // `selectionRounds`.
+  requirements             String?           @db.Text
+  skills                   String?           @db.Text
   // Money, so NUMERIC rather than Float: exact storage and exact SQL
   // aggregation. Prisma surfaces this as a Decimal, which is not a number —
   // see features/drives/utils/format-package.ts before reading it.
-  packageOffered      Decimal     @db.Decimal(10, 2)
-  selectionRounds     String      @db.Text // JSON array of round names
-  driveDate           DateTime
-  applicationDeadline DateTime
-  applyMethod         ApplyMethod
-  externalApplyUrl    String?
-  minCGPA             Float
-  maxActiveBacklogs   Int
-  companyLogoUrl      String?
-  packageDisplay      String?
-  venue               String?
-  reportingTime       String?
-  contactPerson       String?
-  contactPhone        String?
-  pptLink             String?
-  applicationFields   String?     @db.Text
+  packageOffered           Decimal           @db.Decimal(10, 2)
+  selectionRounds          String            @db.Text // JSON array of round names
+  driveDate                DateTime
+  applicationDeadline      DateTime
+  applyMethod              ApplyMethod
+  externalApplyUrl         String?
+  minCGPA                  Float
+  maxActiveBacklogs        Int
+  companyLogoUrl           String?
+  packageDisplay           String?
+  venue                    String?
+  reportingTime            String?
+  contactPerson            String?
+  contactPhone             String?
+  pptLink                  String?
+  applicationFields        String?           @db.Text
   // Master-drive lifecycle. Defaults to PUBLISHED so every pre-existing drive
   // keeps behaving exactly as before; a newly created central drive starts as
   // DRAFT and is released per department.
-  lifecycleStatus     MasterDriveStatus @default(PUBLISHED)
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  lifecycleStatus          MasterDriveStatus @default(PUBLISHED)
+  // Which master content fields a department admin may override for their
+  // department (see DEPARTMENT_EDITABLE_FIELDS). Anything not listed is
+  // locked to the master's value. Set by the Super Admin only; a CHECK keeps
+  // it to known field keys.
+  departmentEditableFields String[]          @default([])
+  // The master recruitment pipeline: the stages every department drive
+  // starts from, as a JSON array of stage definitions (TEXT, as every JSON
+  // column here). NULL means "built from selectionRounds".
+  masterPipeline           String?           @db.Text
+  cancelledAt              DateTime?
+  cancelledById            String?
+  cancellationReason       String?           @db.Text
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
 
   // Relations
   department              Department?               @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   createdByUser           User?                     @relation("DriveCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  cancelledBy             User?                     @relation("DriveCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
   applications            DriveApplication[]
   departmentConfigs       DriveDepartmentConfig[]
   eligibleDepartmentLinks DriveEligibleDepartment[]
+  // Master default eligibility rules, inherited by every department instance
+  // that does not set a rule of the same type itself.
+  eligibilityRules        DriveEligibilityRule[]
+  // Master default application form, used by any department instance that has
+  // no form of its own. A department-owned drive's form lives here.
+  formFields              DriveApplicationField[]
+  placements              StudentPlacement[]
 
   @@index([departmentId])
   @@index([applicationDeadline])
@@ -453,38 +536,66 @@ model DriveEligibleDepartment {
 // the same fact (this drive runs in this department) recorded at two levels,
 // and must never exist without each other.
 model DriveDepartmentConfig {
-  id                  String   @id @default(cuid())
-  driveId             String
-  departmentId        String
+  id                 String                @id @default(cuid())
+  driveId            String
+  departmentId       String
   // Where this department's instance sits in its own lifecycle. Student
   // visibility is gated on PUBLISHED; "deadline passed" remains a separate,
   // derived open/closed state and is never stored.
-  status              DepartmentDriveStatus @default(ASSIGNED)
+  status             DepartmentDriveStatus @default(ASSIGNED)
   // When the Super Admin assigned the drive to this department.
-  assignedAt          DateTime @default(now())
+  assignedAt         DateTime              @default(now())
   // Set once, when the department admin releases the drive to their students.
-  publishedAt         DateTime?
-  publishedByUserId   String?
+  publishedAt        DateTime?
+  publishedByUserId  String?
   // Set at the same moment as publishedAt. Its presence is what makes the
   // content fields immutable — a published drive is something students have
   // already read and applied against.
-  lockedAt            DateTime?
+  lockedAt           DateTime?
+  // Set when the instance is cancelled, by whom and why.
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancellationReason String?               @db.Text
+
+  // Department overrides of the master drive's content. NULL means "inherit
+  // from the master" — the master row is never duplicated per department, and
+  // a value is only stored here when this department deliberately differs.
+  // Resolved at read time by `resolveDepartmentDrive`.
+  roleName            String?
+  jobDescriptionText  String?   @db.Text
+  requirements        String?   @db.Text
+  skills              String?   @db.Text // JSON array of tags
+  driveDate           DateTime?
+  applicationDeadline DateTime?
+  selectionRounds     String?   @db.Text // JSON array of round names
+  minCGPA             Float?
+  maxActiveBacklogs   Int?
   venue               String?
   reportingTime       String?
   coordinatorName     String?
   coordinatorPhone    String?
   coordinatorEmail    String?
-  seatingAllocation   String?  @db.Text
+  seatingAllocation   String?   @db.Text
   pptLink             String?
-  specialInstructions String?  @db.Text
-  applicationFields   String?  @db.Text
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  specialInstructions String?   @db.Text
+  applicationFields   String?   @db.Text
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // Relations
-  drive           Drive      @relation(fields: [driveId], references: [id], onDelete: Cascade)
-  department      Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  publishedByUser User?      @relation("DepartmentDrivePublishedBy", fields: [publishedByUserId], references: [id], onDelete: SetNull)
+  drive            Drive                        @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  department       Department                   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  publishedByUser  User?                        @relation("DepartmentDrivePublishedBy", fields: [publishedByUserId], references: [id], onDelete: SetNull)
+  cancelledBy      User?                        @relation("DepartmentDriveCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  // This department's own eligibility rules. A rule of a given type here
+  // replaces the master's rules of that type for this department only.
+  eligibilityRules DriveEligibilityRule[]
+  // This department's application form. When present it is the whole form —
+  // it replaces the master's rather than merging with it. Materialised at
+  // publication so a published form never depends on anything that can change.
+  formFields       DriveApplicationField[]
+  pipelineVersions RecruitmentPipelineVersion[]
+  pipelineRequests PipelineChangeRequest[]
 
   @@unique([driveId, departmentId])
   // A department admin's list is always "my department, filtered by status".
@@ -492,6 +603,80 @@ model DriveDepartmentConfig {
   // lookup from this btree's leftmost column, so keeping both would be a
   // second copy every write has to maintain (see the index policy above).
   @@index([departmentId, status])
+}
+
+// One eligibility rule, relational rather than JSON text.
+//
+// Owned by exactly one of:
+//   - a master drive (`driveId`)                     — an institution default
+//   - a department instance (`driveDepartmentConfigId`) — that department's rule
+// A department rule of a given type replaces the master's rules of that type
+// for that department; every other master rule is inherited.
+//
+// Two CHECK constraints live in the migration SQL because Prisma cannot
+// express them: exactly one owner is set, and exactly one value column is set
+// (`numberValue` for thresholds, `listValue` for set membership and skills).
+// Operator/value-shape validity per rule type is enforced at the write
+// boundary in features/drives/domain/eligibility-rule-schema.ts.
+//
+// The legacy `Drive.minCGPA` / `maxActiveBacklogs` columns (and their instance
+// overrides) are kept and dual-written as mirrors of the CGPA and
+// ACTIVE_BACKLOGS rules until they are dropped in a later phase.
+model DriveEligibilityRule {
+  id                      String              @id @default(cuid())
+  driveId                 String?
+  driveDepartmentConfigId String?
+  ruleType                EligibilityRuleType
+  operator                EligibilityOperator
+  numberValue             Float?
+  listValue               String[]            @default([])
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  drive           Drive?                 @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  departmentDrive DriveDepartmentConfig? @relation(fields: [driveDepartmentConfigId], references: [id], onDelete: Cascade)
+
+  // One rule per (owner, type, operator): a semester range is GTE + LTE, but
+  // never two GTEs. Each unique index also serves the owner lookup, so no
+  // separate owner index is needed (see the index policy above).
+  @@unique([driveId, ruleType, operator])
+  @@unique([driveDepartmentConfigId, ruleType, operator])
+}
+
+// One field of an application form, relational rather than JSON text.
+//
+// Owned by exactly one of a master drive (its default form) or a department
+// instance (that department's form). `fieldKey` is either a catalog key
+// (features/drives/data/application-fields-catalog.ts) or a custom question
+// `custom_<a-z0-9_>`; anything else is refused at the write boundary *and* by
+// a CHECK in the migration SQL. A custom field is always STUDENT_INPUT and
+// EDITABLE — also enforced by a CHECK.
+//
+// The legacy `applicationFields` JSON columns on Drive and
+// DriveDepartmentConfig are kept and dual-written until a later phase drops
+// them; reads are relational-first and fall back to them.
+model DriveApplicationField {
+  id                      String                     @id @default(cuid())
+  driveId                 String?
+  driveDepartmentConfigId String?
+  fieldKey                String
+  label                   String
+  source                  ApplicationFieldSource
+  category                String
+  description             String?                    @db.Text
+  isRequired              Boolean                    @default(false)
+  isEnabled               Boolean                    @default(true)
+  sortOrder               Int
+  permission              ApplicationFieldPermission
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+
+  drive           Drive?                 @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  departmentDrive DriveDepartmentConfig? @relation(fields: [driveDepartmentConfigId], references: [id], onDelete: Cascade)
+
+  // One row per field per form. Each also serves the owner lookup.
+  @@unique([driveId, fieldKey])
+  @@unique([driveDepartmentConfigId, fieldKey])
 }
 
 // ============================================================================
@@ -522,14 +707,57 @@ model DriveApplication {
   updatedAt         DateTime          @updatedAt
 
   // Relations
-  student      Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  drive        Drive   @relation(fields: [driveId], references: [id], onDelete: Restrict)
-  stageUpdater User?   @relation("ApplicationStageUpdatedBy", fields: [stageUpdatedById], references: [id], onDelete: SetNull)
+  student        Student                   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  drive          Drive                     @relation(fields: [driveId], references: [id], onDelete: Restrict)
+  stageUpdater   User?                     @relation("ApplicationStageUpdatedBy", fields: [stageUpdatedById], references: [id], onDelete: SetNull)
+  snapshot       DriveApplicationSnapshot?
+  placement      StudentPlacement?
+  // The recruitment stage the application is in — a stage of the pipeline
+  // version it was last moved under. Null only for applications from before
+  // pipelines that the backfill has not mapped yet.
+  currentStageId String?
+  currentStage   RecruitmentStage?         @relation("ApplicationCurrentStage", fields: [currentStageId], references: [id], onDelete: NoAction)
+  stageEvents    ApplicationStageEvent[]
 
   @@unique([studentId, driveId])
   @@index([driveId])
   @@index([stage])
   @@index([status])
+}
+
+// How a snapshot came to exist.
+enum ApplicationSnapshotOrigin {
+  // Captured by applyToDrive, in the same transaction as the application.
+  SUBMISSION
+  // Reconstructed for an application submitted before snapshots existed, from
+  // only the columns recorded at submission time. It never claims an
+  // eligibility basis, form or drive content that was not recorded.
+  BACKFILL
+}
+
+// The historical record of one application: what the student submitted, and
+// why they were eligible, against which form and which drive content — frozen
+// at submission so it stays reproducible whatever later changes to the drive,
+// its rules, its form or the student's profile.
+//
+// One per application, written in the same transaction as the application.
+// Rows are never updated (a trigger in the migration refuses it); they go only
+// with their application. `payload` is a versioned JSON document (TEXT, as
+// every other JSON column in this schema), CHECKed to be a JSON object. The
+// three hashes let two snapshots be compared on eligibility, form and drive
+// content without parsing the payload.
+model DriveApplicationSnapshot {
+  id               String                    @id @default(cuid())
+  applicationId    String                    @unique
+  origin           ApplicationSnapshotOrigin
+  schemaVersion    Int
+  capturedAt       DateTime                  @default(now())
+  formHash         String?
+  eligibilityHash  String?
+  driveContentHash String?
+  payload          String                    @db.Text
+
+  application DriveApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 }
 
 // ============================================================================
@@ -618,4 +846,190 @@ model Notification {
 
   @@index([userId, isRead])
   @@index([createdAt])
+}
+
+// How a placement was recorded.
+enum PlacementSource {
+  // Created with the application being marked SELECTED, in the same
+  // transaction (updateApplicationStage).
+  APPLICATION
+  // Recorded by a department admin for an offer made outside CampusHire.
+  MANUAL
+}
+
+// A student's placement: the explicit, auditable record that they are placed.
+//
+// A student is placed while they hold at least one placement with
+// `revokedAt IS NULL`. That is the only definition of "placed" in the app
+// (features/students/utils/placement-status.ts). Once placed, a student is
+// permanently excluded from new drives: the eligibility evaluator checks it
+// first and stops.
+//
+// Rows are history. They are never deleted by the app and never edited: a
+// trigger in the migration refuses every change except the one-time
+// revocation (revokedAt, revokedById, revokeReason, set together, once),
+// which is how a placement recorded by mistake is corrected.
+model StudentPlacement {
+  id             String          @id @default(cuid())
+  studentId      String
+  source         PlacementSource
+  // The selected application, for APPLICATION placements. At most one
+  // placement per application.
+  applicationId  String?         @unique
+  driveId        String?
+  companyName    String
+  roleName       String
+  packageOffered Decimal?        @db.Decimal(10, 2)
+  packageDisplay String?
+  placedAt       DateTime
+  // Null only for rows backfilled from applications selected before this
+  // table existed, where no actor was recorded.
+  recordedById   String?
+  revokedAt      DateTime?
+  revokedById    String?
+  revokeReason   String?         @db.Text
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  student     Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  application DriveApplication? @relation(fields: [applicationId], references: [id], onDelete: NoAction)
+  drive       Drive?            @relation(fields: [driveId], references: [id], onDelete: NoAction)
+  recordedBy  User?             @relation("PlacementRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+  revokedBy   User?             @relation("PlacementRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([studentId])
+  @@index([driveId])
+}
+
+// What kind of step a recruitment stage is.
+enum RecruitmentStageType {
+  APPLICATION
+  APTITUDE
+  CODING
+  GROUP_DISCUSSION
+  TECHNICAL_INTERVIEW
+  HR_INTERVIEW
+  MANAGERIAL_INTERVIEW
+  PRESENTATION
+  ASSESSMENT
+  OFFER
+  CUSTOM
+}
+
+enum PipelineVersionStatus {
+  ACTIVE
+  SUPERSEDED
+}
+
+enum PipelineChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// One version of a department drive's recruitment pipeline.
+//
+// A version never changes: a change to the pipeline is a new version, and the
+// previous one is marked SUPERSEDED (a trigger allows exactly that and nothing
+// else). Exactly one version per department drive is ACTIVE (a partial unique
+// index). Applications keep pointing at the stages of whatever version they
+// were last moved under, so history is never rewritten.
+model RecruitmentPipelineVersion {
+  id                      String                @id @default(cuid())
+  driveDepartmentConfigId String
+  version                 Int
+  status                  PipelineVersionStatus
+  // Why this version exists: initial, direct edit, approved request…
+  note                    String?               @db.Text
+  createdById             String?
+  createdAt               DateTime              @default(now())
+  supersededAt            DateTime?
+
+  departmentDrive DriveDepartmentConfig   @relation(fields: [driveDepartmentConfigId], references: [id], onDelete: Cascade)
+  createdBy       User?                   @relation("PipelineVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  stages          RecruitmentStage[]
+  stageEvents     ApplicationStageEvent[]
+  requestsBasedOn PipelineChangeRequest[] @relation("PipelineRequestBase")
+  requestsResult  PipelineChangeRequest[] @relation("PipelineRequestResult")
+
+  @@unique([driveDepartmentConfigId, version])
+}
+
+// A stage of one pipeline version. Immutable (trigger).
+model RecruitmentStage {
+  id                String               @id @default(cuid())
+  pipelineVersionId String
+  name              String
+  stageType         RecruitmentStageType
+  sortOrder         Int
+  description       String?              @db.Text
+  instructions      String?              @db.Text
+  // Whether students see this stage by name on their application.
+  visibleToStudents Boolean              @default(true)
+  scheduledAt       DateTime?
+  location          String?
+  // A disabled stage stays in the version but cannot be moved into.
+  isEnabled         Boolean              @default(true)
+
+  pipelineVersion  RecruitmentPipelineVersion @relation(fields: [pipelineVersionId], references: [id], onDelete: Cascade)
+  applicationsHere DriveApplication[]         @relation("ApplicationCurrentStage")
+  eventsFrom       ApplicationStageEvent[]    @relation("StageEventFrom")
+  eventsTo         ApplicationStageEvent[]    @relation("StageEventTo")
+
+  @@unique([pipelineVersionId, sortOrder])
+}
+
+// One move of one application: from which stage and status to which, under
+// which pipeline version, by whom, and why. Append-only (trigger).
+model ApplicationStageEvent {
+  id                String             @id @default(cuid())
+  applicationId     String
+  pipelineVersionId String
+  fromStageId       String?
+  toStageId         String
+  fromStatus        ApplicationStatus?
+  toStatus          ApplicationStatus
+  // Null for the backfill of applications from before pipelines.
+  actorId           String?
+  note              String?            @db.Text
+  createdAt         DateTime           @default(now())
+
+  application     DriveApplication           @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  pipelineVersion RecruitmentPipelineVersion @relation(fields: [pipelineVersionId], references: [id], onDelete: NoAction)
+  fromStage       RecruitmentStage?          @relation("StageEventFrom", fields: [fromStageId], references: [id], onDelete: NoAction)
+  toStage         RecruitmentStage           @relation("StageEventTo", fields: [toStageId], references: [id], onDelete: NoAction)
+  actor           User?                      @relation("StageEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId])
+}
+
+// A department admin's proposed change to a published drive's pipeline,
+// reviewed by the Super Admin. At most one PENDING per department drive
+// (partial unique index); a reviewer can never be the requester (CHECK).
+model PipelineChangeRequest {
+  id                      String               @id @default(cuid())
+  driveDepartmentConfigId String
+  // The active version when the change was proposed. Approval is refused if
+  // the pipeline has moved on since.
+  baseVersionId           String
+  // The proposed stages, as a JSON array (TEXT, as every JSON column here).
+  proposedStages          String               @db.Text
+  reason                  String               @db.Text
+  status                  PipelineChangeStatus @default(PENDING)
+  requestedById           String
+  createdAt               DateTime             @default(now())
+  reviewedById            String?
+  reviewedAt              DateTime?
+  reviewNote              String?              @db.Text
+  // The version an approval created.
+  resultingVersionId      String?
+
+  departmentDrive  DriveDepartmentConfig       @relation(fields: [driveDepartmentConfigId], references: [id], onDelete: Cascade)
+  baseVersion      RecruitmentPipelineVersion  @relation("PipelineRequestBase", fields: [baseVersionId], references: [id], onDelete: NoAction)
+  resultingVersion RecruitmentPipelineVersion? @relation("PipelineRequestResult", fields: [resultingVersionId], references: [id], onDelete: NoAction)
+  requestedBy      User                        @relation("PipelineRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  reviewedBy       User?                       @relation("PipelineReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([driveDepartmentConfigId])
+  @@index([status])
 }

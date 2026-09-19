@@ -54,11 +54,14 @@ describe("getMyApplications", () => {
       consentAcceptedAt: null,
       stageUpdatedAt: null,
       stageUpdatedById: null,
+      currentStageId: null,
       snapshotCgpa: null,
       snapshotBacklogs: null,
       createdAt: new Date("2026-09-01"),
       updatedAt: new Date("2026-09-01"),
-      drive: mockDrive,
+      // As Prisma returns it: the drive plus the applicant's department's
+      // instance (none here, so everything is inherited from the master).
+      drive: { ...mockDrive, departmentConfigs: [] as never[] },
     },
     {
       id: "app-2",
@@ -71,6 +74,7 @@ describe("getMyApplications", () => {
       consentAcceptedAt: null,
       stageUpdatedAt: null,
       stageUpdatedById: null,
+      currentStageId: null,
       snapshotCgpa: null,
       snapshotBacklogs: null,
       createdAt: new Date("2026-08-25"),
@@ -80,12 +84,69 @@ describe("getMyApplications", () => {
         id: "drive-2",
         companyName: "InnovateLabs",
         roleName: "Data Scientist",
+        departmentConfigs: [] as never[],
       },
     },
   ];
 
+  /** What the query returns for a row: the drive resolved for the applicant's department. */
+  const asResolved = (row: (typeof mockApplications)[number]) => {
+    const { departmentConfigs, ...master } = row.drive;
+    void departmentConfigs;
+    return {
+      ...row,
+      // No pipeline stage on these rows: nothing to show the student yet.
+      stageLabel: null,
+      driveCancelled: false,
+      drive: {
+        ...master,
+        seatingAllocation: null,
+        specialInstructions: null,
+        coordinatorEmail: null,
+      },
+    };
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe("cancelled drives", () => {
+    it("keeps the application and marks the drive cancelled for the student", async () => {
+      vi.mocked(prisma.driveApplication.count).mockResolvedValue(2);
+      vi.mocked(prisma.driveApplication.findMany).mockResolvedValue([
+        {
+          ...mockApplications[0],
+          drive: { ...mockApplications[0].drive, departmentConfigs: [{ status: "CANCELLED" } as never] },
+        },
+        {
+          ...mockApplications[1],
+          drive: { ...mockApplications[1].drive, lifecycleStatus: "CANCELLED" },
+        },
+      ] as never);
+
+      const result = await getMyApplications("student-1", 1, 25);
+
+      expect(result.data.map((row) => [row.id, row.driveCancelled])).toEqual([
+        ["app-1", true],
+        ["app-2", true],
+      ]);
+    });
+  });
+
+  describe("recruitment stage, read-only for the student", () => {
+    it("shows a visible stage by name and a hidden one only as in progress", async () => {
+      vi.mocked(prisma.driveApplication.count).mockResolvedValue(2);
+      vi.mocked(prisma.driveApplication.findMany).mockResolvedValue([
+        { ...mockApplications[0], currentStage: { name: "Technical Interview", visibleToStudents: true } },
+        { ...mockApplications[1], currentStage: { name: "Internal panel review", visibleToStudents: false } },
+      ] as never);
+
+      const result = await getMyApplications("student-1", 1, 25);
+
+      expect(result.data.map((row) => row.stageLabel)).toEqual(["Technical Interview", "In progress"]);
+      expect(JSON.stringify(result.data)).not.toContain("Internal panel review");
+    });
   });
 
   describe("Basic Functionality", () => {
@@ -96,7 +157,7 @@ describe("getMyApplications", () => {
       const result = await getMyApplications("student-1", 1, 25);
 
       expect(result).toEqual({
-        data: mockApplications,
+        data: mockApplications.map(asResolved),
         page: 1,
         pageSize: 25,
         totalCount: 2,
@@ -108,11 +169,43 @@ describe("getMyApplications", () => {
 
       expect(prisma.driveApplication.findMany).toHaveBeenCalledWith({
         where: { studentId: "student-1" },
-        include: { drive: true },
+        include: {
+          // The stage, and whether the student may see its name.
+          currentStage: { select: { name: true, visibleToStudents: true } },
+          drive: {
+            include: {
+              // Only the applicant's own department's instance is loaded.
+              departmentConfigs: {
+                where: { department: { students: { some: { id: "student-1" } } } },
+              },
+            },
+          },
+        },
         orderBy: { appliedAt: "desc" },
         skip: 0,
         take: 25,
       });
+    });
+
+    it("shows each application under the applicant's department's version of the drive", async () => {
+      const overridden = {
+        ...mockApplications[0],
+        drive: {
+          ...mockApplications[0].drive,
+          departmentConfigs: [
+            { roleName: "Backend Developer", applicationDeadline: null } as never,
+          ],
+        },
+      };
+
+      vi.mocked(prisma.driveApplication.count).mockResolvedValue(1);
+      vi.mocked(prisma.driveApplication.findMany).mockResolvedValue([overridden]);
+
+      const result = await getMyApplications("student-1", 1, 25);
+
+      expect(result.data[0].drive.roleName).toBe("Backend Developer");
+      // Everything the department did not override is still the master's.
+      expect(result.data[0].drive.companyName).toBe("TechCorp");
     });
 
     it("should return empty result for student with no applications", async () => {

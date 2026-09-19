@@ -318,10 +318,20 @@ export default async function ApplicationsPage({ searchParams }: ApplicationsPag
                       {formatDriveDate(application.drive.driveDate)}
                     </td>
                     <td style={{ padding: '14px 16px' }}>
-                      {driveStatus === 'open' ? (
+                      {application.driveCancelled ? (
+                        <StatusBadge variant="red">Cancelled</StatusBadge>
+                      ) : driveStatus === 'open' ? (
                         <StatusBadge variant="green">Open</StatusBadge>
                       ) : (
                         <StatusBadge variant="red">Closed</StatusBadge>
+                      )}
+                      {/* Recruitment progress — set by the department, read-only here. */}
+                      {application.stageLabel && (
+                        <div style={{ fontSize: 12, marginTop: 4, color: 'var(--text-secondary)' }}>
+                          Stage: <strong>{application.stageLabel}</strong>
+                          {application.status === 'SELECTED' && ' · Selected'}
+                          {application.status === 'REJECTED' && ' · Not selected'}
+                        </div>
                       )}
                     </td>
                     <td

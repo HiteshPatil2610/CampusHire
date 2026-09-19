@@ -1,16 +1,20 @@
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PostDriveForm } from "./post-drive-form";
+import { getDepartmentBatchYears } from "@/features/students/queries/department-batch-years";
 
 export default async function PostDrivePage() {
   const { department } = await requireDepartmentAdmin();
 
   // Fetch all active departments for eligibility selection
-  const allDepts = await prisma.department.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, code: true },
-    orderBy: { code: "asc" },
-  });
+  const [allDepts, batchYears] = await Promise.all([
+    prisma.department.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { code: "asc" },
+    }),
+    getDepartmentBatchYears(department.id),
+  ]);
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -26,6 +30,7 @@ export default async function PostDrivePage() {
         departmentName={department.name}
         departmentCode={department.code}
         allDepartments={allDepts}
+        batchYears={batchYears}
       />
     </div>
   );

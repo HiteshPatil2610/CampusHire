@@ -44,7 +44,9 @@ export function buildDepartmentDriveData(
     contactPerson: input.contactPerson ?? null,
     contactPhone: input.contactPhone ?? null,
     pptLink: input.pptLink ?? null,
-    applicationFields: input.applicationFields ?? null,
+    // `applicationFields` is deliberately absent: the form is written to
+    // `DriveApplicationField` rows by `writeMasterForm`, which dual-writes
+    // this column. Writing it here too could leave the two disagreeing.
   };
 }
 
@@ -77,6 +79,9 @@ export function buildCentralDriveData(
     companyLogoUrl: input.companyLogoUrl ?? null,
     roleName: input.roleName,
     jobDescriptionText: input.jobDescriptionText || null,
+    // Master defaults a department may override on its own instance.
+    requirements: input.requirements || null,
+    skills: input.skills && input.skills.length > 0 ? JSON.stringify(input.skills) : null,
     packageOffered: parsePackageFromDisplay(input.packageDisplay),
     packageDisplay: input.packageDisplay,
     driveDate: new Date(input.driveDate),

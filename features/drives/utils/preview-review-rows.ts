@@ -1,8 +1,11 @@
+import { LOCKED_FIELD_KEYS } from "@/features/applications/utils/application-review-fields";
 import {
-  LOCKED_FIELD_KEYS,
-  EDITABLE_FIELD_KEYS,
-} from "@/features/applications/utils/application-review-fields";
-import type { StoredApplicationField } from "./application-fields";
+  enabledFields,
+  iconFor,
+  isCustomKey,
+  type ApplicationFieldConfig,
+  type ApplicationFieldPermission,
+} from "../domain/application-form";
 
 export interface PreviewReviewRow {
   key: string;
@@ -10,6 +13,8 @@ export interface PreviewReviewRow {
   icon: string;
   value: string;
   required: boolean;
+  permission: ApplicationFieldPermission;
+  description: string | null;
 }
 
 export interface PreviewReviewRows {
@@ -50,34 +55,41 @@ const SAMPLE_VALUES: Record<string, string> = {
 };
 
 /**
- * Split the fields the admin has configured into the same three groups the
- * real submission card renders, filled with sample values.
+ * Split the configured form into the same three groups the real submission
+ * card renders, filled with sample values.
  *
- * Reusing LOCKED_FIELD_KEYS / EDITABLE_FIELD_KEYS keeps the preview honest: a
- * row the preview shows as locked is locked in the student's actual flow too.
+ * The grouping rule is identical to `buildApplicationReviewData`: a field's
+ * configured permission decides editable vs read-only, and registrar-owned
+ * keys are shown as institutional records. So a row the preview shows as
+ * editable is editable in the student's actual flow too — and `applyToDrive`
+ * enforces the same permission on the server.
  */
 export function buildPreviewReviewRows(
-  fields: StoredApplicationField[],
+  fields: ApplicationFieldConfig[],
   departmentCode: string
 ): PreviewReviewRows {
   const rows: PreviewReviewRows = { locked: [], editable: [], readOnly: [] };
 
-  for (const field of fields) {
+  for (const field of enabledFields(fields)) {
     const row: PreviewReviewRow = {
-      key: field.key,
+      key: field.fieldKey,
       label: field.label,
-      icon: field.icon,
+      icon: iconFor(field.fieldKey),
       value:
-        field.key === "department"
+        field.fieldKey === "department"
           ? departmentCode
-          : (SAMPLE_VALUES[field.key] ?? "—"),
-      required: field.required,
+          : isCustomKey(field.fieldKey)
+            ? ""
+            : (SAMPLE_VALUES[field.fieldKey] ?? "—"),
+      required: field.isRequired,
+      permission: field.permission,
+      description: field.description,
     };
 
-    if (LOCKED_FIELD_KEYS.has(field.key)) {
-      rows.locked.push(row);
-    } else if (EDITABLE_FIELD_KEYS.has(field.key)) {
+    if (field.permission === "EDITABLE") {
       rows.editable.push(row);
+    } else if (LOCKED_FIELD_KEYS.has(field.fieldKey)) {
+      rows.locked.push(row);
     } else {
       rows.readOnly.push(row);
     }

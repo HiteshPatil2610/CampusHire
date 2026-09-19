@@ -28,6 +28,13 @@ export const AuditAction = {
   WITHDRAW: "WITHDRAW",
   IMPORT: "IMPORT",
   ROLE_CHANGE: "ROLE_CHANGE",
+  REVOKE: "REVOKE",
+  REQUEST: "REQUEST",
+  APPROVE: "APPROVE",
+  REJECT: "REJECT",
+  TRANSITION: "TRANSITION",
+  CANCEL: "CANCEL",
+  EXTEND_DEADLINE: "EXTEND_DEADLINE",
 } as const;
 
 /**
@@ -39,6 +46,10 @@ export const AuditEntityType = {
   USER: "User",
   DRIVE: "Drive",
   DRIVE_APPLICATION: "DriveApplication",
+  APPLICATION_SNAPSHOT: "DriveApplicationSnapshot",
+  STUDENT_PLACEMENT: "StudentPlacement",
+  RECRUITMENT_PIPELINE: "RecruitmentPipelineVersion",
+  PIPELINE_CHANGE_REQUEST: "PipelineChangeRequest",
   STUDENT: "Student",
   BULK_IMPORT: "BulkImport",
 } as const;

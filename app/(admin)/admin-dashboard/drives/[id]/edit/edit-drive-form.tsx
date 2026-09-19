@@ -12,6 +12,8 @@ import { AdminDrivePreviewCard } from "@/components/admin/drives/admin-drive-pre
 import DatePicker from "@/components/ui/date-picker";
 import UrlField from "@/components/ui/url-field";
 import { useToast } from "@/hooks/use-toast";
+import { BatchTargetingPicker } from "@/features/drives/components/batch-targeting-picker";
+import type { DepartmentBatchYear } from "@/features/students/queries/department-batch-years";
 import { eligibleDepartmentIdsOf } from "@/features/drives/utils/eligible-departments";
 import type { HasEligibleDepartmentLinks } from "@/features/drives/utils/eligible-departments";
 import type { WithSerializedPackage } from "@/features/drives/utils/serialize-drive";
@@ -29,6 +31,10 @@ interface EditDriveFormProps {
   departmentId: string;
   departmentCode: string;
   allDepartments: Department[];
+  /** Batch years this department's students have. */
+  batchYears: DepartmentBatchYear[];
+  /** The batches the drive targets today. */
+  initialBatches: string[];
 }
 
 export function EditDriveForm({
@@ -37,8 +43,11 @@ export function EditDriveForm({
   departmentId,
   departmentCode,
   allDepartments,
+  batchYears,
+  initialBatches,
 }: EditDriveFormProps) {
   const router = useRouter();
+  const [selectedBatches, setSelectedBatches] = useState<string[]>(initialBatches);
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
@@ -147,6 +156,7 @@ export function EditDriveForm({
         jobDescriptionUrl: form.jobDescriptionUrl.trim() || undefined,
         minCGPA: parseFloat(form.minCGPA),
         maxActiveBacklogs: parseInt(form.maxActiveBacklogs, 10),
+        batchYears: selectedBatches,
         eligibleDepartments: form.eligibleDepartments,
         driveDate: form.driveDate,
         applicationDeadline: form.applicationDeadline,
@@ -248,6 +258,15 @@ export function EditDriveForm({
             <label>Max Active Backlogs *</label>
             <input required type="number" value={form.maxActiveBacklogs} onChange={(e) => setForm({ ...form, maxActiveBacklogs: e.target.value })} />
           </div>
+        </div>
+
+        <div className="field">
+          <label>Eligible Batches *</label>
+          <BatchTargetingPicker
+            available={batchYears}
+            selected={selectedBatches}
+            onChange={setSelectedBatches}
+          />
         </div>
 
         <div className="field">

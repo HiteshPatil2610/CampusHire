@@ -25,6 +25,22 @@ vi.mock("@/lib/prisma", () => ({
       count: vi.fn(),
     },
     department: { findMany: vi.fn() },
+    driveApplicationField: { deleteMany: vi.fn(), createMany: vi.fn() },
+    driveEligibilityRule: { deleteMany: vi.fn(), createMany: vi.fn() },
+    // The config save writes the instance and its rules in one transaction;
+    // run the callback against the same mocked client.
+    // Recruitment pipeline models (see pipeline-fixtures.ts).
+    recruitmentPipelineVersion: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      createMany: vi.fn(),
+      updateMany: vi.fn(),
+      count: vi.fn(),
+    },
+    recruitmentStage: { findUnique: vi.fn() },
+    applicationStageEvent: { create: vi.fn(), createMany: vi.fn() },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -47,6 +63,10 @@ vi.mock("@/features/notifications/actions/notify-eligible-students-of-drive", ()
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { prisma } from "@/lib/prisma";
+import { withActivePipeline } from "@/features/recruitment/__tests__/pipeline-fixtures";
+
+// Every department drive here already has an active recruitment pipeline.
+beforeEach(() => withActivePipeline(prisma));
 import { requireSuperAdmin, requireDepartmentAdmin } from "@/lib/auth";
 import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
 import {
@@ -79,24 +99,53 @@ const centralDrive = {
   roleName: "Software Engineer",
   isCentralDrive: true,
   lifecycleStatus: "DRAFT" as const,
+  // Complete content, so the publish validation has nothing to refuse.
+  jobDescriptionText: "Build and ship services.",
+  jobDescriptionUrl: null,
+  requirements: null,
+  skills: null,
+  selectionRounds: "[]",
+  masterPipeline: null,
+  departmentEditableFields: [],
+  applicationDeadline: new Date(Date.now() + 7 * 86_400_000),
+  driveDate: new Date(Date.now() + 14 * 86_400_000),
   eligibleDepartmentLinks: [{ departmentId: DEPT_A }],
+  // No default form: departments inherit the catalog default.
+  applicationFields: null,
+  formFields: [],
+  minCGPA: 7,
+  maxActiveBacklogs: 0,
+  // The master targets the 2026 batch, so an instance that sets none
+  // inherits a batch and may publish.
+  eligibilityRules: [
+    { ruleType: "BATCH_YEAR", operator: "IN", numberValue: null, listValue: ["2026"] },
+  ],
 };
+
+/** What a department must fill in before it can publish. */
+const READY_LOGISTICS = { venue: "Main Hall", reportingTime: "09:00 AM" };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  (prisma.$transaction as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    (fn: (tx: unknown) => unknown) => fn(prisma)
+  );
 
   vi.mocked(requireDepartmentAdmin).mockResolvedValue(adminOfA as never);
   vi.mocked(requireSuperAdmin).mockResolvedValue({ id: "user-super" } as never);
   vi.mocked(prisma.drive.findUnique).mockResolvedValue(centralDrive as never);
   vi.mocked(prisma.drive.update).mockResolvedValue({} as never);
   vi.mocked(prisma.driveDepartmentConfig.update).mockResolvedValue({} as never);
-  vi.mocked(prisma.driveDepartmentConfig.upsert).mockResolvedValue({} as never);
+  vi.mocked(prisma.driveDepartmentConfig.upsert).mockResolvedValue({ id: "config-1" } as never);
   vi.mocked(prisma.driveDepartmentConfig.count).mockResolvedValue(1 as never);
   vi.mocked(prisma.driveDepartmentConfig.findUnique).mockResolvedValue({
+    ...READY_LOGISTICS,
     id: "config-1",
     status: "CONFIGURED",
     lockedAt: null,
     applicationFields: null,
+    formFields: [],
+    eligibilityRules: [],
   } as never);
 });
 
@@ -158,8 +207,29 @@ describe("locking contract", () => {
     expect(isDepartmentDriveLocked({ lockedAt: null })).toBe(false);
   });
 
-  it("freezes the application form and nothing else on the instance", () => {
-    expect(LOCKED_DEPARTMENT_DRIVE_FIELDS).toEqual(["applicationFields"]);
+  it("freezes the application form and every content override on the instance", () => {
+    // The department's version of the offer: what students applied for, and
+    // the bar they were judged against.
+    for (const field of [
+      "applicationFields",
+      "roleName",
+      "jobDescriptionText",
+      "requirements",
+      "skills",
+      "driveDate",
+      "applicationDeadline",
+      "selectionRounds",
+      "minCGPA",
+      "maxActiveBacklogs",
+    ]) {
+      expect(LOCKED_DEPARTMENT_DRIVE_FIELDS).toContain(field);
+    }
+  });
+
+  it("never freezes logistics on the instance", () => {
+    for (const field of EDITABLE_AFTER_PUBLISH_FIELDS) {
+      expect(LOCKED_DEPARTMENT_DRIVE_FIELDS).not.toContain(field);
+    }
   });
 
   it("keeps logistics editable after publication", () => {
@@ -230,13 +300,67 @@ describe("publishDepartmentDrive", () => {
 
     expect(result.success).toBe(true);
 
-    const [call] = vi.mocked(prisma.driveDepartmentConfig.update).mock.calls;
-    const data = (call[0] as { data: Record<string, unknown> }).data;
+    const data = vi
+      .mocked(prisma.driveDepartmentConfig.update)
+      .mock.calls.map((call) => (call[0] as { data: Record<string, unknown> }).data)
+      .find((payload) => "status" in payload)!;
 
     expect(data.status).toBe("PUBLISHED");
     expect(data.publishedAt).toBeInstanceOf(Date);
     expect(data.publishedByUserId).toBe("user-admin-a");
     expect(data.lockedAt).toBeInstanceOf(Date);
+  });
+
+  it("snapshots the inherited form into the department's own rows", async () => {
+    // The instance has no form of its own, so it inherits the catalog
+    // default. Publishing copies that into its rows, so a later change to the
+    // master's default can never reach students who already applied.
+    await publishDepartmentDrive({ driveId: DRIVE_ID });
+
+    expect(prisma.driveApplicationField.deleteMany).toHaveBeenCalledWith({
+      where: { driveDepartmentConfigId: "config-1" },
+    });
+    const [call] = vi.mocked(prisma.driveApplicationField.createMany).mock.calls;
+    const rows = (call[0] as { data: { fieldKey: string; driveDepartmentConfigId: string }[] })
+      .data;
+    expect(rows.map((row) => row.fieldKey)).toEqual([
+      "name",
+      "rollNo",
+      "email",
+      "phone",
+      "cgpa",
+      "backlogs",
+      "department",
+    ]);
+    expect(rows.every((row) => row.driveDepartmentConfigId === "config-1")).toBe(true);
+  });
+
+  it("keeps a department's own form as it is on publish", async () => {
+    vi.mocked(prisma.driveDepartmentConfig.findUnique).mockResolvedValue({
+      ...READY_LOGISTICS,
+      id: "config-1",
+      status: "CONFIGURED",
+      lockedAt: null,
+      applicationFields: null,
+      formFields: [
+        {
+          fieldKey: "name",
+          label: "Full Name",
+          source: "PROFILE",
+          category: "Basic Identity",
+          description: null,
+          isRequired: true,
+          isEnabled: true,
+          sortOrder: 0,
+          permission: "READ_ONLY",
+        },
+      ],
+    } as never);
+
+    await publishDepartmentDrive({ driveId: DRIVE_ID });
+
+    expect(prisma.driveApplicationField.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.driveApplicationField.createMany).not.toHaveBeenCalled();
   });
 
   it("notifies only this department's students", async () => {
@@ -259,12 +383,64 @@ describe("publishDepartmentDrive", () => {
     expect(prisma.driveDepartmentConfig.update).not.toHaveBeenCalled();
   });
 
+  it("refuses to publish a drive that targets no batch", async () => {
+    // Neither the master nor this department selected a batch: publishing
+    // would open the drive to every batch by default.
+    vi.mocked(prisma.drive.findUnique).mockResolvedValue({
+      ...centralDrive,
+      eligibilityRules: [],
+    } as never);
+
+    const result = await publishDepartmentDrive({ driveId: DRIVE_ID });
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toMatch(/batches/i);
+    expect(prisma.driveDepartmentConfig.update).not.toHaveBeenCalled();
+    expect(notifyEligibleStudentsOfDrive).not.toHaveBeenCalled();
+  });
+
+  it("publishes when the department itself targets a batch", async () => {
+    vi.mocked(prisma.drive.findUnique).mockResolvedValue({
+      ...centralDrive,
+      eligibilityRules: [],
+    } as never);
+    vi.mocked(prisma.driveDepartmentConfig.findUnique).mockResolvedValue({
+      ...READY_LOGISTICS,
+      id: "config-1",
+      status: "CONFIGURED",
+      lockedAt: null,
+      applicationFields: null,
+      formFields: [],
+      eligibilityRules: [
+        { ruleType: "BATCH_YEAR", operator: "IN", numberValue: null, listValue: ["2027"] },
+      ],
+    } as never);
+
+    const result = await publishDepartmentDrive({ driveId: DRIVE_ID });
+    expect(result.success).toBe(true);
+  });
+
+  it("refuses to publish an instance of an archived master drive", async () => {
+    vi.mocked(prisma.drive.findUnique).mockResolvedValue({
+      ...centralDrive,
+      lifecycleStatus: "ARCHIVED",
+    } as never);
+
+    const result = await publishDepartmentDrive({ driveId: DRIVE_ID });
+
+    expect(result.success).toBe(false);
+    expect(prisma.driveDepartmentConfig.update).not.toHaveBeenCalled();
+    expect(notifyEligibleStudentsOfDrive).not.toHaveBeenCalled();
+  });
+
   it("refuses to publish an already-published instance", async () => {
     vi.mocked(prisma.driveDepartmentConfig.findUnique).mockResolvedValue({
       id: "config-1",
       status: "PUBLISHED",
       lockedAt: new Date(),
       applicationFields: null,
+      formFields: [],
+      eligibilityRules: [],
     } as never);
 
     const result = await publishDepartmentDrive({ driveId: DRIVE_ID });
@@ -296,6 +472,8 @@ describe("setDepartmentDriveStatus", () => {
       status: "PUBLISHED",
       lockedAt: new Date(),
       applicationFields: null,
+      formFields: [],
+      eligibilityRules: [],
     } as never);
   });
 
@@ -418,6 +596,8 @@ describe("saveDriveDepartmentConfig — lock enforcement", () => {
       status: "ASSIGNED",
       lockedAt: null,
       applicationFields: null,
+      formFields: [],
+      eligibilityRules: [],
     } as never);
 
     const result = await saveDriveDepartmentConfig(configInput);
@@ -434,12 +614,17 @@ describe("saveDriveDepartmentConfig — lock enforcement", () => {
       status: "PUBLISHED",
       lockedAt: new Date(),
       applicationFields: JSON.stringify([{ key: "somethingElse" }]),
+      formFields: [],
+      eligibilityRules: [],
     } as never);
 
     const result = await saveDriveDepartmentConfig(configInput);
 
     expect(result.success).toBe(false);
-    if (!result.success) expect(result.error).toMatch(/locked/i);
+    if (!result.success) {
+      expect(result.error).toMatch(/no longer change/i);
+      expect(result.error).toMatch(/applicationFields/);
+    }
     expect(prisma.driveDepartmentConfig.upsert).not.toHaveBeenCalled();
   });
 
@@ -466,6 +651,8 @@ describe("saveDriveDepartmentConfig — lock enforcement", () => {
       status: "PUBLISHED",
       lockedAt: new Date(),
       applicationFields: stored,
+      formFields: [],
+      eligibilityRules: [],
     } as never);
 
     const result = await saveDriveDepartmentConfig(configInput);

@@ -211,7 +211,7 @@ export function DrivesListClient({
                       <td style={{ textAlign: "right" }}>
                         <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                           <Link
-                            href={`/admin-dashboard/drives/${drive.id}/applications`}
+                            href={`/admin-dashboard/drives/${drive.id}?tab=applications`}
                             className="btn btn-ghost btn-sm"
                             style={{ fontSize: 11 }}
                           >

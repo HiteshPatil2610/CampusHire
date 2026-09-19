@@ -2,13 +2,20 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireStudent, AuthorizationError } from '@/lib/auth';
 import { getDriveDetail } from '@/features/drives/queries/get-drive-detail';
-import { getIneligibilityReasons } from '@/features/drives/queries/drive-eligibility';
+import {
+  evaluateStudentForDrive,
+  getIneligibilityReasons,
+} from '@/features/drives/queries/drive-eligibility';
 import { getDriveStatus } from '@/features/drives/utils/drive-status';
 import { checkApplicationExists } from '@/features/applications/queries/check-application-exists';
 import { formatDriveDate, formatDeadline } from '@/lib/drive-date-helpers';
 import { ApplySection } from '@/components/drives/apply-section';
 import { prisma } from '@/lib/prisma';
+import { buildApplicationReviewData } from '@/features/applications/utils/application-review-fields';
+import { ACTIVE_PLACEMENTS_SELECT } from '@/features/students/utils/placement-status';
+import { serializePackageOffered } from '@/features/drives/utils/serialize-drive';
 import StatusBadge from '@/components/ui/status-badge';
+import { parseJsonArray } from '@/lib/parse-json-array';
 
 import { formatPackage } from '@/features/drives/utils/format-package';
 interface DriveDetailPageProps {
@@ -33,6 +40,13 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
     include: {
       academic: true,
       department: { select: { id: true, name: true, code: true } },
+      // Eligibility reads skill names; the application form also reads skill
+      // types, projects and certifications — all loaded in this one query.
+      skills: { select: { skillName: true, skillType: true } },
+      projects: { select: { title: true } },
+      certifications: { select: { certificationName: true } },
+      // Active placements — what the evaluator checks first.
+      placements: ACTIVE_PLACEMENTS_SELECT,
     },
   });
 
@@ -109,15 +123,27 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
     notFound();
   }
 
-  // Get drive status
+  // Get drive status (from this department's deadline — `drive` is resolved)
   const driveStatus = getDriveStatus(drive.applicationDeadline);
+  const skills = parseJsonArray(drive.skills);
+  // The department's pipeline stages students may see, else the legacy list.
+  const selectionRounds = drive.recruitmentStages?.length
+    ? drive.recruitmentStages.map((stage) => stage.name)
+    : parseJsonArray(drive.selectionRounds);
 
   // Check if already applied
   const hasApplied = await checkApplicationExists(student.id, drive.id);
 
   // Get ineligibility reasons (for checklist display)
+  // Standing (approved → placed → opted in → department) first, then this
+  // drive's rules — the evaluator applyToDrive uses, in the same order.
   const ineligibilityReasons = getIneligibilityReasons(studentWithAcademic, drive);
   const isFullyEligible = ineligibilityReasons.length === 0;
+
+  // Every rule this department applies, each evaluated by the same engine that
+  // decided whether this page was visible at all. This replaced two inline
+  // CGPA/backlog comparisons that could have disagreed with the real decision.
+  const ruleResults = evaluateStudentForDrive(studentWithAcademic, drive).results;
 
   // Eligible departments, from the DriveEligibleDepartment relation
   const eligibleDeptIds = drive.eligibleDepartmentLinks.map((link) => link.departmentId);
@@ -127,14 +153,30 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
   });
   const eligibleDeptNames = eligibleDepts.map((d) => d.name);
 
-  // Check each eligibility criterion
-  const cgpaCheck = studentWithAcademic.academic.currentCGPA >= drive.minCGPA;
-  const backlogsCheck = studentWithAcademic.academic.activeBacklogs <= drive.maxActiveBacklogs;
+  // Structural checks the checklist shows alongside the rules.
   const deptCheck = eligibleDeptIds.includes(studentWithAcademic.departmentId);
   const deadlineCheck = driveStatus === 'open';
 
   // Package display
   const packageText = formatPackage(drive);
+
+  // The plain drive row for the client apply card: relations and the rule set
+  // stay on the server.
+  const {
+    eligibleDepartmentLinks: _links,
+    eligibilityRules: _rules,
+    department: _department,
+    applicationForm: _form,
+    recruitmentStages: _stages,
+    cancellation: _cancellation,
+    ...driveRow
+  } = drive;
+  void _cancellation;
+  void _links;
+  void _rules;
+  void _department;
+  void _form;
+  void _stages;
 
   // Get applicant count
   const applicantCount = await prisma.driveApplication.count({
@@ -205,7 +247,9 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <StatusBadge variant="accent">{packageText}</StatusBadge>
-              {driveStatus === 'open' ? (
+              {drive.cancellation ? (
+                <StatusBadge variant="red">Cancelled</StatusBadge>
+              ) : driveStatus === 'open' ? (
                 <StatusBadge variant="green">Open</StatusBadge>
               ) : (
                 <StatusBadge variant="red">Closed</StatusBadge>
@@ -281,31 +325,38 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
         </h2>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* CGPA Check */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <span style={{ fontSize: 18, color: cgpaCheck ? 'var(--teal)' : 'var(--red)' }}>
-              {cgpaCheck ? '✓' : '✗'}
-            </span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>
-                CGPA: {studentWithAcademic.academic.currentCGPA} {cgpaCheck ? '≥' : '<'}{' '}
-                {drive.minCGPA} (required)
+          {/* One row per rule this department applies */}
+          {ruleResults.map((result) => (
+            <div
+              key={`${result.rule.ruleType}:${result.rule.operator}`}
+              style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}
+            >
+              <span
+                style={{
+                  fontSize: 18,
+                  color: result.passed ? 'var(--teal)' : 'var(--red)',
+                }}
+              >
+                {result.passed ? '✓' : '✗'}
+              </span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                  {result.description}
+                  {result.actual !== null && (
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      {' '}
+                      · You: {result.actual}
+                    </span>
+                  )}
+                </div>
+                {!result.passed && result.reason && (
+                  <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 2 }}>
+                    {result.reason}
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-
-          {/* Backlogs Check */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <span style={{ fontSize: 18, color: backlogsCheck ? 'var(--teal)' : 'var(--red)' }}>
-              {backlogsCheck ? '✓' : '✗'}
-            </span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>
-                Active backlogs: {studentWithAcademic.academic.activeBacklogs}{' '}
-                {backlogsCheck ? '≤' : '>'} {drive.maxActiveBacklogs} (allowed)
-              </div>
-            </div>
-          </div>
+          ))}
 
           {/* Department Check */}
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -385,8 +436,76 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
         </div>
       )}
 
+      {/* Role details — this department's version, resolved server-side */}
+      {(drive.jobDescriptionText || drive.requirements || skills.length > 0) && (
+        <div
+          style={{
+            padding: 20,
+            borderRadius: 12,
+            border: '1px solid var(--border)',
+            background: 'var(--surface-0)',
+            marginBottom: 24,
+            display: 'grid',
+            gap: 16,
+          }}
+        >
+          {drive.jobDescriptionText && (
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>
+                About the role
+              </h2>
+              <p
+                style={{
+                  fontSize: 14,
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.6,
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {drive.jobDescriptionText}
+              </p>
+            </div>
+          )}
+
+          {drive.requirements && (
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>
+                Requirements
+              </h2>
+              <p
+                style={{
+                  fontSize: 14,
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.6,
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {drive.requirements}
+              </p>
+            </div>
+          )}
+
+          {skills.length > 0 && (
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>
+                Skills
+              </h2>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {skills.map((skill) => (
+                  <span key={skill} className="badge badge-gray" style={{ fontSize: 12 }}>
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Selection Process */}
-      {drive.selectionRounds && (
+      {selectionRounds.length > 0 && (
         <div
           style={{
             padding: 20,
@@ -408,7 +527,8 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
             Selection Process
           </h2>
           <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            {drive.selectionRounds}
+            {/* Stored as a JSON array; this used to print the raw string. */}
+            {selectionRounds.join(' → ')}
           </div>
         </div>
       )}
@@ -472,22 +592,34 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
         </div>
       )}
 
-      {/* Apply Section */}
+      {/* A cancelled drive: only a student who applied still reaches it. */}
+      {drive.cancellation && (
+        <div
+          className="card"
+          style={{ marginBottom: 16, borderLeft: '3px solid var(--red, #c0392b)', fontSize: 13 }}
+        >
+          <strong>This drive has been cancelled.</strong> Your application is kept on record.
+          {drive.cancellation.reason ? ` Reason: ${drive.cancellation.reason}` : ''}
+        </div>
+      )}
+
+      {/* Apply Section — this department's own application form */}
       <ApplySection
-        driveId={drive.id}
-        companyName={drive.companyName}
-        roleName={drive.roleName}
-        driveDate={drive.driveDate}
-        applicationDeadline={drive.applicationDeadline}
-        driveStatus={driveStatus}
+        drive={serializePackageOffered(driveRow)}
+        driveStatus={drive.cancellation ? 'closed' : driveStatus}
         hasApplied={hasApplied}
-        applyMethod={drive.applyMethod}
-        externalApplyUrl={drive.externalApplyUrl}
-        studentName={studentWithAcademic.name}
-        studentCGPA={studentWithAcademic.academic.currentCGPA}
-        studentBacklogs={studentWithAcademic.academic.activeBacklogs}
-        studentDepartment={studentWithAcademic.department.name}
-        studentRollNumber={studentWithAcademic.rollNumber ?? ''}
+        reviewFields={buildApplicationReviewData(
+          {
+            student: studentWithAcademic,
+            academic: studentWithAcademic.academic,
+            skills: studentWithAcademic.skills,
+            projects: studentWithAcademic.projects,
+            certifications: studentWithAcademic.certifications,
+          },
+          drive.applicationForm ?? []
+        )}
+        eligible={isFullyEligible}
+        ineligibilityReasons={ineligibilityReasons}
       />
     </div>
   );

@@ -557,6 +557,26 @@ Every motion trigger verifies `window.matchMedia('(prefers-reduced-motion: reduc
 
 ---
 
+### 8.11 Drive Workflow Patterns
+
+- **Step wizard.** A multi-step configuration is a row of `btn btn-sm` step buttons (`btn-primary` for the current step, `btn-outline` otherwise) with a ✓ on completed steps and `aria-current="step"` on the current one. Completion comes from the server's readiness result, not from client state, and the wizard opens at the first incomplete step. The create-drive dialog uses the same idea with `badge` chips (`badge-purple` current, `badge-teal` done, `badge-gray` upcoming).
+- **Save draft / continue.** Every step ends with a `card` footer: an unsaved/saved status line, "Save draft" (`btn-outline`) and "Save & continue →" (`btn-primary`). Publishing is its own final step with a checklist (✅ done, ⚠️ with the issues listed, ⛔ blocking) and a disabled button until the server-computed readiness is clean and nothing is unsaved.
+- **Locked vs editable.** A field the Super Admin locked shows its master value as plain text with a `badge-gray` "🔒 Set by the Super Admin"; an editable one shows the input with an Inherited / Overridden badge. In permission lists, `badge-teal` EDITABLE and `badge-gray` LOCKED beside a checkbox. A disabled input is guidance only — the server enforces the rule.
+- **Lifecycle badges.** ASSIGNED/ARCHIVED `badge-gray`, CONFIGURED `badge-purple`, PUBLISHED `badge-green`, CLOSED and CANCELLED `badge-red`. Students see "Cancelled" (red `StatusBadge`) on a cancelled drive and in their applications, with the reason on the drive page.
+- **Destructive confirmations.** Cancel and deadline extension expand an inline panel (reason `textarea`, at least 5 characters; a `datetime-local` input for the deadline) with a primary confirm button and a "Back" outline button. The reason is shown to affected people, so the placeholder says so.
+- **Pipeline editing.** `PipelineEditor` is the one stage editor (Super Admin master stages, department proposals, drafts). A proposal always asks for a reason and shows any pending request as a ⏳ note; the current stages stay visible until it is approved.
+
+### 8.12 Drive Workspace Patterns
+
+- **URL tabs.** A workspace's tabs are links (`?tab=`), not client state, so each tab is shareable and only the open tab's data loads. Same look as 8.11's tab bar (accent underline on the current tab), with `role="tablist"` / `role="tab"`.
+- **Filter bar.** Search input plus `select`s in one wrapping row, a "Clear filters" ghost button when any is active, the result count on the right and the export on the far right. Lists filter in the URL when the server pages them (applications, placements) and in memory when the whole set is loaded (students).
+- **Bulk actions.** Selecting rows reveals a toolbar card (count, outcome, target stage, note, "Review…"). "Review" opens a dialog that shows what would move and what would not and why; the confirm button states the number that will actually move; the result lists every success and every failure. Only movable rows have a checkbox.
+- **Placement confirmation.** A dialog that lists exactly what is recorded, the three consequences (permanent exclusion, history kept, audited), and a required acknowledgement checkbox before the primary button enables.
+- **Read-only history.** Stage history opens inline under its row as an ordered list (from → to · outcome · when · who · pipeline version · note). Activity is a dot-list newest first, with an empty state.
+- **Permission denied.** `PermissionDenied`: a centred card with a lock, one plain sentence and a way back. It never says whether the record exists.
+
+---
+
 ## 9. Screen Inventory Reference
 
 | Module | Screens & File References |
@@ -564,5 +584,5 @@ Every motion trigger verifies `window.matchMedia('(prefers-reduced-motion: reduc
 | **Public** | `index.html` (Landing), `login.html`, `register.html`, `otp-verification.html`, `reset-password.html` |
 | **Student** | `student-dashboard.html`, `student-profile.html`, `readiness-dashboard.html`, `notifications.html`, `settings.html` |
 | **Admin** | `admin-home.html`, `admin-dashboard.html` (Student Directory), `add-student.html`, `excel-upload.html`, `post-drive.html`, `announcements.html`, `reports-analytics.html` |
-| **Super Admin** | `super-admin-dashboard.html`, `department-management.html`, `admin-accounts.html`, `system-settings.html`, `global-reports.html`, `audit-log.html` |
+| **Super Admin** | `super-admin-dashboard.html`, `department-management.html`, `admin-accounts.html`, `system-settings.html`, `global-reports.html`, `audit-log.html`; built since the prototype: Central Drives (create wizard, permissions, stages, assignment console, cancel / extend deadline) Pipeline Requests and Placements (global, read-only); Department Admin: Drive workspace (Overview, Eligibility, Eligible / Registered Students, Applications, Recruitment Pipeline, Placement, Activity) |
 | **Shared Assets** | `styles.css` (Design tokens & layout rules), `motion.js` (Web Animations API engine), `drive-data.js` (Mock placement drive records) |

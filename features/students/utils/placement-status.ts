@@ -1,18 +1,38 @@
 import type { Prisma, Student } from "@prisma/client";
 
 /**
- * Placement is never stored on the Student row.
+ * Placement is never a flag on the Student row.
  *
- * It is derived from the applications a student actually holds: a student is
- * placed once a department admin marks one of their applications SELECTED.
- * Every screen — dept-admin roster, dept dashboard, super-admin reports,
- * department matrix — resolves it through this module, so "Placed" can never
- * mean two different things in two different panels again.
+ * A student is placed while they hold at least one `StudentPlacement` that
+ * has not been revoked. Placements are explicit records — company, role,
+ * package, date, who recorded it — created when a department admin marks an
+ * application SELECTED (in the same transaction) or records an off-campus
+ * offer, and corrected only by revoking them with a reason. Every screen —
+ * dept-admin roster, dept dashboard, super-admin reports, department matrix,
+ * and the eligibility evaluator — resolves "placed" through this module, so
+ * it can never mean two different things in two places.
  *
  * The previous `Student.placementStatus` text column was written by nothing
  * and read with three different casings, which made every Placed count
- * silently zero.
+ * silently zero. Deriving from SELECTED applications fixed that, but could
+ * not say where or when a student was placed, or record an offer made
+ * outside CampusHire.
  */
+
+/** A placement that counts: not revoked. */
+export const ACTIVE_PLACEMENT_WHERE = {
+  revokedAt: null,
+} satisfies Prisma.StudentPlacementWhereInput;
+
+/**
+ * Include for the eligibility subject: a student's active placements, ids
+ * only. `toEligibilitySubject` requires it, so a caller that forgot to load
+ * placement does not compile.
+ */
+export const ACTIVE_PLACEMENTS_SELECT = {
+  where: ACTIVE_PLACEMENT_WHERE,
+  select: { id: true, revokedAt: true },
+} as const;
 
 /** A student's participation and outcome, as shown on rosters and KPI cards. */
 export type PlacementState = "PENDING" | "OPTED_OUT" | "PLACED" | "ELIGIBLE";
@@ -22,18 +42,25 @@ export type PlacementState = "PENDING" | "OPTED_OUT" | "PLACED" | "ELIGIBLE";
  * Use inside a `where` alongside the caller's own department scoping.
  */
 export const PLACED_STUDENT_FILTER = {
-  applications: { some: { status: "SELECTED" } },
+  placements: { some: ACTIVE_PLACEMENT_WHERE },
 } satisfies Prisma.StudentWhereInput;
 
 /** Inverse of {@link PLACED_STUDENT_FILTER}. */
 export const UNPLACED_STUDENT_FILTER = {
-  applications: { none: { status: "SELECTED" } },
+  placements: { none: ACTIVE_PLACEMENT_WHERE },
 } satisfies Prisma.StudentWhereInput;
 
 /**
+ * The same test as SQL, for raw queries: `<alias>` is the Student row's
+ * alias. Kept here so the raw reports cannot drift from the Prisma filters.
+ */
+export function placedStudentSql(alias: string): string {
+  return `EXISTS (SELECT 1 FROM "StudentPlacement" sp WHERE sp."studentId" = ${alias}."id" AND sp."revokedAt" IS NULL)`;
+}
+
+/**
  * The minimum shape needed to resolve a student's placement state. Callers
- * supply it by selecting a `_count` of SELECTED applications, or by passing
- * `isPlaced` directly when they already know.
+ * supply `isPlaced` from their active placements (`ACTIVE_PLACEMENTS_SELECT`).
  */
 export interface PlacementInput {
   isPending: Student["isPending"];

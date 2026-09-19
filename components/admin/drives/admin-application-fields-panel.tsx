@@ -7,6 +7,10 @@ import {
   type ApplicationFieldDef,
 } from "@/features/drives/data/application-fields-catalog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  allowedPermissions,
+  defaultPermission,
+} from "@/features/drives/domain/application-form";
 
 export interface ApplicationFieldConfig {
   key: string;
@@ -17,6 +21,12 @@ export interface ApplicationFieldConfig {
   description?: string;
   required: boolean;
   enabled: boolean;
+  /**
+   * Whether the student may change this value on the application. Absent on
+   * forms saved before permissions existed — the catalog default applies.
+   * Only a UI hint: the server re-validates it against the catalog.
+   */
+  permission?: "READ_ONLY" | "EDITABLE";
 }
 
 interface AdminApplicationFieldsPanelProps {
@@ -98,6 +108,16 @@ export function AdminApplicationFieldsPanel({
           return { ...f, required: !f.required };
         }
         return f;
+      })
+    );
+  }
+
+  function handleTogglePermission(keyToToggle: string) {
+    onChange?.(
+      activeFields.map((f) => {
+        if (f.key !== keyToToggle) return f;
+        const current = f.permission ?? defaultPermission(f.key);
+        return { ...f, permission: current === "EDITABLE" ? "READ_ONLY" : "EDITABLE" };
       })
     );
   }
@@ -565,6 +585,28 @@ export function AdminApplicationFieldsPanel({
                       >
                         {isMandatory ? "✓ Mandatory (*)" : "○ Optional"}
                       </button>
+                      {(() => {
+                        const permission = field.permission ?? defaultPermission(field.key);
+                        const choosable = allowedPermissions(field.key).length > 1;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePermission(field.key)}
+                            disabled={!choosable}
+                            className="btn btn-outline btn-sm"
+                            style={{ fontSize: 11, padding: "3px 10px", borderRadius: 14, marginLeft: 6 }}
+                            title={
+                              choosable
+                                ? "Click to toggle whether the student may edit this value"
+                                : permission === "EDITABLE"
+                                  ? "Answered by the student"
+                                  : "Verified profile record — cannot be edited by the student"
+                            }
+                          >
+                            {permission === "EDITABLE" ? "✎ Editable" : "🔒 Read-only"}
+                          </button>
+                        );
+                      })()}
                     </td>
 
                     <td style={{ textAlign: "right" }}>

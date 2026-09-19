@@ -17,7 +17,34 @@ vi.mock("@/lib/prisma", () => ({
       count: vi.fn(),
       findMany: vi.fn(),
     },
+    // Application, snapshot and audit rows are written in one transaction.
+    // Recruitment pipeline models (see pipeline-fixtures.ts).
+    recruitmentPipelineVersion: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      createMany: vi.fn(),
+      updateMany: vi.fn(),
+      count: vi.fn(),
+    },
+    recruitmentStage: { findUnique: vi.fn() },
+    applicationStageEvent: { create: vi.fn(), createMany: vi.fn() },
+    $transaction: vi.fn(),
   },
+}));
+
+vi.mock("@/lib/audit", () => ({
+  createAuditLog: vi.fn(),
+  createAuditLogInTransaction: vi.fn(),
+  AuditAction: { APPLY: "APPLY", UPDATE: "UPDATE", CREATE: "CREATE" },
+  AuditEntityType: {
+    DRIVE_APPLICATION: "DriveApplication",
+    APPLICATION_SNAPSHOT: "DriveApplicationSnapshot",
+  },
+}));
+
+vi.mock("@/lib/notifications", () => ({
+  createApplicationSubmittedNotification: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -29,8 +56,43 @@ vi.mock("../queries/check-application-exists", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
+import { withActivePipeline } from "@/features/recruitment/__tests__/pipeline-fixtures";
+
+// Every department drive here already has an active recruitment pipeline.
+beforeEach(() => withActivePipeline(prisma));
 import { requireStudent } from "@/lib/auth";
 import { checkApplicationExists } from "../queries/check-application-exists";
+
+/** A published department instance that overrides nothing. */
+const publishedInstance = {
+  eligibilityRules: [],
+  // No form of its own: it inherits the master's, which inherits the catalog
+  // default (name, roll no, email, phone, CGPA, backlogs, department).
+  formFields: [],
+  id: "config-1",
+  driveId: "clpq0000000000000000000",
+  departmentId: "dept-1",
+  status: "PUBLISHED" as const,
+  lockedAt: new Date(),
+  roleName: null,
+  jobDescriptionText: null,
+  requirements: null,
+  skills: null,
+  driveDate: null,
+  applicationDeadline: null,
+  selectionRounds: null,
+  minCGPA: null,
+  maxActiveBacklogs: null,
+  applicationFields: null,
+  venue: null,
+  reportingTime: null,
+  coordinatorName: null,
+  coordinatorPhone: null,
+  coordinatorEmail: null,
+  seatingAllocation: null,
+  pptLink: null,
+  specialInstructions: null,
+};
 
 describe("applyToDrive", () => {
   const mockUser = {
@@ -64,8 +126,15 @@ describe("applyToDrive", () => {
     address: null,
     personalEmail: null,
     batchYear: 2025,
+    // Not placed: the evaluator's standing check passes.
+    placements: [] as { revokedAt: Date | null }[],
     createdAt: new Date(),
     updatedAt: new Date(),
+    // What the application form's profile fields read, loaded by applyToDrive
+    // in its student query.
+    department: { code: "CSE" },
+    projects: [],
+    certifications: [],
   };
 
   const mockAuth = {
@@ -95,6 +164,13 @@ describe("applyToDrive", () => {
     createdByUserId: null,
     isCentralDrive: false,
     lifecycleStatus: "PUBLISHED" as const,
+    departmentEditableFields: [] as string[],
+    masterPipeline: null,
+    cancelledAt: null,
+    cancelledById: null,
+    cancellationReason: null,
+    requirements: null,
+    skills: null,
     companyName: "TechCorp",
     roleName: "Software Engineer",
     jobDescriptionUrl: null,
@@ -119,6 +195,14 @@ describe("applyToDrive", () => {
     applicationFields: null,
     createdAt: new Date(),
     updatedAt: new Date(),
+    // The applicant's department's instance, loaded in the same query. It is
+    // PUBLISHED and overrides nothing, so every check reads the master's
+    // values — the per-department cases live in department-overrides.test.ts.
+    // Master default rules: none stored, so the evaluator derives the
+    // CGPA / backlog rules from the legacy columns above.
+    eligibilityRules: [],
+    formFields: [],
+    departmentConfigs: [{ ...publishedInstance }],
   };
 
   const mockApplication = {
@@ -132,6 +216,7 @@ describe("applyToDrive", () => {
     consentAcceptedAt: null,
     stageUpdatedAt: null,
     stageUpdatedById: null,
+    currentStageId: null,
     snapshotCgpa: null,
     snapshotBacklogs: null,
     createdAt: new Date(),
@@ -140,12 +225,16 @@ describe("applyToDrive", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (prisma.$transaction as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    (fn: (tx: unknown) => unknown) => fn(prisma)
+  );
   });
 
   describe("Success Cases", () => {
     it("should reject submission when the accuracy declaration is not ticked", async () => {
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         academic: mockAcademic,
       } as any);
@@ -164,6 +253,7 @@ describe("applyToDrive", () => {
     it("should store only editable fields and drop locked institutional keys", async () => {
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         academic: mockAcademic,
       } as any);
@@ -188,7 +278,14 @@ describe("applyToDrive", () => {
         .calls[0][0] as any;
       const stored = JSON.parse(created.data.submittedDetails);
 
-      expect(stored).toEqual({ phone: "9876543210" });
+      // Every editable field on the form, with the student's effective value —
+      // the edited phone, and name and email as on the profile. The locked
+      // institutional keys are dropped however they were sent.
+      expect(stored).toEqual({
+        name: "Test Student",
+        email: "student@example.com",
+        phone: "9876543210",
+      });
       // The snapshot keeps the server-read values, not the client's
       expect(created.data.snapshotCgpa).toBe(mockAcademic.currentCGPA);
       expect(created.data.snapshotBacklogs).toBe(mockAcademic.activeBacklogs);
@@ -198,6 +295,7 @@ describe("applyToDrive", () => {
       // Setup mocks
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         academic: mockAcademic,
       } as any);
@@ -213,12 +311,30 @@ describe("applyToDrive", () => {
       }
       expect(prisma.driveApplication.create).toHaveBeenCalledWith({
         data: {
+          // Entered at the pipeline's Application stage.
+          currentStageId: "rst_application",
+          stage: "APPLIED",
           studentId: "student-1",
           driveId: "clpq0000000000000000000",
           snapshotCgpa: mockAcademic.currentCGPA,
           snapshotBacklogs: mockAcademic.activeBacklogs,
-          submittedDetails: "{}",
+          submittedDetails: JSON.stringify({
+            name: "Test Student",
+            email: "student@example.com",
+            phone: "1234567890",
+          }),
           consentAcceptedAt: expect.any(Date),
+          // The snapshot is created with the application, in the same write.
+          snapshot: {
+            create: expect.objectContaining({
+              origin: "SUBMISSION",
+              schemaVersion: 1,
+              formHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+              eligibilityHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+              driveContentHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+              payload: expect.any(String),
+            }),
+          },
         },
       });
     });
@@ -251,6 +367,7 @@ describe("applyToDrive", () => {
     it("should reject if academic information missing", async () => {
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         academic: null,
       } as any);
@@ -279,6 +396,7 @@ describe("applyToDrive", () => {
     it("should reject if drive not found", async () => {
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         academic: mockAcademic,
       } as any);
@@ -297,6 +415,7 @@ describe("applyToDrive", () => {
     it("should reject if CGPA below minimum", async () => {
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         academic: {
           ...mockAcademic,
@@ -318,6 +437,7 @@ describe("applyToDrive", () => {
     it("should reject if active backlogs exceed maximum", async () => {
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         academic: {
           ...mockAcademic,
@@ -339,6 +459,7 @@ describe("applyToDrive", () => {
     it("should reject if department not eligible", async () => {
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         departmentId: "dept-2", // Not in eligibleDepartments
         academic: mockAcademic,
@@ -365,6 +486,7 @@ describe("applyToDrive", () => {
 
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         academic: mockAcademic,
       } as any);
@@ -385,6 +507,7 @@ describe("applyToDrive", () => {
     it("should reject if already applied (application-level check)", async () => {
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         academic: mockAcademic,
       } as any);
@@ -402,6 +525,7 @@ describe("applyToDrive", () => {
     it("should handle database unique constraint error gracefully", async () => {
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         academic: mockAcademic,
       } as any);
@@ -431,6 +555,7 @@ describe("applyToDrive", () => {
     it("should handle unexpected errors gracefully", async () => {
       vi.mocked(requireStudent).mockResolvedValue(mockAuth);
       vi.mocked(prisma.student.findUnique).mockResolvedValue({
+        skills: [],
         ...mockStudent,
         academic: mockAcademic,
       } as any);

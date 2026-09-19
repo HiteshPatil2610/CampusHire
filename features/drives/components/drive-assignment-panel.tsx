@@ -9,6 +9,11 @@ import type { DepartmentAssignmentRow } from "../queries/get-drive-assignments";
 import { assignDriveToDepartments } from "../actions/assign-drive-departments";
 import { unassignDriveDepartment } from "../actions/unassign-drive-department";
 import { setMasterDriveStatus } from "../actions/set-master-drive-status";
+import {
+  cancelDepartmentDriveAsSuperAdmin,
+  cancelMasterDrive,
+} from "../actions/cancel-drive";
+import { extendDepartmentDriveDeadline } from "../actions/manage-master-drive";
 
 /**
  * The Super Admin's assignment console for one master drive.
@@ -32,13 +37,30 @@ const STATUS_BADGE: Record<DepartmentDriveStatus, string> = {
   PUBLISHED: "badge-green",
   CLOSED: "badge-red",
   ARCHIVED: "badge-gray",
+  CANCELLED: "badge-red",
 };
 
 const MASTER_BADGE: Record<MasterDriveStatus, string> = {
   DRAFT: "badge-gray",
   PUBLISHED: "badge-green",
   ARCHIVED: "badge-red",
+  CANCELLED: "badge-red",
 };
+
+const LIVE_STATUSES: DepartmentDriveStatus[] = ["ASSIGNED", "CONFIGURED", "PUBLISHED", "CLOSED"];
+
+/** A Date as the value a datetime-local input expects, in local time. */
+function toLocalInput(value: Date | string): string {
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+/** One pending Super Admin action, with its inputs. */
+type PendingAction =
+  | { kind: "cancel-master" }
+  | { kind: "cancel"; row: DepartmentAssignmentRow }
+  | { kind: "extend"; row: DepartmentAssignmentRow };
 
 export function DriveAssignmentPanel({
   driveId,
@@ -49,6 +71,57 @@ export function DriveAssignmentPanel({
   const [rows, setRows] = useState<DepartmentAssignmentRow[] | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [action, setAction] = useState<PendingAction | null>(null);
+  const [reason, setReason] = useState("");
+  const [newDeadline, setNewDeadline] = useState("");
+
+  function openAction(next: PendingAction) {
+    setAction(next);
+    setReason("");
+    setNewDeadline(
+      next.kind === "extend" && next.row.applicationDeadline
+        ? toLocalInput(next.row.applicationDeadline)
+        : ""
+    );
+  }
+
+  function runAction() {
+    if (!action) return;
+    startTransition(async () => {
+      const result =
+        action.kind === "cancel-master"
+          ? await cancelMasterDrive({ driveId, reason })
+          : action.kind === "cancel"
+            ? await cancelDepartmentDriveAsSuperAdmin({
+                driveId,
+                departmentId: action.row.departmentId,
+                reason,
+              })
+            : await extendDepartmentDriveDeadline({
+                driveId,
+                departmentId: action.row.departmentId,
+                newDeadline: new Date(newDeadline).toISOString(),
+                reason,
+              });
+
+      if (!result.success) {
+        toast({ title: "Could not complete", description: result.error, variant: "destructive" });
+        return;
+      }
+      toast({
+        title: action.kind === "extend" ? "Deadline extended" : "Drive cancelled",
+        description:
+          "message" in result && result.message
+            ? result.message
+            : "notified" in result
+              ? `${result.notified} people notified.`
+              : undefined,
+      });
+      setAction(null);
+      await load();
+      router.refresh();
+    });
+  }
 
   const load = useCallback(async () => {
     const result = await getDriveAssignments(driveId);
@@ -187,8 +260,81 @@ export function DriveAssignmentPanel({
               Archive
             </button>
           )}
+          {(lifecycleStatus === "DRAFT" || lifecycleStatus === "PUBLISHED") && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              style={{ color: "var(--red, #c0392b)" }}
+              disabled={isPending}
+              onClick={() => openAction({ kind: "cancel-master" })}
+            >
+              Cancel drive
+            </button>
+          )}
         </div>
       </div>
+
+      {action && (
+        <div
+          style={{
+            display: "grid",
+            gap: 8,
+            marginBottom: 12,
+            padding: 12,
+            borderRadius: 8,
+            border: "0.5px solid var(--border-strong)",
+            background: "var(--surface-1)",
+          }}
+        >
+          <strong style={{ fontSize: 13 }}>
+            {action.kind === "cancel-master"
+              ? "Cancel this drive in every department"
+              : action.kind === "cancel"
+                ? `Cancel the drive for ${action.row.departmentCode}`
+                : `Extend the application deadline for ${action.row.departmentCode}`}
+          </strong>
+          {action.kind === "extend" && (
+            <label style={{ fontSize: 12, display: "grid", gap: 4 }}>
+              New deadline (later than the current one, before the drive date)
+              <input
+                type="datetime-local"
+                value={newDeadline}
+                onChange={(e) => setNewDeadline(e.target.value)}
+                style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "0.5px solid var(--border-strong)", maxWidth: 260 }}
+              />
+            </label>
+          )}
+          <textarea
+            rows={2}
+            maxLength={1000}
+            value={reason}
+            placeholder={
+              action.kind === "extend"
+                ? "Why is the deadline being extended? (recorded in the audit log)"
+                : "Why is this drive cancelled? Applicants are told this reason."
+            }
+            onChange={(e) => setReason(e.target.value)}
+            style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "0.5px solid var(--border-strong)" }}
+          />
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={
+                isPending ||
+                reason.trim().length < 5 ||
+                (action.kind === "extend" && !newDeadline)
+              }
+              onClick={runAction}
+            >
+              {isPending ? "Working…" : action.kind === "extend" ? "Extend deadline" : "Confirm cancellation"}
+            </button>
+            <button type="button" className="btn btn-outline btn-sm" disabled={isPending} onClick={() => setAction(null)}>
+              Back
+            </button>
+          </div>
+        </div>
+      )}
 
       {rows === null ? (
         <div className="skeleton" style={{ height: 120, borderRadius: 8 }} />
@@ -199,6 +345,7 @@ export function DriveAssignmentPanel({
               <tr>
                 <th style={{ textAlign: "left" }}>Department</th>
                 <th style={{ textAlign: "left" }}>Instance</th>
+                <th style={{ textAlign: "left" }}>Deadline</th>
                 <th style={{ textAlign: "right" }}>Applications</th>
                 <th />
               </tr>
@@ -207,7 +354,7 @@ export function DriveAssignmentPanel({
               {assigned.length === 0 && (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     style={{ padding: 16, color: "var(--text-muted)" }}
                   >
                     Not assigned to any department yet.
@@ -230,9 +377,44 @@ export function DriveAssignmentPanel({
                     >
                       {row.status}
                     </span>
+                    {row.status === "CANCELLED" && row.cancellationReason && (
+                      <div className="text-muted" style={{ fontSize: 11 }}>
+                        {row.cancellationReason}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ fontSize: 12 }}>
+                    {row.applicationDeadline
+                      ? new Date(row.applicationDeadline).toLocaleString("en-IN", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })
+                      : "—"}
                   </td>
                   <td style={{ textAlign: "right" }}>{row.applicationCount}</td>
-                  <td style={{ textAlign: "right" }}>
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    {row.status === "PUBLISHED" && (
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        style={{ fontSize: 11, marginRight: 4 }}
+                        disabled={isPending}
+                        onClick={() => openAction({ kind: "extend", row })}
+                      >
+                        Extend deadline
+                      </button>
+                    )}
+                    {row.status && LIVE_STATUSES.includes(row.status) && (
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        style={{ fontSize: 11, marginRight: 4 }}
+                        disabled={isPending}
+                        onClick={() => openAction({ kind: "cancel", row })}
+                      >
+                        Cancel
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn btn-outline btn-sm"
@@ -253,7 +435,7 @@ export function DriveAssignmentPanel({
             </tbody>
           </table>
 
-          {unassigned.length > 0 && (
+          {unassigned.length > 0 && (lifecycleStatus === "DRAFT" || lifecycleStatus === "PUBLISHED") && (
             <div style={{ marginTop: 16 }}>
               <div
                 style={{

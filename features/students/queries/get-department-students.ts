@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin } from "@/lib/auth";
 import type { Student, StudentAcademic, Department } from "@prisma/client";
 import {
+  ACTIVE_PLACEMENT_WHERE,
   PLACED_STUDENT_FILTER,
   UNPLACED_STUDENT_FILTER,
   resolvePlacementState,
@@ -99,25 +100,25 @@ export async function getDepartmentStudents(
         academic: true,
         department: { select: { id: true, name: true, code: true } },
         _count: { select: { skills: true, projects: true, applications: true } },
-        // Only the selected offers, so placement state and the company list
+        // Only active placements, so placement state and the company list
         // come from one query rather than a per-row follow-up.
-        applications: {
-          where: { status: "SELECTED" },
-          select: { drive: { select: { companyName: true } } },
+        placements: {
+          where: ACTIVE_PLACEMENT_WHERE,
+          select: { companyName: true },
         },
       },
     }),
   ]);
 
   return {
-    data: data.map(({ applications, ...student }) => ({
+    data: data.map(({ placements, ...student }) => ({
       ...student,
       placementState: resolvePlacementState({
         isPending: student.isPending,
         optedIn: student.optedIn,
-        isPlaced: applications.length > 0,
+        isPlaced: placements.length > 0,
       }),
-      placedCompanies: applications.map((a) => a.drive.companyName),
+      placedCompanies: placements.map((placement) => placement.companyName),
     })),
     page,
     pageSize,

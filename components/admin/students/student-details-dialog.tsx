@@ -15,6 +15,7 @@ import {
   PLACEMENT_STATE_BADGES,
   resolvePlacementState,
 } from '@/features/students/utils/placement-status';
+import { StudentPlacementPanel } from './student-placement-panel';
 
 interface StudentDetailsDialogProps {
   studentId: string | null; // null = closed
@@ -32,9 +33,10 @@ interface StudentDetailsDialogProps {
  * - Added profile completion % instead
  * - Maps temp frontend field names to Prisma schema
  *
- * Placement state is derived from the student's SELECTED applications — there
- * is no stored placement column. The admin can set and lock the student's
- * placement participation from here.
+ * Placement state is derived from the student's active placement records
+ * (StudentPlacement). The admin can see the placement history, record an
+ * off-campus placement or revoke a mistaken one, and set and lock the
+ * student's placement participation, from here.
  */
 export function StudentDetailsDialog({
   studentId,
@@ -42,6 +44,8 @@ export function StudentDetailsDialog({
 }: StudentDetailsDialogProps) {
   const [profile, setProfile] = useState<CompleteProfile | null>(null);
   const [loading, setLoading] = useState(false);
+  // Bumped after a placement change so the profile (and its badge) reloads.
+  const [reloadKey, setReloadKey] = useState(0);
   const [isSavingOptIn, startOptInTransition] = useTransition();
   const { toast } = useToast();
 
@@ -67,7 +71,7 @@ export function StudentDetailsDialog({
       .finally(() => {
         setLoading(false);
       });
-  }, [studentId, onClose, toast]);
+  }, [studentId, onClose, toast, reloadKey]);
 
   if (!studentId) return null;
 
@@ -80,7 +84,7 @@ export function StudentDetailsDialog({
     ? calculateProfileCompletion(profile)
     : { percentage: 0, completedSections: [], missingSections: [] };
 
-  // Placement is derived from the offers the student holds, never stored.
+  // Placement comes from the student's active placement records.
   const offers = profile?.selectedOffers ?? [];
   const isPlaced = offers.length > 0;
   const isPending = student?.isPending === true;
@@ -232,34 +236,12 @@ export function StudentDetailsDialog({
               </div>
             </div>
 
-            {/* Offers held — the source of the Placed state */}
-            {isPlaced && (
-              <div
-                className="card"
-                style={{ padding: '10px 12px', display: 'grid', gap: 6 }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    textTransform: 'uppercase',
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  Offers
-                </div>
-                {offers.map((offer) => (
-                  <div key={offer.driveId} style={{ fontSize: 13 }}>
-                    <strong>{offer.companyName}</strong> — {offer.roleName}
-                    {offer.packageDisplay && (
-                      <span className="text-muted">
-                        {' '}
-                        · {offer.packageDisplay}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Placement — the source of the Placed state */}
+            <StudentPlacementPanel
+              studentId={studentId}
+              canRecord
+              onChanged={() => setReloadKey((key) => key + 1)}
+            />
 
             {/* Placement participation — admin-controlled, lockable */}
             <div

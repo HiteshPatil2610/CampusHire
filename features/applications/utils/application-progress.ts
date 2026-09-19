@@ -104,6 +104,17 @@ export function validateStageTransition(params: {
     };
   }
 
+  // A selection is final. Marking SELECTED records the student's placement;
+  // a mistake is corrected by revoking that placement (with a reason), never
+  // by quietly moving the application. The database refuses it too.
+  if (currentStatus === "SELECTED") {
+    return {
+      valid: false,
+      error:
+        "A selection is final. If it was recorded by mistake, revoke the student's placement instead.",
+    };
+  }
+
   // Nothing may move an application into WITHDRAWN any more: an application is
   // final once submitted, for the student and the admin alike. The schema
   // already rejects the value; this keeps the pure rule honest on its own.

@@ -1,4 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import {
+  ACTIVE_PLACEMENTS_SELECT,
+  UNPLACED_STUDENT_FILTER,
+} from "@/features/students/utils/placement-status";
 import { isStudentAcademicallyEligibleForDrive } from "@/features/drives/queries/drive-eligibility";
 import {
   eligibleDepartmentIdsOf,
@@ -7,6 +11,7 @@ import {
 import type { Drive } from "@prisma/client";
 
 import { formatPackage } from "@/features/drives/utils/format-package";
+import { resolveDepartmentDriveWithRules } from "@/features/drives/domain/resolve-department-drive";
 /**
  * Announce a newly posted drive to the students who can actually apply to it.
  *
@@ -38,30 +43,76 @@ export async function notifyEligibleStudentsOfDrive(
     const assigned = eligibleDepartmentIdsOf(drive);
     // Intersected rather than replaced: a caller can narrow the audience but
     // never widen it past the departments the drive is actually assigned to.
-    const eligibleDepartmentIds = options.departmentIds
+    const requested = options.departmentIds
       ? assigned.filter((id) => options.departmentIds!.includes(id))
       : assigned;
 
-    if (eligibleDepartmentIds.length === 0) {
+    if (requested.length === 0) {
       return { notified: 0 };
     }
+
+    // Only departments that have actually published their instance. A student
+    // must never be told about a drive the listing would then hide from them,
+    // and the listing shows PUBLISHED instances only.
+    // Each published instance with its own rules, and the master's defaults.
+    // Loaded here rather than trusted from the caller, so a caller that passed
+    // a drive without its rule set cannot make this evaluate against nothing.
+    const [instances, masterRules] = await Promise.all([
+      prisma.driveDepartmentConfig.findMany({
+        where: {
+          driveId: drive.id,
+          departmentId: { in: requested },
+          status: "PUBLISHED",
+        },
+        include: { eligibilityRules: true },
+      }),
+      prisma.driveEligibilityRule.findMany({ where: { driveId: drive.id } }),
+    ]);
+
+    if (instances.length === 0) {
+      return { notified: 0 };
+    }
+
+    // Each department sees its own version of the drive — its role title and
+    // its rule set — so eligibility and the message are resolved per
+    // department, through the same evaluator the listing and `applyToDrive` use.
+    const resolvedByDepartment = new Map(
+      instances.map((instance) => [
+        instance.departmentId,
+        resolveDepartmentDriveWithRules(
+          { ...drive, eligibilityRules: masterRules },
+          instance
+        ),
+      ])
+    );
 
     // Narrow in the query where the database can, then apply the shared
     // eligibility rule in memory — CGPA and backlog limits live on the
     // related academic row and are easier to read through the pure function.
     const candidates = await prisma.student.findMany({
       where: {
-        departmentId: { in: eligibleDepartmentIds },
+        departmentId: { in: [...resolvedByDepartment.keys()] },
         isPending: false,
         optedIn: true,
+        // A placed student is permanently excluded: narrowed here, and
+        // decided again (first) by the evaluator below.
+        ...UNPLACED_STUDENT_FILTER,
         userId: { not: null },
       },
-      include: { academic: true },
+      include: {
+        academic: true,
+        skills: { select: { skillName: true } },
+        placements: ACTIVE_PLACEMENTS_SELECT,
+      },
     });
 
-    const recipients = candidates.filter((student) =>
-      isStudentAcademicallyEligibleForDrive(student, drive)
-    );
+    const recipients = candidates.filter((student) => {
+      const resolved = resolvedByDepartment.get(student.departmentId);
+      return (
+        resolved !== undefined &&
+        isStudentAcademicallyEligibleForDrive(student, resolved)
+      );
+    });
 
     // A student with no academic record can never be eligible for anything,
     // so a new drive is the moment that gap actually costs them something.
@@ -81,7 +132,10 @@ export async function notifyEligibleStudentsOfDrive(
         userId: student.userId!,
         type: "DRIVE",
         title: "New Drive Available",
-        message: `${drive.companyName} is hiring for ${drive.roleName} · ${packageText}`,
+        // The role this student's department is actually hiring for.
+        message: `${drive.companyName} is hiring for ${
+          resolvedByDepartment.get(student.departmentId)!.roleName
+        } · ${packageText}`,
         resourceType: "Drive",
         resourceId: drive.id,
       })),

@@ -5,22 +5,50 @@ import { useRouter } from "next/navigation";
 import { parseJsonArray } from "@/lib/parse-json-array";
 import { eligibleDepartmentIdsOf } from "../utils/eligible-departments";
 import { getDriveStatus } from "../utils/drive-status";
-import { resolveSelectedApplicationFields } from "../utils/application-fields";
-import {
-  AVAILABLE_STUDENT_FIELDS,
-  FIELD_PRESETS,
-} from "../data/application-fields-catalog";
 import { saveDriveDepartmentConfig } from "../actions/save-drive-department-config";
-import { StudentPortalPreview } from "./student-portal-preview";
 import { StudentApplicationPreviewModal } from "./student-application-preview";
-import type { StoredApplicationField } from "../utils/application-fields";
+import {
+  PipelineReviewStep,
+  PublishStep,
+  StudentPreviewStep,
+} from "./department-drive-steps";
+import {
+  DEPARTMENT_DRIVE_STEPS,
+  type DepartmentDriveStepId,
+} from "../domain/department-drive-readiness";
+import type { DepartmentEditableField } from "../domain/drive-lifecycle";
+import { ApplicationFormEditor } from "./application-form-editor";
+import { BatchTargetingPicker } from "./batch-targeting-picker";
+import { EligibleStudentsCard } from "./eligible-students-card";
+import {
+  targetedBatchYears,
+  withTargetedBatchYears,
+} from "../domain/batch-targeting";
+import type { DepartmentBatchYear } from "@/features/students/queries/department-batch-years";
+import type { ApplicationFieldConfig } from "../domain/application-form";
 import type { DepartmentCentralDrive } from "../queries/get-department-central-drives";
+import {
+  resolveDepartmentDrive,
+  overriddenFields,
+} from "../domain/resolve-department-drive";
+import {
+  legacyColumnsFromRules,
+  withLegacyRules,
+} from "../domain/eligibility-rules";
+import {
+  EligibilityRulesEditor,
+  fromDrafts,
+  toDrafts,
+  type RuleDraft,
+} from "./eligibility-rules-editor";
 
 import { formatPackage } from "../utils/format-package";
 interface DepartmentDriveConfigPanelProps {
   drive: DepartmentCentralDrive;
   departmentCodesById: Record<string, string>;
   departmentCode: string;
+  /** Batch years this department's students have. */
+  batchYears: DepartmentBatchYear[];
 }
 
 function MetaCell({ label, value }: { label: string; value: string }) {
@@ -86,18 +114,129 @@ const inputStyle: React.CSSProperties = {
   background: "var(--surface-2)",
 };
 
+/** A date as the `YYYY-MM-DD` a native date input expects, or "" for none. */
+function toDateInput(value: Date | string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+/** "Java, SQL" → ["Java", "SQL"]; blank → null, which means inherit. */
+function splitList(value: string): string[] | null {
+  const items = value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : null;
+}
+
+function listToJson(value: string): string | null {
+  const items = splitList(value);
+  return items ? JSON.stringify(items) : null;
+}
+
+/**
+ * One overridable field: the master's value, this department's input, and an
+ * explicit Inherited / Overridden marker, so an admin never has to guess which
+ * value their students are seeing.
+ */
+function OverrideRow({
+  label,
+  hint,
+  masterValue,
+  isOverridden,
+  locked,
+  onReset,
+  children,
+  lockedByMaster = false,
+}: {
+  label: string;
+  hint?: string;
+  masterValue: string;
+  isOverridden: boolean;
+  locked: boolean;
+  onReset: () => void;
+  children: React.ReactNode;
+  /** The Super Admin did not open this field to departments. */
+  lockedByMaster?: boolean;
+}) {
+  if (lockedByMaster) {
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 500 }}>{label}</span>
+          <span className="badge badge-gray" style={{ fontSize: 9 }}>
+            🔒 Set by the Super Admin
+          </span>
+        </div>
+        <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{masterValue}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 6,
+          flexWrap: "wrap",
+        }}
+      >
+        <span style={{ fontSize: 12, fontWeight: 500 }}>{label}</span>
+        <span
+          className={`badge ${isOverridden ? "badge-purple" : "badge-gray"}`}
+          style={{ fontSize: 9 }}
+        >
+          {isOverridden ? "Overridden" : "Inherited"}
+        </span>
+        {isOverridden && !locked && (
+          <button
+            type="button"
+            onClick={onReset}
+            style={{
+              fontSize: 11,
+              border: "none",
+              background: "none",
+              color: "var(--accent)",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            Reset to master
+          </button>
+        )}
+      </div>
+      {children}
+      <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
+        Master: {masterValue}
+        {hint ? ` · ${hint}` : ""}
+      </div>
+    </div>
+  );
+}
+
 export function DepartmentDriveConfigPanel({
   drive,
   departmentCodesById,
   departmentCode,
+  batchYears,
 }: DepartmentDriveConfigPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // Where the admin left off: the first incomplete step of the saved
+  // configuration, as the server computed it.
+  const [step, setStep] = useState<DepartmentDriveStepId>(
+    drive.readiness.published ? "details" : drive.readiness.resumeAt
+  );
+  const editable = new Set<DepartmentEditableField>(drive.editableFields);
+  const inactive = drive.config?.status === "CANCELLED" || drive.config?.status === "ARCHIVED";
 
   const config = drive.config;
   const [venue, setVenue] = useState(config?.venue ?? "");
@@ -120,9 +259,68 @@ export function DepartmentDriveConfigPanel({
   const [specialInstructions, setSpecialInstructions] = useState(
     config?.specialInstructions ?? ""
   );
-  const [fields, setFields] = useState<StoredApplicationField[]>(() =>
-    resolveSelectedApplicationFields(config?.applicationFields)
+  // An instance with no form of its own inherits the master's — show what its
+  // students actually see today (resolved on the server), not a blank.
+  const [fields, setFields] = useState<ApplicationFieldConfig[]>(
+    () => drive.applicationForm
   );
+
+  // This department's overrides of the master's content. An empty value means
+  // "inherit from the master" and is sent as null. Once published they are
+  // locked on the server; the inputs are disabled only for clarity.
+  const locked = Boolean(config?.lockedAt);
+  const [roleOverride, setRoleOverride] = useState(config?.roleName ?? "");
+  const [jdOverride, setJdOverride] = useState(config?.jobDescriptionText ?? "");
+  const [requirementsOverride, setRequirementsOverride] = useState(
+    config?.requirements ?? ""
+  );
+  const [skillsOverride, setSkillsOverride] = useState(
+    parseJsonArray(config?.skills ?? null).join(", ")
+  );
+  const [driveDateOverride, setDriveDateOverride] = useState(
+    toDateInput(config?.driveDate ?? null)
+  );
+  const [deadlineOverride, setDeadlineOverride] = useState(
+    toDateInput(config?.applicationDeadline ?? null)
+  );
+  const [roundsOverride, setRoundsOverride] = useState(
+    parseJsonArray(config?.selectionRounds ?? null).join(", ")
+  );
+  // Eligibility: the master's defaults (with the legacy columns folded in, so
+  // a drive that predates the rule table still shows its real bar), and this
+  // department's own rules as editable drafts.
+  const masterRules = useMemo(
+    () =>
+      withLegacyRules(drive.eligibilityRules, {
+        minCGPA: drive.minCGPA,
+        maxActiveBacklogs: drive.maxActiveBacklogs,
+      }),
+    [drive]
+  );
+  const [ruleDrafts, setRuleDrafts] = useState<RuleDraft[]>(() =>
+    toDrafts(
+      config
+        ? withLegacyRules(config.eligibilityRules, {
+            minCGPA: config.minCGPA,
+            maxActiveBacklogs: config.maxActiveBacklogs,
+          })
+        : []
+    )
+  );
+  const departmentRules = fromDrafts(ruleDrafts);
+  // Batch targeting is this department's BATCH_YEAR rule — the picker reads
+  // and writes that one rule in the same drafts the rules editor edits.
+  const selectedBatches = targetedBatchYears(departmentRules) ?? [];
+  const setSelectedBatches = (years: string[]) => {
+    const others = ruleDrafts.filter((draft) => draft.ruleType !== "BATCH_YEAR");
+    const batchRule = withTargetedBatchYears([], years);
+    setRuleDrafts([...others, ...toDrafts(batchRule)]);
+    setDirty(true);
+    setSaved(false);
+  };
+  // The CGPA / backlog values this rule set implies, for the header and the
+  // student previews, which still show those two figures.
+  const ruleMirrors = legacyColumnsFromRules(departmentRules);
 
   function touch<T>(setter: (value: T) => void) {
     return (value: T) => {
@@ -132,7 +330,41 @@ export function DepartmentDriveConfigPanel({
     };
   }
 
-  const status = getDriveStatus(new Date(drive.applicationDeadline));
+  // The unsaved form, as instance columns: blank means inherit (null).
+  const draftOverrides = {
+    roleName: roleOverride.trim() || null,
+    jobDescriptionText: jdOverride.trim() || null,
+    requirements: requirementsOverride.trim() || null,
+    skills: listToJson(skillsOverride),
+    driveDate: driveDateOverride ? new Date(driveDateOverride) : null,
+    applicationDeadline: deadlineOverride ? new Date(deadlineOverride) : null,
+    selectionRounds: listToJson(roundsOverride),
+    minCGPA: ruleMirrors.minCGPA,
+    maxActiveBacklogs: ruleMirrors.maxActiveBacklogs,
+  };
+
+  // The same resolver the student pages go through, run on the live form — so
+  // the preview is exactly what this department's students will see, before
+  // it is even saved.
+  const preview = resolveDepartmentDrive(
+    {
+      ...drive,
+      driveDate: new Date(drive.driveDate),
+      applicationDeadline: new Date(drive.applicationDeadline),
+    },
+    {
+      ...config,
+      ...draftOverrides,
+      applicationFields: config?.applicationFields ?? null,
+      venue: venue.trim() || null,
+      reportingTime: reportingTime.trim() || null,
+      coordinatorName: coordinatorName.trim() || null,
+      coordinatorPhone: coordinatorPhone.trim() || null,
+    }
+  );
+  const overridden = new Set(overriddenFields(draftOverrides));
+
+  const status = getDriveStatus(preview.applicationDeadline);
   const eligibleCodes = useMemo(
     () =>
       eligibleDepartmentIdsOf(drive)
@@ -141,15 +373,6 @@ export function DepartmentDriveConfigPanel({
     [drive, departmentCodesById]
   );
 
-  const selectedKeys = useMemo(
-    () => new Set(fields.map((field) => field.key)),
-    [fields]
-  );
-  const remainingCatalog = AVAILABLE_STUDENT_FIELDS.filter(
-    (entry) => !selectedKeys.has(entry.key)
-  );
-
-  const mandatoryCount = fields.filter((field) => field.required).length;
   const logisticsReady = Boolean(venue.trim() && reportingTime.trim());
   const packageText = formatPackage(drive);
 
@@ -162,54 +385,7 @@ export function DepartmentDriveConfigPanel({
     specialInstructions: specialInstructions.trim(),
   };
 
-  function applyPreset(presetKey: string) {
-    const preset = FIELD_PRESETS[presetKey];
-    if (!preset) return;
-
-    setFields(
-      preset.keys
-        .map((key) => AVAILABLE_STUDENT_FIELDS.find((e) => e.key === key))
-        .filter((entry): entry is (typeof AVAILABLE_STUDENT_FIELDS)[number] =>
-          Boolean(entry)
-        )
-        .map((entry) => ({
-          key: entry.key,
-          label: entry.label,
-          source: entry.source,
-          category: entry.category,
-          icon: entry.icon,
-          description: entry.description,
-          required: entry.defaultRequired,
-          enabled: true,
-        }))
-    );
-    setDirty(true);
-    setSaved(false);
-  }
-
-  function addField(key: string) {
-    const entry = AVAILABLE_STUDENT_FIELDS.find((item) => item.key === key);
-    if (!entry) return;
-
-    setFields((current) => [
-      ...current,
-      {
-        key: entry.key,
-        label: entry.label,
-        source: entry.source,
-        category: entry.category,
-        icon: entry.icon,
-        description: entry.description,
-        required: entry.defaultRequired,
-        enabled: true,
-      },
-    ]);
-    setPickerOpen(false);
-    setDirty(true);
-    setSaved(false);
-  }
-
-  function handleSave() {
+  function handleSave(then?: () => void) {
     setError(null);
 
     startTransition(async () => {
@@ -223,10 +399,37 @@ export function DepartmentDriveConfigPanel({
         seatingAllocation,
         pptLink,
         specialInstructions,
-        fields: fields.map((field) => ({
-          key: field.key,
-          required: field.required,
-        })),
+        // Omitted once locked: the published form is frozen, and not sending
+        // it keeps logistics-only saves working.
+        fields: locked
+          ? undefined
+          : fields.map((field) => ({
+              key: field.fieldKey,
+              required: field.isRequired,
+              enabled: field.isEnabled,
+              permission: field.permission,
+              label: field.label,
+              description: field.description ?? undefined,
+            })),
+        // Omitted entirely once locked: the server would refuse any change,
+        // and not sending them means a logistics-only save cannot trip it.
+        // Only the fields the Super Admin opened to departments; the server
+        // refuses any other override whatever is sent.
+        overrides: locked
+          ? undefined
+          : Object.fromEntries(
+              Object.entries({
+                roleName: draftOverrides.roleName,
+                jobDescriptionText: draftOverrides.jobDescriptionText,
+                requirements: draftOverrides.requirements,
+                skills: splitList(skillsOverride),
+                driveDate: driveDateOverride || null,
+                applicationDeadline: deadlineOverride || null,
+              }).filter(([field]) => editable.has(field as DepartmentEditableField))
+            ),
+        // Omitted once locked for the same reason: a published rule set is
+        // frozen, and not sending it keeps logistics saves working.
+        eligibilityRules: locked ? undefined : departmentRules,
       });
 
       if (!result.success) {
@@ -237,8 +440,13 @@ export function DepartmentDriveConfigPanel({
       setDirty(false);
       setSaved(true);
       router.refresh();
+      then?.();
     });
   }
+
+  const stepIndex = DEPARTMENT_DRIVE_STEPS.findIndex((candidate) => candidate.id === step);
+  const nextStep = DEPARTMENT_DRIVE_STEPS[stepIndex + 1]?.id ?? null;
+  const stepState = new Map(drive.readiness.steps.map((entry) => [entry.id, entry]));
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -295,30 +503,11 @@ export function DepartmentDriveConfigPanel({
                 className="text-secondary"
                 style={{ fontSize: 13, marginTop: 4 }}
               >
-                {drive.roleName} · <strong>{packageText}</strong>
+                {preview.roleName} · <strong>{packageText}</strong>
               </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => setPreviewOpen(true)}
-              className="btn btn-outline btn-sm"
-              style={{ fontSize: 12 }}
-            >
-              👁 Preview Student View
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isPending}
-              className="btn btn-primary btn-sm"
-              style={{ fontSize: 12 }}
-            >
-              {isPending ? "Saving…" : "💾 Save Configuration"}
-            </button>
-          </div>
         </div>
 
         <div
@@ -332,10 +521,10 @@ export function DepartmentDriveConfigPanel({
             background: "var(--surface-1)",
           }}
         >
-          <MetaCell label="Min CGPA Criteria" value={`≥ ${drive.minCGPA}`} />
+          <MetaCell label="Min CGPA Criteria" value={`≥ ${preview.minCGPA}`} />
           <MetaCell
             label="Max Backlogs"
-            value={`≤ ${drive.maxActiveBacklogs} active`}
+            value={`≤ ${preview.maxActiveBacklogs} active`}
           />
           <MetaCell
             label="Eligible Depts"
@@ -343,13 +532,11 @@ export function DepartmentDriveConfigPanel({
           />
           <MetaCell
             label="Drive Date"
-            value={new Date(drive.driveDate).toISOString().slice(0, 10)}
+            value={toDateInput(preview.driveDate) || "—"}
           />
           <MetaCell
             label="App Deadline"
-            value={new Date(drive.applicationDeadline)
-              .toISOString()
-              .slice(0, 10)}
+            value={toDateInput(preview.applicationDeadline) || "—"}
           />
           <MetaCell
             label={`${departmentCode} Applicants`}
@@ -359,534 +546,555 @@ export function DepartmentDriveConfigPanel({
           />
         </div>
 
-        {drive.jobDescriptionText && (
+        {preview.jobDescriptionText && (
           <div style={{ marginTop: 16 }}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-              Job Scope &amp; Description (from Super Admin):
+              Job Scope &amp; Description (
+              {overridden.has("jobDescriptionText")
+                ? `${departmentCode} version`
+                : "from Super Admin"}
+              ):
             </div>
             <p
               className="text-secondary"
               style={{ fontSize: 13, margin: 0, whiteSpace: "pre-wrap" }}
             >
-              {drive.jobDescriptionText}
+              {preview.jobDescriptionText}
             </p>
           </div>
         )}
       </div>
 
-      <StudentPortalPreview
-        companyName={drive.companyName}
-        roleName={drive.roleName}
-        packageText={packageText}
-        driveDate={new Date(drive.driveDate)}
-        applicationDeadline={new Date(drive.applicationDeadline)}
-        minCGPA={drive.minCGPA}
-        eligibleCodes={eligibleCodes}
-        departmentCode={departmentCode}
-        logistics={previewLogistics}
-        selectionRounds={parseJsonArray(drive.selectionRounds)}
-        fields={fields}
-        onOpenModal={() => setPreviewOpen(true)}
-      />
-
-      <StudentApplicationPreviewModal
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
-        companyName={drive.companyName}
-        roleName={drive.roleName}
-        packageText={packageText}
-        driveDate={new Date(drive.driveDate)}
-        applicationDeadline={new Date(drive.applicationDeadline)}
-        departmentCode={departmentCode}
-        logistics={previewLogistics}
-        fields={fields}
-      />
-
-      {/* Logistics form */}
-      <div className="card">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <h3 className="section-title" style={{ margin: 0 }}>
-              🏢 Department Logistics &amp; Additional Drive Information
-            </h3>
-            <p
-              className="text-secondary"
-              style={{ fontSize: 12, margin: "6px 0 0", maxWidth: 720 }}
+      {/* Steps — the saved configuration's completion, from the server */}
+      <nav
+        aria-label="Configuration steps"
+        style={{ display: "flex", gap: 6, flexWrap: "wrap" }}
+      >
+        {DEPARTMENT_DRIVE_STEPS.map((entry, index) => {
+          const state = stepState.get(entry.id);
+          const current = entry.id === step;
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => setStep(entry.id)}
+              className={`btn btn-sm ${current ? "btn-primary" : "btn-outline"}`}
+              style={{ fontSize: 12 }}
+              aria-current={current ? "step" : undefined}
+              title={state?.issues.join(" ") || undefined}
             >
-              Provide offline venue, reporting schedule, faculty coordinator
-              helpline, and department-specific student guidelines. Students see
-              this information prior to attending the drive.
-            </p>
-          </div>
-          <span
-            className={`badge ${logisticsReady ? "badge-teal" : "badge-amber"}`}
-            style={{ fontSize: 10 }}
-          >
-            {logisticsReady ? "✓ Logistics Configured" : "⚠ Logistics Pending"}
-          </span>
-        </div>
+              {index + 1}. {entry.label}
+              {state?.complete ? " ✓" : state && state.issues.length > 0 ? " ⚠" : ""}
+            </button>
+          );
+        })}
+      </nav>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: 16,
-            marginTop: 18,
-          }}
-        >
-          <Field
-            label="Drive Venue / Lab / Auditorium Location"
-            hint="Specific building, hall, or lab where students should gather."
-            required
-          >
-            <input
-              type="text"
-              value={venue}
-              onChange={(e) => touch(setVenue)(e.target.value)}
-              placeholder="e.g. Main Auditorium, Block A"
-              style={inputStyle}
-            />
-          </Field>
-
-          <Field
-            label="Reporting Time & Schedule"
-            hint="Required arrival time for biometric/physical verification."
-            required
-          >
-            <input
-              type="text"
-              value={reportingTime}
-              onChange={(e) => touch(setReportingTime)(e.target.value)}
-              placeholder="e.g. 09:00 AM"
-              style={inputStyle}
-            />
-          </Field>
-
-          <Field label="Department Placement Coordinator">
-            <input
-              type="text"
-              value={coordinatorName}
-              onChange={(e) => touch(setCoordinatorName)(e.target.value)}
-              placeholder="e.g. Prof. S. R. Deshmukh"
-              style={inputStyle}
-            />
-          </Field>
-
-          <Field label="Coordinator Contact Helpline (Phone)">
-            <input
-              type="tel"
-              value={coordinatorPhone}
-              onChange={(e) => touch(setCoordinatorPhone)(e.target.value)}
-              placeholder="e.g. 98000 12345"
-              style={inputStyle}
-            />
-          </Field>
-
-          <Field label="Coordinator Official Email">
-            <input
-              type="email"
-              value={coordinatorEmail}
-              onChange={(e) => touch(setCoordinatorEmail)(e.target.value)}
-              placeholder="e.g. cse.placement@college.edu"
-              style={inputStyle}
-            />
-          </Field>
-
-          <Field label="Seating & Lab Allocation Breakdown">
-            <input
-              type="text"
-              value={seatingAllocation}
-              onChange={(e) => touch(setSeatingAllocation)(e.target.value)}
-              placeholder="e.g. Hall B-201 (Roll CS001–CS075), Lab 3 (CS076+)"
-              style={inputStyle}
-            />
-          </Field>
-        </div>
-
-        <div style={{ marginTop: 16 }}>
-          <Field label="Pre-Placement Talk (PPT) / Online Meeting Link (if applicable)">
-            <div style={{ display: "flex" }}>
+      {step === "details" && (
+        <>
+          {/* This department's version of the offer */}
+          <div className="card">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+                marginBottom: 14,
+              }}
+            >
+              <div>
+                <h3 className="section-title" style={{ margin: 0 }}>
+                  🎯 {departmentCode} version of this drive
+                </h3>
+                <p
+                  className="text-secondary"
+                  style={{ fontSize: 12, margin: "6px 0 0", maxWidth: 720 }}
+                >
+                  Leave a field blank to inherit the Super Admin&apos;s value. Anything
+                  you set here applies to {departmentCode} students only — other
+                  departments running this drive are unaffected, and the master
+                  drive itself is never changed.
+                </p>
+              </div>
               <span
-                className="text-muted"
+                className={`badge ${locked ? "badge-gray" : "badge-purple"}`}
+                style={{ fontSize: 10 }}
+              >
+                {locked
+                  ? "🔒 Locked — published"
+                  : `${overridden.size} field${overridden.size === 1 ? "" : "s"} overridden`}
+              </span>
+            </div>
+
+            <div style={{ display: "grid", gap: 14 }}>
+              <OverrideRow
+                label="Role / job title"
+                masterValue={drive.roleName}
+                isOverridden={overridden.has("roleName")}
+                lockedByMaster={!editable.has("roleName")}
+                locked={locked}
+                onReset={() => touch(setRoleOverride)("")}
+              >
+                <input
+                  style={inputStyle}
+                  value={roleOverride}
+                  placeholder={drive.roleName}
+                  disabled={locked}
+                  onChange={(e) => touch(setRoleOverride)(e.target.value)}
+                />
+              </OverrideRow>
+
+              <OverrideRow
+                label="Job description"
+                masterValue={drive.jobDescriptionText || "—"}
+                isOverridden={overridden.has("jobDescriptionText")}
+                lockedByMaster={!editable.has("jobDescriptionText")}
+                locked={locked}
+                onReset={() => touch(setJdOverride)("")}
+              >
+                <textarea
+                  style={{ ...inputStyle, minHeight: 90, resize: "vertical" }}
+                  value={jdOverride}
+                  placeholder={drive.jobDescriptionText || "No master JD"}
+                  disabled={locked}
+                  onChange={(e) => touch(setJdOverride)(e.target.value)}
+                />
+              </OverrideRow>
+
+              <OverrideRow
+                label="Requirements"
+                masterValue={drive.requirements || "—"}
+                isOverridden={overridden.has("requirements")}
+                lockedByMaster={!editable.has("requirements")}
+                locked={locked}
+                onReset={() => touch(setRequirementsOverride)("")}
+              >
+                <textarea
+                  style={{ ...inputStyle, minHeight: 70, resize: "vertical" }}
+                  value={requirementsOverride}
+                  placeholder={drive.requirements || "No master requirements"}
+                  disabled={locked}
+                  onChange={(e) => touch(setRequirementsOverride)(e.target.value)}
+                />
+              </OverrideRow>
+
+              <OverrideRow
+                label="Skills"
+                hint="Comma-separated"
+                masterValue={parseJsonArray(drive.skills).join(", ") || "—"}
+                isOverridden={overridden.has("skills")}
+                lockedByMaster={!editable.has("skills")}
+                locked={locked}
+                onReset={() => touch(setSkillsOverride)("")}
+              >
+                <input
+                  style={inputStyle}
+                  value={skillsOverride}
+                  placeholder={
+                    parseJsonArray(drive.skills).join(", ") || "e.g. Java, SQL"
+                  }
+                  disabled={locked}
+                  onChange={(e) => touch(setSkillsOverride)(e.target.value)}
+                />
+              </OverrideRow>
+
+              <div
                 style={{
-                  fontSize: 12,
-                  padding: "9px 12px",
-                  border: "0.5px solid var(--border-strong)",
-                  borderRight: "none",
-                  borderRadius: "8px 0 0 8px",
-                  background: "var(--surface-1)",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: 14,
                 }}
               >
-                https://
-              </span>
-              <input
-                type="text"
-                value={pptLink}
-                onChange={(e) => touch(setPptLink)(e.target.value)}
-                placeholder="meet.google.com/xyz-abc-def or teams.microsoft.com/..."
-                style={{ ...inputStyle, borderRadius: "0 8px 8px 0" }}
-              />
+                <OverrideRow
+                  label="Drive date"
+                  masterValue={toDateInput(drive.driveDate)}
+                  isOverridden={overridden.has("driveDate")}
+                lockedByMaster={!editable.has("driveDate")}
+                  locked={locked}
+                  onReset={() => touch(setDriveDateOverride)("")}
+                >
+                  <input
+                    type="date"
+                    style={inputStyle}
+                    value={driveDateOverride}
+                    disabled={locked}
+                    onChange={(e) => touch(setDriveDateOverride)(e.target.value)}
+                  />
+                </OverrideRow>
+
+                <OverrideRow
+                  label="Application deadline"
+                  masterValue={toDateInput(drive.applicationDeadline)}
+                  isOverridden={overridden.has("applicationDeadline")}
+                lockedByMaster={!editable.has("applicationDeadline")}
+                  locked={locked}
+                  onReset={() => touch(setDeadlineOverride)("")}
+                >
+                  <input
+                    type="date"
+                    style={inputStyle}
+                    value={deadlineOverride}
+                    disabled={locked}
+                    onChange={(e) => touch(setDeadlineOverride)(e.target.value)}
+                  />
+                </OverrideRow>
+              </div>
+
+              {/* Selection rounds are the recruitment pipeline now — configured on
+                  the drive's Recruitment page, versioned, and changed after
+                  publishing only with Super Admin approval. */}
+              <div className="text-secondary" style={{ fontSize: 12 }}>
+                <strong>Selection rounds:</strong>{" "}
+                {parseJsonArray(config?.selectionRounds ?? drive.selectionRounds).join(" → ") || "—"}
+                {" · "}
+                <a href={`/admin-dashboard/drives/${drive.id}?tab=pipeline`} style={{ color: "var(--accent)" }}>
+                  Configure the recruitment pipeline →
+                </a>
+              </div>
             </div>
-          </Field>
-        </div>
+          </div>
 
-        <div style={{ marginTop: 16 }}>
-          <Field label="Special Instructions & Student Guidelines">
-            <textarea
-              value={specialInstructions}
-              onChange={(e) => touch(setSpecialInstructions)(e.target.value)}
-              rows={3}
-              placeholder="e.g. Carry 2 copies of resume and college ID. Formal dress code mandatory."
-              style={{ ...inputStyle, resize: "vertical" }}
-            />
-          </Field>
-        </div>
-      </div>
+          {/* Logistics form */}
+          <div className="card">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <h3 className="section-title" style={{ margin: 0 }}>
+                  🏢 Department Logistics &amp; Additional Drive Information
+                </h3>
+                <p
+                  className="text-secondary"
+                  style={{ fontSize: 12, margin: "6px 0 0", maxWidth: 720 }}
+                >
+                  Provide offline venue, reporting schedule, faculty coordinator
+                  helpline, and department-specific student guidelines. Students see
+                  this information prior to attending the drive.
+                </p>
+              </div>
+              <span
+                className={`badge ${logisticsReady ? "badge-teal" : "badge-amber"}`}
+                style={{ fontSize: 10 }}
+              >
+                {logisticsReady ? "✓ Logistics Configured" : "⚠ Logistics Pending"}
+              </span>
+            </div>
 
-      {/* Application fields */}
-      <div className="card">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                gap: 16,
+                marginTop: 18,
+              }}
+            >
+              <Field
+                label="Drive Venue / Lab / Auditorium Location"
+                hint="Specific building, hall, or lab where students should gather."
+                required
+              >
+                <input
+                  type="text"
+                  value={venue}
+                  onChange={(e) => touch(setVenue)(e.target.value)}
+                  placeholder="e.g. Main Auditorium, Block A"
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field
+                label="Reporting Time & Schedule"
+                hint="Required arrival time for biometric/physical verification."
+                required
+              >
+                <input
+                  type="text"
+                  value={reportingTime}
+                  onChange={(e) => touch(setReportingTime)(e.target.value)}
+                  placeholder="e.g. 09:00 AM"
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="Department Placement Coordinator">
+                <input
+                  type="text"
+                  value={coordinatorName}
+                  onChange={(e) => touch(setCoordinatorName)(e.target.value)}
+                  placeholder="e.g. Prof. S. R. Deshmukh"
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="Coordinator Contact Helpline (Phone)">
+                <input
+                  type="tel"
+                  value={coordinatorPhone}
+                  onChange={(e) => touch(setCoordinatorPhone)(e.target.value)}
+                  placeholder="e.g. 98000 12345"
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="Coordinator Official Email">
+                <input
+                  type="email"
+                  value={coordinatorEmail}
+                  onChange={(e) => touch(setCoordinatorEmail)(e.target.value)}
+                  placeholder="e.g. cse.placement@college.edu"
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="Seating & Lab Allocation Breakdown">
+                <input
+                  type="text"
+                  value={seatingAllocation}
+                  onChange={(e) => touch(setSeatingAllocation)(e.target.value)}
+                  placeholder="e.g. Hall B-201 (Roll CS001–CS075), Lab 3 (CS076+)"
+                  style={inputStyle}
+                />
+              </Field>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <Field label="Pre-Placement Talk (PPT) / Online Meeting Link (if applicable)">
+                <div style={{ display: "flex" }}>
+                  <span
+                    className="text-muted"
+                    style={{
+                      fontSize: 12,
+                      padding: "9px 12px",
+                      border: "0.5px solid var(--border-strong)",
+                      borderRight: "none",
+                      borderRadius: "8px 0 0 8px",
+                      background: "var(--surface-1)",
+                    }}
+                  >
+                    https://
+                  </span>
+                  <input
+                    type="text"
+                    value={pptLink}
+                    onChange={(e) => touch(setPptLink)(e.target.value)}
+                    placeholder="meet.google.com/xyz-abc-def or teams.microsoft.com/..."
+                    style={{ ...inputStyle, borderRadius: "0 8px 8px 0" }}
+                  />
+                </div>
+              </Field>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <Field label="Special Instructions & Student Guidelines">
+                <textarea
+                  value={specialInstructions}
+                  onChange={(e) => touch(setSpecialInstructions)(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. Carry 2 copies of resume and college ID. Formal dress code mandatory."
+                  style={{ ...inputStyle, resize: "vertical" }}
+                />
+              </Field>
+            </div>
+          </div>
+
+        </>
+      )}
+
+      {step === "fields" && (
+        <>
+          <StudentApplicationPreviewModal
+            open={previewOpen}
+            onOpenChange={setPreviewOpen}
+            companyName={drive.companyName}
+            roleName={preview.roleName}
+            packageText={packageText}
+            driveDate={preview.driveDate}
+            applicationDeadline={preview.applicationDeadline}
+            departmentCode={departmentCode}
+            logistics={previewLogistics}
+            fields={fields}
+          />
+
+          {/* Application form */}
+          <div className="card">
             <h3 className="section-title" style={{ margin: 0 }}>
-              📋 Required Student Application Fields
+              📋 Student Application Form
             </h3>
             <p
               className="text-secondary"
-              style={{ fontSize: 12, margin: "6px 0 0", maxWidth: 700 }}
+              style={{ fontSize: 12, margin: "6px 0 14px", maxWidth: 700 }}
             >
-              Choose which fields students must supply to apply for this drive.
-              Pre-filled from the student&apos;s completed profile.
+              Decide exactly which fields {departmentCode} students see when they
+              apply, which they must fill, and which they may edit. Read-only fields
+              are taken from the student's verified profile.
+              {!drive.applicationFormOrigin.startsWith("DEPARTMENT") &&
+                " Until you save, this department uses the drive's default form."}
             </p>
-          </div>
-          <span className="badge badge-accent" style={{ fontSize: 10 }}>
-            {fields.length} Fields Configured ({mandatoryCount} Mandatory,{" "}
-            {fields.length - mandatoryCount} Optional)
-          </span>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            padding: "12px 14px",
-            marginTop: 16,
-            borderRadius: 8,
-            background: "var(--surface-1)",
-            borderLeft: "3px solid var(--accent)",
-          }}
-        >
-          <span style={{ fontSize: 14 }}>💡</span>
-          <p className="text-secondary" style={{ fontSize: 12, margin: 0 }}>
-            <strong style={{ color: "var(--text-primary)" }}>
-              Profile Integration:
-            </strong>{" "}
-            All selected fields are verified and pre-populated directly from the
-            student&apos;s profile records when they click <em>Apply Now</em>.
-          </p>
-        </div>
-
-        <div style={{ marginTop: 18 }}>
-          <div
-            className="text-secondary"
-            style={{
-              fontSize: 11,
-              fontWeight: 500,
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
-              marginBottom: 8,
-            }}
-          >
-            Quick Application Presets:
-          </div>
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              alignItems: "center",
-              flexWrap: "wrap",
-            }}
-          >
-            {Object.entries(FIELD_PRESETS).map(([key, preset]) => (
+            <div style={{ marginBottom: 12 }}>
               <button
-                key={key}
                 type="button"
-                onClick={() => applyPreset(key)}
+                onClick={() => setPreviewOpen(true)}
                 className="btn btn-outline btn-sm"
-                style={{ fontSize: 11 }}
-                title={preset.description}
+                style={{ fontSize: 12 }}
               >
-                ⚡ {preset.name}
+                👁 Preview the form
               </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => {
-                setFields([]);
+            </div>
+            <ApplicationFormEditor
+              fields={fields}
+              onChange={(next) => {
+                setFields(next);
                 setDirty(true);
                 setSaved(false);
               }}
+              locked={locked}
+              departmentCode={departmentCode}
+            />
+          </div>
+
+        </>
+      )}
+
+      {step === "eligibility" && (
+        <>
+          {/* Eligibility rules for this department */}
+          <div className="card">
+            <div
               style={{
-                border: "none",
-                background: "transparent",
-                color: "var(--accent)",
-                fontSize: 11,
-                cursor: "pointer",
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+                marginBottom: 14,
               }}
             >
-              Clear all
-            </button>
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            flexWrap: "wrap",
-            marginTop: 16,
-            padding: "12px 14px",
-            borderRadius: 10,
-            border: "0.5px solid var(--border)",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setPickerOpen((open) => !open)}
-            disabled={remainingCatalog.length === 0}
-            className="btn btn-primary btn-sm"
-            style={{ fontSize: 12 }}
-          >
-            ＋ Add Field from Profile Catalog
-          </button>
-          <span className="text-muted" style={{ fontSize: 11, marginLeft: "auto" }}>
-            {remainingCatalog.length} more profile field
-            {remainingCatalog.length === 1 ? "" : "s"} available in catalog
-          </span>
-        </div>
-
-        {pickerOpen && remainingCatalog.length > 0 && (
-          <div
-            style={{
-              marginTop: 10,
-              padding: 12,
-              borderRadius: 10,
-              border: "0.5px solid var(--border-strong)",
-              background: "var(--surface-1)",
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 8,
-              maxHeight: 260,
-              overflowY: "auto",
-            }}
-          >
-            {remainingCatalog.map((entry) => (
-              <button
-                key={entry.key}
-                type="button"
-                onClick={() => addField(entry.key)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  textAlign: "left",
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "0.5px solid var(--border)",
-                  background: "var(--surface-2)",
-                  cursor: "pointer",
-                }}
-              >
-                <span style={{ fontSize: 14 }}>{entry.icon}</span>
-                <span style={{ minWidth: 0 }}>
-                  <span
-                    style={{
-                      display: "block",
-                      fontSize: 12,
-                      fontWeight: 500,
-                    }}
-                  >
-                    {entry.label}
-                  </span>
-                  <span
-                    className="text-muted"
-                    style={{ display: "block", fontSize: 10 }}
-                  >
-                    {entry.category}
-                  </span>
+              <div>
+                <h3 className="section-title" style={{ margin: 0 }}>
+                  ✅ Eligibility rules
+                </h3>
+                <p
+                  className="text-secondary"
+                  style={{ fontSize: 12, margin: "6px 0 0", maxWidth: 720 }}
+                >
+                  Who among {departmentCode} students can see and apply to this
+                  drive. Evaluated server-side against each student&apos;s own
+                  records — the same rules decide the drive list, the apply button
+                  and the notification.
+                </p>
+              </div>
+              {locked && (
+                <span className="badge badge-gray" style={{ fontSize: 10 }}>
+                  🔒 Locked — published
                 </span>
+              )}
+            </div>
+
+            <EligibilityRulesEditor
+              masterRules={masterRules}
+              drafts={ruleDrafts}
+              onChange={touch(setRuleDrafts)}
+              locked={locked}
+              departmentCode={departmentCode}
+            />
+          </div>
+
+        </>
+      )}
+
+      {step === "batches" && (
+        <>
+          <div className="card">
+            <h3 className="section-title" style={{ margin: "0 0 10px" }}>
+              🎓 Eligible batches
+            </h3>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                  🎓 Eligible batches{" "}
+                  <span className="badge badge-purple" style={{ fontSize: 10 }}>
+                    Required to publish
+                  </span>
+                </div>
+                <BatchTargetingPicker
+                  available={batchYears}
+                  selected={selectedBatches}
+                  onChange={setSelectedBatches}
+                  locked={locked}
+                  inherited={targetedBatchYears(masterRules)}
+                />
+              </div>
+      
+          </div>
+
+          <EligibleStudentsCard driveId={drive.id} dirty={dirty} />
+        </>
+      )}
+
+      {step === "pipeline" && (
+        <PipelineReviewStep driveId={drive.id} pipeline={drive.pipeline} locked={locked} />
+      )}
+
+      {step === "preview" && <StudentPreviewStep driveId={drive.id} dirty={dirty} />}
+
+      {step === "publish" && (
+        <PublishStep driveId={drive.id} readiness={drive.readiness} dirty={dirty} />
+      )}
+
+      {/* Save draft / continue */}
+      {!inactive && step !== "preview" && step !== "publish" && (
+        <div
+          className="card"
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 600 }}>
+            {error
+              ? `⛔ ${error}`
+              : dirty
+                ? "✏️ Unsaved changes"
+                : saved
+                  ? "✅ Saved as a draft — you can leave and continue later"
+                  : "✅ Up to date"}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => handleSave()}
+              disabled={isPending}
+              className="btn btn-outline btn-sm"
+              style={{ fontSize: 12 }}
+            >
+              {isPending ? "Saving…" : "💾 Save draft"}
+            </button>
+            {nextStep && (
+              <button
+                type="button"
+                onClick={() => handleSave(() => setStep(nextStep))}
+                disabled={isPending}
+                className="btn btn-primary btn-sm"
+                style={{ fontSize: 12 }}
+              >
+                Save &amp; continue →
               </button>
-            ))}
-          </div>
-        )}
-
-        {fields.length === 0 ? (
-          <div
-            className="text-muted"
-            style={{
-              fontSize: 12,
-              textAlign: "center",
-              padding: 28,
-              marginTop: 16,
-              border: "0.5px dashed var(--border-strong)",
-              borderRadius: 10,
-            }}
-          >
-            No fields selected. Apply a preset or add fields from the catalog.
-          </div>
-        ) : (
-          <div className="table-wrap" style={{ marginTop: 16 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Field Name &amp; Source</th>
-                  <th>Category</th>
-                  <th>Requirement Status</th>
-                  <th style={{ textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fields.map((field) => (
-                  <tr key={field.key}>
-                    <td>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                        }}
-                      >
-                        <span style={{ fontSize: 16 }}>{field.icon}</span>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>
-                            {field.label}
-                            {field.required && (
-                              <span style={{ color: "var(--accent)" }}> *</span>
-                            )}
-                          </div>
-                          <div className="text-muted" style={{ fontSize: 11 }}>
-                            Source:{" "}
-                            {field.source === "upload"
-                              ? "File Upload"
-                              : "Student Profile"}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="badge badge-gray" style={{ fontSize: 10 }}>
-                        {field.category}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFields((current) =>
-                            current.map((item) =>
-                              item.key === field.key
-                                ? { ...item, required: !item.required }
-                                : item
-                            )
-                          );
-                          setDirty(true);
-                          setSaved(false);
-                        }}
-                        className={`btn btn-sm ${
-                          field.required ? "btn-primary" : "btn-outline"
-                        }`}
-                        style={{ fontSize: 11 }}
-                      >
-                        {field.required ? "✓ Mandatory (*)" : "○ Optional"}
-                      </button>
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFields((current) =>
-                            current.filter((item) => item.key !== field.key)
-                          );
-                          setDirty(true);
-                          setSaved(false);
-                        }}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          color: "var(--accent)",
-                          fontSize: 11,
-                          cursor: "pointer",
-                        }}
-                      >
-                        ✕ Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Save bar */}
-      <div
-        className="card"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 16 }}>
-            {error ? "⛔" : dirty ? "✏️" : "✅"}
-          </span>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>
-              {error
-                ? error
-                : dirty
-                  ? "Unsaved changes"
-                  : saved
-                    ? "Configuration saved"
-                    : "Drive configuration is up-to-date"}
-            </div>
-            <div className="text-muted" style={{ fontSize: 11 }}>
-              {fields.length} field{fields.length === 1 ? "" : "s"} configured ·
-              Venue: {venue.trim() || "not set"}
-            </div>
+            )}
           </div>
         </div>
+      )}
+      {(step === "preview" || step === "publish") && nextStep && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => setStep(nextStep)}>
+            Continue →
+          </button>
+        </div>
+      )}
 
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={isPending}
-          className="btn btn-primary btn-sm"
-          style={{ fontSize: 12 }}
-        >
-          {isPending ? "Saving…" : "💾 Save All Changes"}
-        </button>
-      </div>
     </div>
   );
 }

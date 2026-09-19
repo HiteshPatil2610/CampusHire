@@ -13,6 +13,8 @@ import DatePicker from "@/components/ui/date-picker";
 import UrlField from "@/components/ui/url-field";
 import CompanyLogoField from "@/components/shared/company-logo-field";
 import { useToast } from "@/hooks/use-toast";
+import { BatchTargetingPicker } from "@/features/drives/components/batch-targeting-picker";
+import type { DepartmentBatchYear } from "@/features/students/queries/department-batch-years";
 
 interface Department {
   id: string;
@@ -25,6 +27,8 @@ interface PostDriveFormProps {
   departmentName: string;
   departmentCode: string;
   allDepartments: Department[];
+  /** Batch years this department's students have. */
+  batchYears: DepartmentBatchYear[];
 }
 
 export function PostDriveForm({
@@ -32,8 +36,10 @@ export function PostDriveForm({
   departmentName,
   departmentCode,
   allDepartments,
+  batchYears,
 }: PostDriveFormProps) {
   const router = useRouter();
+  const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
@@ -219,6 +225,7 @@ export function PostDriveForm({
         jobDescriptionUrl: form.jobDescriptionUrl.trim() || undefined,
         minCGPA: parseFloat(form.minCGPA),
         maxActiveBacklogs: parseInt(form.maxActiveBacklogs, 10),
+        batchYears: selectedBatches,
         eligibleDepartments: form.eligibleDepartments,
         driveDate: form.driveDate,
         applicationDeadline: form.applicationDeadline,
@@ -349,6 +356,15 @@ export function PostDriveForm({
               onChange={(e) => setForm({ ...form, maxActiveBacklogs: e.target.value })}
             />
           </div>
+        </div>
+
+        <div className="field">
+          <label>Eligible Batches *</label>
+          <BatchTargetingPicker
+            available={batchYears}
+            selected={selectedBatches}
+            onChange={setSelectedBatches}
+          />
         </div>
 
         <div className="field">

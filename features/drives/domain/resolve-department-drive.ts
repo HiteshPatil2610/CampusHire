@@ -1,5 +1,14 @@
 import type { Drive, DriveDepartmentConfig } from "@prisma/client";
-import type { HasEligibleDepartmentLinks } from "../utils/eligible-departments";
+import {
+  resolveEligibilityRules,
+  type EffectiveEligibilityRule,
+  type EligibilityRuleInput,
+} from "./eligibility-rules";
+import {
+  resolveApplicationForm,
+  type ApplicationFieldConfig,
+  type ApplicationFormOrigin,
+} from "./application-form";
 
 /**
  * Collapse a master drive and one department's instance into the single shape
@@ -7,24 +16,67 @@ import type { HasEligibleDepartmentLinks } from "../utils/eligible-departments";
  *
  *   MASTER DRIVE  +  DEPARTMENT INSTANCE  →  ResolvedDepartmentDrive
  *
- * A central drive is authored once by the Super Admin but runs separately in
- * each eligible department: venue, coordinator and required application fields
- * belong to the department admin and are visible only to that department's
- * students. Resolving here keeps every downstream consumer — cards, the detail
- * page, the apply flow — working on a plain Drive-like object while still
- * showing department-specific values.
+ * The master holds the institution/company-level defaults. Each department
+ * instance may override parts of it — a different role title, its own JD, a
+ * higher or lower CGPA bar, its own dates. **NULL on the instance means
+ * "inherit from the master".** The master row is never copied per department;
+ * a value lives on the instance only when that department deliberately
+ * differs.
  *
- * **The resolved shape is deliberately flat and identical to what the previous
- * `applyDepartmentConfig` returned**, because six components read it directly
- * (`drive-card`, `drives-grid`, `dashboard-drive-card`, `apply-section`,
- * `application-review-modal`, `ineligible-drive-page`). Changing it would mean
- * changing all of them; it is the stable contract at this boundary.
+ * The resolved shape is deliberately flat and uses the master's own field
+ * names, so every consumer — cards, the detail page, the apply flow, the
+ * eligibility engine — reads a plain Drive-like object and automatically gets
+ * the department's values. Six components read it directly; fields may be
+ * added but not removed or renamed.
  *
- * Resolution rule: an instance value wins when it is set, otherwise the
- * master's value is inherited. A missing instance row means "inherit
- * everything" — which is the state every assigned department is in until its
- * admin saves a configuration for the first time.
+ * Kept free of Prisma runtime and server imports so the admin configuration
+ * panel can run the exact same resolution client-side for its live preview.
  */
+
+/**
+ * Master fields a department instance may override, and the instance column
+ * that holds each override. One list, used by the resolver, the lock and the
+ * admin UI, so the three can never disagree about what is overridable.
+ *
+ * Logistics use different column names on the instance (the instance says
+ * "coordinator", the master says "contact"), which is why this is a map rather
+ * than a list of shared names.
+ */
+export const OVERRIDABLE_FIELDS = {
+  // Content: what the job is, who qualifies, and by when.
+  roleName: "roleName",
+  jobDescriptionText: "jobDescriptionText",
+  requirements: "requirements",
+  skills: "skills",
+  driveDate: "driveDate",
+  applicationDeadline: "applicationDeadline",
+  selectionRounds: "selectionRounds",
+  minCGPA: "minCGPA",
+  maxActiveBacklogs: "maxActiveBacklogs",
+  // Application configuration.
+  applicationFields: "applicationFields",
+  // Logistics.
+  venue: "venue",
+  reportingTime: "reportingTime",
+  contactPerson: "coordinatorName",
+  contactPhone: "coordinatorPhone",
+  pptLink: "pptLink",
+} as const satisfies Record<string, keyof DriveDepartmentConfig>;
+
+export type OverridableMasterField = keyof typeof OVERRIDABLE_FIELDS;
+
+/** The content fields — the offer itself, as opposed to logistics. */
+export const CONTENT_OVERRIDE_FIELDS = [
+  "roleName",
+  "jobDescriptionText",
+  "requirements",
+  "skills",
+  "driveDate",
+  "applicationDeadline",
+  "selectionRounds",
+  "minCGPA",
+  "maxActiveBacklogs",
+] as const satisfies readonly OverridableMasterField[];
 
 /** The three fields that exist only on an instance, with no master fallback. */
 export interface DepartmentOnlyFields {
@@ -33,22 +85,47 @@ export interface DepartmentOnlyFields {
   coordinatorEmail: string | null;
 }
 
-export type ResolvedDepartmentDrive<TDrive extends Drive = Drive> = TDrive &
-  DepartmentOnlyFields;
+/**
+ * The master fields this resolution reads. Typed structurally rather than as
+ * the full Prisma `Drive`, so a client component can resolve a serialized drive
+ * (whose `packageOffered` is already a string) with the same function.
+ */
+type MasterContent = Pick<Drive, OverridableMasterField>;
+
+/** Instance values that may be present; the columns the resolver reads. */
+export type InstanceOverrides = Partial<
+  Pick<
+    DriveDepartmentConfig,
+    | (typeof OVERRIDABLE_FIELDS)[OverridableMasterField]
+    | keyof DepartmentOnlyFields
+  >
+>;
+
+export type ResolvedDepartmentDrive<TDrive extends MasterContent = Drive> =
+  TDrive & DepartmentOnlyFields;
 
 /**
  * Historical alias. The student-facing queries and components named this type
  * before the domain layer existed; kept so their imports keep reading
  * naturally.
  */
-export type DriveForStudent<TDrive extends Drive = Drive> =
+export type DriveForStudent<TDrive extends MasterContent = Drive> =
   ResolvedDepartmentDrive<TDrive>;
 
-export function resolveDepartmentDrive<
-  TDrive extends Drive & HasEligibleDepartmentLinks,
->(
+/**
+ * The resolution rule, for one field: an instance value wins when it is set,
+ * otherwise the master's value is inherited.
+ *
+ * `??` rather than `||`, deliberately — `0` backlogs and a CGPA bar of `0` are
+ * real answers, and so is a logistics field an instance cleared to `""`.
+ */
+function pick<T>(override: T | null | undefined, master: T): T {
+  return override ?? master;
+}
+
+export function resolveDepartmentDrive<TDrive extends MasterContent>(
   master: TDrive,
-  instance: DriveDepartmentConfig | null | undefined
+  instance: InstanceOverrides | null | undefined
 ): ResolvedDepartmentDrive<TDrive> {
   if (!instance) {
     return {
@@ -59,31 +136,31 @@ export function resolveDepartmentDrive<
     };
   }
 
-  return {
-    ...master,
-    // `??` rather than `||`: an instance that deliberately stores an empty
-    // string is still an answer, and must not fall back to the master's value.
-    venue: instance.venue ?? master.venue,
-    reportingTime: instance.reportingTime ?? master.reportingTime,
-    contactPerson: instance.coordinatorName ?? master.contactPerson,
-    contactPhone: instance.coordinatorPhone ?? master.contactPhone,
-    pptLink: instance.pptLink ?? master.pptLink,
-    applicationFields: instance.applicationFields ?? master.applicationFields,
-    seatingAllocation: instance.seatingAllocation,
-    specialInstructions: instance.specialInstructions,
-    coordinatorEmail: instance.coordinatorEmail,
-  };
+  const resolved = { ...master } as ResolvedDepartmentDrive<TDrive>;
+
+  for (const [masterField, instanceField] of Object.entries(
+    OVERRIDABLE_FIELDS
+  ) as [OverridableMasterField, keyof InstanceOverrides][]) {
+    (resolved as unknown as Record<string, unknown>)[masterField] = pick(
+      instance[instanceField] as unknown,
+      master[masterField] as unknown
+    );
+  }
+
+  resolved.seatingAllocation = instance.seatingAllocation ?? null;
+  resolved.specialInstructions = instance.specialInstructions ?? null;
+  resolved.coordinatorEmail = instance.coordinatorEmail ?? null;
+
+  return resolved;
 }
 
 /**
- * Resolve a page of master drives against the instances belonging to one
+ * Resolve a set of master drives against the instances belonging to one
  * department, given the instance rows already fetched for them.
  */
-export function resolveDepartmentDrives<
-  TDrive extends Drive & HasEligibleDepartmentLinks,
->(
+export function resolveDepartmentDrives<TDrive extends MasterContent & { id: string }>(
   masters: TDrive[],
-  instances: DriveDepartmentConfig[]
+  instances: (InstanceOverrides & { driveId: string })[]
 ): ResolvedDepartmentDrive<TDrive>[] {
   const byDriveId = new Map(
     instances.map((instance) => [instance.driveId, instance])
@@ -91,5 +168,84 @@ export function resolveDepartmentDrives<
 
   return masters.map((master) =>
     resolveDepartmentDrive(master, byDriveId.get(master.id))
+  );
+}
+
+/**
+ * Resolve a master drive for one department **including its eligibility rule
+ * set** — what every eligibility decision needs.
+ *
+ * Both rule sets are required inputs, deliberately: a caller that loaded the
+ * drive but forgot `eligibilityRules` on the master or on the instance does not
+ * compile, instead of silently evaluating against the master's defaults only.
+ * The legacy `minCGPA` / `maxActiveBacklogs` columns are passed through as the
+ * compatibility fallback (see `withLegacyRules`).
+ */
+export function resolveDepartmentDriveWithRules<
+  TDrive extends MasterContent & { eligibilityRules: EligibilityRuleInput[] },
+>(
+  master: TDrive,
+  instance:
+    | (InstanceOverrides & { eligibilityRules: EligibilityRuleInput[] })
+    | null
+    | undefined
+): Omit<ResolvedDepartmentDrive<TDrive>, "eligibilityRules"> & {
+  eligibilityRules: EffectiveEligibilityRule[];
+} {
+  return {
+    ...resolveDepartmentDrive(master, instance),
+    eligibilityRules: resolveEligibilityRules({
+      masterRules: master.eligibilityRules,
+      masterLegacy: {
+        minCGPA: master.minCGPA,
+        maxActiveBacklogs: master.maxActiveBacklogs,
+      },
+      departmentRules: instance?.eligibilityRules ?? [],
+      departmentLegacy: instance
+        ? {
+            minCGPA: instance.minCGPA ?? null,
+            maxActiveBacklogs: instance.maxActiveBacklogs ?? null,
+          }
+        : null,
+    }),
+  };
+}
+
+/**
+ * The application form one department's students get, resolved from the
+ * relational rows first and the legacy JSON after (see
+ * `resolveApplicationForm`). Both `formFields` relations are required inputs,
+ * for the same reason the rule sets are: a caller that forgot to load them
+ * does not compile, rather than silently falling through to the default form.
+ */
+export function resolveDepartmentApplicationForm(
+  master: { formFields: ApplicationFieldConfig[]; applicationFields: string | null },
+  instance:
+    | { formFields: ApplicationFieldConfig[]; applicationFields: string | null }
+    | null
+    | undefined
+): { fields: ApplicationFieldConfig[]; origin: ApplicationFormOrigin } {
+  return resolveApplicationForm({
+    departmentFields: instance?.formFields ?? [],
+    departmentLegacyJson: instance?.applicationFields ?? null,
+    masterFields: master.formFields,
+    masterLegacyJson: master.applicationFields,
+  });
+}
+
+/**
+ * Which master fields this instance currently overrides. Drives the
+ * inherited/overridden markers in the admin UI.
+ */
+export function overriddenFields(
+  instance: InstanceOverrides | null | undefined
+): OverridableMasterField[] {
+  if (!instance) return [];
+
+  return (Object.keys(OVERRIDABLE_FIELDS) as OverridableMasterField[]).filter(
+    (field) => {
+      const value = instance[OVERRIDABLE_FIELDS[field] as keyof InstanceOverrides];
+      return value !== null && value !== undefined;
+    }
   );
 }

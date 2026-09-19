@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { EditDriveForm } from "./edit-drive-form";
 import { eligibleDepartmentLinksInclude } from "@/features/drives/utils/eligible-departments";
 import { serializePackageOffered } from "@/features/drives/utils/serialize-drive";
+import { getDepartmentBatchYears } from "@/features/students/queries/department-batch-years";
+import { targetedBatchYears } from "@/features/drives/domain/batch-targeting";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -16,7 +18,7 @@ export default async function EditDrivePage(props: PageProps) {
   // Fetch the drive
   const drive = await prisma.drive.findUnique({
     where: { id: params.id },
-    include: eligibleDepartmentLinksInclude,
+    include: { ...eligibleDepartmentLinksInclude, eligibilityRules: true },
   });
 
   if (!drive) {
@@ -29,11 +31,15 @@ export default async function EditDrivePage(props: PageProps) {
   }
 
   // Fetch all active departments
-  const allDepts = await prisma.department.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, code: true },
-    orderBy: { code: "asc" },
-  });
+  const [allDepts, batchYears] = await Promise.all([
+    prisma.department.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { code: "asc" },
+    }),
+    getDepartmentBatchYears(department.id),
+  ]);
+  const { eligibilityRules, ...driveRow } = drive;
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -46,7 +52,9 @@ export default async function EditDrivePage(props: PageProps) {
 
       <EditDriveForm
         driveId={drive.id}
-        drive={serializePackageOffered(drive)}
+        drive={serializePackageOffered(driveRow)}
+        batchYears={batchYears}
+        initialBatches={targetedBatchYears(eligibilityRules) ?? []}
         departmentId={department.id}
         departmentCode={department.code}
         allDepartments={allDepts}

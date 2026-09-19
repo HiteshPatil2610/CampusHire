@@ -28,6 +28,13 @@ If a change cannot be verified end to end quickly, the scope is too broad — sp
 - If a requirement is ambiguous (e.g. an edge case in Excel validation, an unclear eligibility rule), resolve it in `project-overview.md` or `architecture.md` before implementing — do not silently pick an interpretation.
 - If a requirement is missing entirely, add it as an open question in `progress-tracker.md` and pause that part of the implementation rather than guessing.
 
+## Database Safety
+
+- Never run `prisma migrate dev`, database resets or destructive reset flags against the connected Neon database, and never drop tables, columns or data automatically.
+- For any destructive or irreversible change: inspect dependencies, produce an impact/dry-run report, explain exactly what would change, and stop for confirmation before executing it.
+- Ask before applying a migration to production, before deleting a Neon branch, and before any other irreversible action — approval for one does not extend to the next. The process is in `code-standards.md` (Migrations).
+- Do not claim something was verified unless it was actually verified (tests run, migration probed, screen opened). Say what was not verified.
+
 ## Protected Files
 
 Do not modify the following unless explicitly instructed:
@@ -43,7 +50,9 @@ Update the relevant context file whenever implementation changes:
 - `architecture.md` — if system boundaries, storage model, or an invariant changes
 - `code-standards.md` — if a new convention or pattern is adopted
 - `ui-context.md` — if a new token, component pattern, or layout pattern is introduced
-- `project-overview.md` — if scope changes (a feature moves in or out of V1)
+- `project-overview.md` — if scope changes (a feature moves in or out of V1) or a user-facing flow changes
+- `progress-tracker.md` — after every meaningful implementation change, with what was found, decided, changed, tested and left open
+- Historical specs (`specs/`, `specs_architecture/`, `arch-fix/`) describe how work was requested. They are not updated to match later changes; `architecture.md` and `progress-tracker.md` are the current truth.
 
 ## Before Moving to the Next Unit
 

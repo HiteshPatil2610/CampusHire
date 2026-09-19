@@ -30,6 +30,18 @@ vi.mock("@/lib/prisma", () => ({
       deleteMany: vi.fn(),
       findUnique: vi.fn(),
     },
+    // Recruitment pipeline models (see pipeline-fixtures.ts).
+    recruitmentPipelineVersion: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      createMany: vi.fn(),
+      updateMany: vi.fn(),
+      count: vi.fn(),
+    },
+    recruitmentStage: { findUnique: vi.fn() },
+    applicationStageEvent: { create: vi.fn(), createMany: vi.fn() },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -41,8 +53,12 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/audit", () => ({
   createAuditLog: vi.fn(),
-  AuditAction: { APPLY: "APPLY", UPDATE: "UPDATE" },
-  AuditEntityType: { DRIVE_APPLICATION: "DriveApplication" },
+  createAuditLogInTransaction: vi.fn(),
+  AuditAction: { APPLY: "APPLY", UPDATE: "UPDATE", CREATE: "CREATE" },
+  AuditEntityType: {
+    DRIVE_APPLICATION: "DriveApplication",
+    APPLICATION_SNAPSHOT: "DriveApplicationSnapshot",
+  },
 }));
 
 vi.mock("@/lib/notifications", () => ({
@@ -58,6 +74,10 @@ vi.mock("../queries/check-application-exists", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { prisma } from "@/lib/prisma";
+import { withActivePipeline } from "@/features/recruitment/__tests__/pipeline-fixtures";
+
+// Every department drive here already has an active recruitment pipeline.
+beforeEach(() => withActivePipeline(prisma));
 import { requireStudent, requireDepartmentAdmin } from "@/lib/auth";
 import { checkApplicationExists } from "../queries/check-application-exists";
 import { applyToDrive } from "../actions/apply-to-drive";
@@ -75,9 +95,17 @@ const student = {
   rollNumber: "CS2021001",
   name: "Test Student",
   email: "student@example.com",
+  phoneNumber: "9876543210",
 };
 
 const studentWithAcademic = {
+  skills: [],
+  projects: [],
+  certifications: [],
+  department: { code: "CSE" },
+  isPending: false,
+  optedIn: true,
+  placements: [],
   ...student,
   academic: { currentCGPA: 8.5, activeBacklogs: 0 },
 };
@@ -89,11 +117,29 @@ const openDrive = {
   minCGPA: 7,
   maxActiveBacklogs: 0,
   applicationDeadline: new Date(Date.now() + 7 * 864e5),
+  lifecycleStatus: "PUBLISHED" as const,
   eligibleDepartmentLinks: [{ departmentId: "dept-a" }],
+  // The applicant's department has published this drive and overrides nothing.
+  eligibilityRules: [],
+  // No form anywhere: the catalog default applies.
+  applicationFields: null,
+  formFields: [],
+  departmentConfigs: [
+    {
+      status: "PUBLISHED" as const,
+      lockedAt: new Date(),
+      eligibilityRules: [],
+      applicationFields: null,
+      formFields: [],
+    },
+  ],
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  (prisma.$transaction as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    (fn: (tx: unknown) => unknown) => fn(prisma)
+  );
 
   vi.mocked(requireStudent).mockResolvedValue({
     user: { id: "user-1" },
@@ -156,7 +202,13 @@ describe("applyToDrive — submission", () => {
       (call[0] as { data: { submittedDetails: string } }).data.submittedDetails
     );
 
-    expect(stored).toEqual({ phone: "9999999999" });
+    // The form's editable fields with their effective values; the
+    // registrar-owned CGPA is dropped.
+    expect(stored).toEqual({
+      name: "Test Student",
+      email: "student@example.com",
+      phone: "9999999999",
+    });
     expect(stored).not.toHaveProperty("cgpa");
   });
 });
@@ -309,7 +361,9 @@ describe("updateApplicationStage — admin scope unchanged", () => {
       departmentId: "dept-a",
       isCentralDrive: false,
       eligibleDepartmentLinks: [{ departmentId: "dept-a" }],
+      departmentConfigs: [{ id: "config-1", roleName: null }],
     },
+    currentStage: null,
   };
 
   beforeEach(() => {
@@ -323,7 +377,7 @@ describe("updateApplicationStage — admin scope unchanged", () => {
   it("lets the owning department's admin advance the stage", async () => {
     const result = await updateApplicationStage({
       applicationId: APPLICATION_ID,
-      stage: "INTERVIEW",
+      stageId: "rst_technical",
       status: "IN_PROGRESS",
     });
 
@@ -334,7 +388,7 @@ describe("updateApplicationStage — admin scope unchanged", () => {
   it("writes only stage and status — never the submitted content", async () => {
     await updateApplicationStage({
       applicationId: APPLICATION_ID,
-      stage: "INTERVIEW",
+      stageId: "rst_technical",
       status: "IN_PROGRESS",
     });
 
@@ -342,6 +396,7 @@ describe("updateApplicationStage — admin scope unchanged", () => {
     const data = (call[0] as { data: Record<string, unknown> }).data;
 
     expect(Object.keys(data).sort()).toEqual([
+      "currentStageId",
       "stage",
       "stageUpdatedAt",
       "stageUpdatedById",
@@ -360,7 +415,7 @@ describe("updateApplicationStage — admin scope unchanged", () => {
 
     const result = await updateApplicationStage({
       applicationId: APPLICATION_ID,
-      stage: "INTERVIEW",
+      stageId: "rst_technical",
       status: "IN_PROGRESS",
     });
 
@@ -375,7 +430,7 @@ describe("updateApplicationStage — admin scope unchanged", () => {
 
     const result = await updateApplicationStage({
       applicationId: APPLICATION_ID,
-      stage: "INTERVIEW",
+      stageId: "rst_technical",
       status: "IN_PROGRESS",
     });
 
@@ -386,7 +441,7 @@ describe("updateApplicationStage — admin scope unchanged", () => {
   it("never deletes an application", async () => {
     await updateApplicationStage({
       applicationId: APPLICATION_ID,
-      stage: "INTERVIEW",
+      stageId: "rst_technical",
       status: "IN_PROGRESS",
     });
 

@@ -5,6 +5,8 @@ import {
   maxActiveBacklogsField,
   optionalUrl,
 } from "./drive-core";
+import { eligibilityRuleSetSchema } from "../domain/eligibility-rule-schema";
+import { DEPARTMENT_EDITABLE_FIELDS } from "../domain/drive-lifecycle";
 
 /**
  * Central (master) Drive Schema
@@ -32,6 +34,44 @@ export const createCentralDriveSchema = z
       .max(5000, "Job description too long")
       .optional()
       .or(z.literal("")),
+    // Institution-level defaults each department may override.
+    requirements: z
+      .string()
+      .max(5000, "Requirements too long")
+      .optional()
+      .or(z.literal("")),
+    skills: z
+      .array(z.string().trim().min(1).max(100))
+      .max(40, "Too many skills")
+      .optional(),
+    /**
+     * Master default eligibility rules beyond CGPA and backlogs — those two are
+     * owned by the dedicated `minCGPA` / `maxActiveBacklogs` fields above, so
+     * they are refused here rather than allowed to contradict them. Omit to
+     * leave the drive's existing extra defaults untouched.
+     */
+    eligibilityRules: eligibilityRuleSetSchema
+      .refine(
+        (rules) =>
+          !rules.some((rule) => rule.ruleType === "CGPA" || rule.ruleType === "ACTIVE_BACKLOGS"),
+        "Set CGPA and backlog limits with their own fields, not as extra rules"
+      )
+      .optional(),
+    /**
+     * Which content fields each assigned department may override. Anything
+     * not listed is locked to the master's value. Create only — changed later
+     * through `setDepartmentEditPermissions`.
+     */
+    departmentEditableFields: z
+      .array(z.enum(DEPARTMENT_EDITABLE_FIELDS))
+      .max(DEPARTMENT_EDITABLE_FIELDS.length)
+      .optional(),
+    /**
+     * The master recruitment pipeline, validated in full by
+     * `validatePipelineStages` in the action. Create only — changed later
+     * through `saveMasterPipeline`. Omit to build it from selection rounds.
+     */
+    recruitmentStages: z.array(z.unknown()).max(15).optional(),
   })
   .refine(deadlineBeforeDriveDate.check, deadlineBeforeDriveDate.message);
 
@@ -39,24 +79,3 @@ export type CreateCentralDriveInput = z.infer<typeof createCentralDriveSchema>;
 
 export const updateCentralDriveSchema = createCentralDriveSchema;
 export type UpdateCentralDriveInput = z.infer<typeof updateCentralDriveSchema>;
-
-/**
- * Payload for the post-creation "Application Fields Required" toggle panel.
- * Only enablement is editable here — whether a field is required is set
- * during drive configuration and preserved untouched.
- */
-export const centralDriveApplicationFieldsSchema = z.object({
-  driveId: z.string().min(1, "Drive ID is required"),
-  fields: z
-    .array(
-      z.object({
-        fieldKey: z.string().min(1),
-        isEnabled: z.boolean(),
-      })
-    )
-    .max(100, "Too many fields"),
-});
-
-export type CentralDriveApplicationFieldsInput = z.infer<
-  typeof centralDriveApplicationFieldsSchema
->;
