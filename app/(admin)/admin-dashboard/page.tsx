@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { requireDepartmentAdmin } from '@/lib/auth';
 import { getAdminDashboardStats } from '@/features/students/queries/get-admin-dashboard-stats';
 import { getAdminDrives } from '@/features/drives/actions/get-admin-drives';
+import { getAdminActionItems } from '@/features/dashboard/queries/get-action-items';
+import { ActionRequiredPanel } from '@/features/dashboard/components/action-required-panel';
 import { getDriveStatus } from '@/features/drives/utils/drive-status';
 import { DepartmentScopeBanner } from '@/components/shared/department-scope-banner';
 import KpiCard from '@/components/shared/kpi-card';
@@ -21,9 +23,10 @@ export default async function AdminDashboardPage() {
   const { department } = await requireDepartmentAdmin();
 
   // Fetch dashboard data
-  const [stats, drivesResult] = await Promise.all([
+  const [stats, drivesResult, actionItems] = await Promise.all([
     getAdminDashboardStats(),
     getAdminDrives({ page: 1, pageSize: 4 }),
+    getAdminActionItems(),
   ]);
 
   const deptCode = department.code;
@@ -43,6 +46,8 @@ export default async function AdminDashboardPage() {
       >
         Department Overview
       </h1>
+
+      <ActionRequiredPanel items={actionItems} emptyMessage="Nothing is waiting on your department." />
 
       {/* KPI Cards */}
       <div

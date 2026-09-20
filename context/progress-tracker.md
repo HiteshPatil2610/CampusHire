@@ -53,11 +53,46 @@ Update this file after every meaningful implementation change.
 ## Current Goal
 
 - All V1 frontend integration units complete ✅
-- ARCH-FIX2 units 1–4, 7 and 8 complete and applied to production (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Units 9–11 in `context/arch-fix/` are not started.
+- ARCH-FIX2 units 1–4, 7, 8 and 9 complete (unit 9 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Units 10–11 in `context/arch-fix/` are not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 863 tests pass, 27 pre-existing failures (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
+- Current baseline: 946 tests pass, 27 pre-existing failures (the excel-import database-duplicates test also times out intermittently) (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
 
 ## Completed
+
+- **Operational dashboards, filters, exports & reminders — ARCH-FIX2 unit-9
+  (COMPLETE — no database change):**
+  - **Found:** unit 6 already delivered the application filters (search, batch,
+    stage, status), the eligible/registered lists on the central evaluator,
+    the validated bulk stage move and the automatic closing-soon reminder
+    (unit 7). What was missing: action-required panels, application filters
+    for placement and date, drive filters for the Super Admin, a full-dataset
+    export with server-side authorization (the only export wrote the current
+    page from the browser), and a way to send a reminder on demand.
+  - **Added:** `features/dashboard` (pure action-item builders, three role
+    queries, `ActionRequiredPanel` on all three dashboards);
+    `features/exports` (dataset definitions, `exportDriveDataset`,
+    `ExportMenu`) and `lib/csv-format.ts` (the shared CSV formatter, so the
+    existing formula-injection guard covers both paths); placement and
+    applied-date filters on the department and Super Admin application views
+    (the latter also gained search, batch and status); a status / department /
+    drive-date filter on the Super Admin drive list (`drive-list-filter.ts`);
+    `sendDeadlineReminder` + `ReminderButton` reusing the fan-out and the
+    automatic reminder's per-student key; `evaluateDepartmentDriveReadiness`
+    extracted so the dashboard and the notification share the Publish
+    button's check; the bulk move's audit entry now names operation, drive,
+    department and counts.
+  - **Tests:** `export-datasets` (14), `export-authorization` (15),
+    `action-items` (26), `drive-list-filter` (8), `application-filters` (6),
+    `deadline-reminder` (15). Mutation check: 16 of 17 caught; the miss is an
+    equivalent mutant (the CSV writer already restricts to the allowlisted
+    columns, so the separate projection is a redundant second defence). Full
+    suite 946 passed / 28 failed: the known 27 plus the excel-import
+    "database duplicates" test, which times out reaching the real database
+    (5 s) and is unrelated. `tsc`, lint and `next build` clean.
+  - **Open:** the eligible-students export is per department, so the Super
+    Admin has none; the per-table "export this page" button remains and is
+    labelled as one page; exports over 10,000 rows are refused rather than
+    split; not browser-verified.
 
 - **Admin invitations & role-specific settings — ARCH-FIX2 unit-8 (COMPLETE —
   migration `20260927000000_admin_invitations_settings` applied to

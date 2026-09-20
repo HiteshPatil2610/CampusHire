@@ -34,7 +34,18 @@ export interface GetDriveApplicationsParams {
   /** A stage of this department's pipeline for the drive. */
   stageId?: string;
   status?: ApplicationStatus;
+  /** "placed": holds an active placement (anywhere); "unplaced": does not. */
+  placement?: "placed" | "unplaced";
+  /** ISO dates (YYYY-MM-DD), inclusive, on the day the application was made. */
+  appliedFrom?: string;
+  appliedTo?: string;
 }
+
+const parseDay = (value: string | undefined, endOfDay: boolean): Date | undefined => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
 
 const APPLICATION_STATUSES: ApplicationStatus[] = ["IN_PROGRESS", "SELECTED", "REJECTED", "WITHDRAWN"];
 
@@ -96,6 +107,10 @@ export async function getDriveApplications(
   const status =
     params.status && APPLICATION_STATUSES.includes(params.status) ? params.status : undefined;
   const stageId = params.stageId?.trim().slice(0, 64) || undefined;
+  const placement =
+    params.placement === "placed" || params.placement === "unplaced" ? params.placement : undefined;
+  const appliedFrom = parseDay(params.appliedFrom, false);
+  const appliedTo = parseDay(params.appliedTo, true);
 
   // Own drive: every applicant is already in-department. Central drive:
   // scope explicitly to this department's students only. Either way the
@@ -104,7 +119,15 @@ export async function getDriveApplications(
     driveId: params.driveId,
     ...(status ? { status } : {}),
     ...(stageId ? { currentStageId: stageId } : {}),
+    ...(appliedFrom || appliedTo
+      ? { appliedAt: { ...(appliedFrom ? { gte: appliedFrom } : {}), ...(appliedTo ? { lte: appliedTo } : {}) } }
+      : {}),
     student: {
+      ...(placement === "placed"
+        ? { placements: { some: ACTIVE_PLACEMENT_WHERE } }
+        : placement === "unplaced"
+          ? { placements: { none: ACTIVE_PLACEMENT_WHERE } }
+          : {}),
       ...(ownsDrive ? {} : { departmentId: department.id }),
       ...(batchYear ? { batchYear } : {}),
       ...(search

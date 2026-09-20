@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireSuperAdmin } from "@/lib/auth";
 import { getSystemStats } from "@/features/departments/queries/get-system-stats";
 import { getDepartmentMatrix } from "@/features/departments/queries/get-department-matrix";
+import { getSuperAdminActionItems } from "@/features/dashboard/queries/get-action-items";
+import { ActionRequiredPanel } from "@/features/dashboard/components/action-required-panel";
 import KpiCard from "@/components/shared/kpi-card";
 import StatusBadge from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
@@ -10,13 +12,14 @@ import { eligibleDepartmentIdsOf, eligibleDepartmentLinksInclude } from "@/featu
 export default async function SuperAdminDashboardPage() {
   await requireSuperAdmin();
 
-  const [stats, deptMatrix, centralDrives] = await Promise.all([
+  const [stats, deptMatrix, centralDrives, actionItems] = await Promise.all([
     getSystemStats(),
     getDepartmentMatrix(),
     prisma.drive.findMany({
       orderBy: { createdAt: 'desc' },
       include: { department: true, ...eligibleDepartmentLinksInclude },
     }),
+    getSuperAdminActionItems(),
   ]);
 
   const deptCodeById = new Map(deptMatrix.map((d) => [d.id, d.code]));
@@ -32,6 +35,8 @@ export default async function SuperAdminDashboardPage() {
       <h1 className="page-title" style={{ marginBottom: 20 }}>
         Institutional Overview
       </h1>
+
+      <ActionRequiredPanel items={actionItems} emptyMessage="No requests, invitations or system issues are waiting." />
 
       {/* KPI Cards */}
       <div

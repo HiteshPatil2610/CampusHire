@@ -6,6 +6,12 @@ import { formatDriveDate, formatDeadline } from "@/lib/drive-date-helpers";
 import { getDriveStatus } from "../utils/drive-status";
 import { CentralDriveDetailPanel } from "./central-drive-detail-panel";
 import { PostCentralDriveModal } from "./post-central-drive-modal";
+import {
+  EMPTY_DRIVE_FILTER,
+  driveFilterActive,
+  filterDrives,
+  type DriveFilterInput,
+} from "../domain/drive-list-filter";
 import type { StageDraft } from "@/features/recruitment/components/pipeline-editor";
 import type { CentralDriveListItem, DriveDeptStatusSummary } from "../queries/get-central-drives";
 import { formatPackage } from "../utils/format-package";
@@ -75,6 +81,12 @@ export function CentralDrivesView({
     drives[0]?.id ?? null
   );
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<Omit<DriveFilterInput, "search">>({
+    status: "",
+    departmentId: "",
+    from: "",
+    to: "",
+  });
 
   // Keep the selection valid as the server list refreshes
   useEffect(() => {
@@ -92,14 +104,9 @@ export function CentralDrivesView({
 
   const selectedDrive = drives.find((drive) => drive.id === selectedId) ?? null;
 
-  const visibleDrives = drives.filter((drive) => {
-    const term = search.trim().toLowerCase();
-    if (!term) return true;
-    return (
-      drive.companyName.toLowerCase().includes(term) ||
-      drive.roleName.toLowerCase().includes(term)
-    );
-  });
+  const filter: DriveFilterInput = { ...EMPTY_DRIVE_FILTER, ...filters, search };
+  const visibleDrives = filterDrives(drives, filter);
+  const filtering = driveFilterActive(filter);
 
   // Summary counts for the header KPI row
   const totalApps = drives.reduce((sum, d) => sum + d._count.applications, 0);
@@ -207,9 +214,66 @@ export function CentralDrivesView({
               />
             </div>
 
+            {/* Status, department and drive date narrow the list further. */}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+              <select
+                aria-label="Drive status"
+                value={filters.status}
+                onChange={(e) =>
+                  setFilters({ ...filters, status: e.target.value as DriveFilterInput["status"] })
+                }
+                style={{ padding: "5px 8px", fontSize: 12, borderRadius: 8, border: "0.5px solid var(--border-strong)" }}
+              >
+                <option value="">Any status</option>
+                <option value="DRAFT">Draft</option>
+                <option value="PUBLISHED">Published</option>
+                <option value="CANCELLED">Cancelled</option>
+                <option value="ARCHIVED">Archived</option>
+              </select>
+              <select
+                aria-label="Department"
+                value={filters.departmentId}
+                onChange={(e) => setFilters({ ...filters, departmentId: e.target.value })}
+                style={{ padding: "5px 8px", fontSize: 12, borderRadius: 8, border: "0.5px solid var(--border-strong)" }}
+              >
+                <option value="">Any department</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.code}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="date"
+                aria-label="Drive date from"
+                value={filters.from}
+                onChange={(e) => setFilters({ ...filters, from: e.target.value })}
+                style={{ padding: "4px 6px", fontSize: 12, borderRadius: 8, border: "0.5px solid var(--border-strong)" }}
+              />
+              <input
+                type="date"
+                aria-label="Drive date to"
+                value={filters.to}
+                onChange={(e) => setFilters({ ...filters, to: e.target.value })}
+                style={{ padding: "4px 6px", fontSize: 12, borderRadius: 8, border: "0.5px solid var(--border-strong)" }}
+              />
+              {filtering && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setSearch("");
+                    setFilters({ status: "", departmentId: "", from: "", to: "" });
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
             {visibleDrives.length === 0 ? (
               <div className="text-muted" style={{ fontSize: 13, padding: "20px 4px" }}>
-                No drives match &ldquo;{search}&rdquo;.
+                {filtering ? "No drives match these filters." : "No drives yet."}
               </div>
             ) : (
               <div style={{ display: "grid", gap: 8, maxHeight: "calc(100vh - 300px)", overflowY: "auto" }}>

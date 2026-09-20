@@ -19,6 +19,8 @@ import { DrivePlacementTab } from "@/features/students/components/drive-placemen
 import { PermissionDenied } from "@/components/shared/permission-denied";
 import { getDepartmentBatchYears } from "@/features/students/queries/department-batch-years";
 import type { ApplicationStatus } from "@prisma/client";
+import { ExportMenu } from "@/features/exports/components/export-menu";
+import { ReminderButton } from "@/features/notifications/components/reminder-button";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +46,9 @@ interface PageProps {
     batch?: string;
     stage?: string;
     status?: string;
+    placement?: string;
+    from?: string;
+    to?: string;
   }>;
 }
 
@@ -153,6 +158,12 @@ export default async function DriveWorkspacePage({ params, searchParams }: PageP
             batchYear: Number.isFinite(batch) ? batch : undefined,
             stageId: query.stage || undefined,
             status,
+            placement:
+              query.placement === "placed" || query.placement === "unplaced"
+                ? query.placement
+                : undefined,
+            appliedFrom: query.from,
+            appliedTo: query.to,
           }),
           getDriveRecruitment(driveId),
           getDepartmentBatchYears(department.id),
@@ -170,6 +181,12 @@ export default async function DriveWorkspacePage({ params, searchParams }: PageP
               batch: Number.isFinite(batch) ? String(batch) : "",
               stage: query.stage ?? "",
               status: status ?? "",
+              placement:
+                query.placement === "placed" || query.placement === "unplaced"
+                  ? query.placement
+                  : "",
+              from: query.from ?? "",
+              to: query.to ?? "",
             }}
             companyName={master.companyName}
             roleName={roleName}
@@ -244,6 +261,12 @@ export default async function DriveWorkspacePage({ params, searchParams }: PageP
             Cancelled: {instance.cancellationReason}
           </div>
         )}
+        {/* The whole dataset, not the page on screen. The server checks the
+            drive and the department again. */}
+        <div style={{ marginTop: 12, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+          <ExportMenu driveId={driveId} />
+          {lifecycle === "PUBLISHED" && open && <ReminderButton driveId={driveId} />}
+        </div>
       </div>
 
       <div

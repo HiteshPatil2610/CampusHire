@@ -27,6 +27,9 @@ interface Filters {
   batch: string;
   stage: string;
   status: string;
+  placement: string;
+  from: string;
+  to: string;
 }
 
 const selectStyle: React.CSSProperties = {
@@ -87,11 +90,22 @@ export function DriveApplicationsWorkspace({
     setSelected(new Set());
     setOpen(null);
   }, [applications]);
-  useEffect(() => setDraft(filters), [filters.q, filters.batch, filters.stage, filters.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(
+    () => setDraft(filters),
+    [filters.q, filters.batch, filters.stage, filters.status, filters.placement, filters.from, filters.to] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const active = stages.filter((stage) => stage.isEnabled);
-  const filtersActive = Boolean(filters.q || filters.batch || filters.stage || filters.status);
+  const filtersActive = Boolean(
+    filters.q ||
+      filters.batch ||
+      filters.stage ||
+      filters.status ||
+      filters.placement ||
+      filters.from ||
+      filters.to
+  );
 
   function go(next: Partial<Filters> & { page?: number }) {
     const merged = { ...filters, ...next };
@@ -100,6 +114,9 @@ export function DriveApplicationsWorkspace({
     if (merged.batch) params.set("batch", merged.batch);
     if (merged.stage) params.set("stage", merged.stage);
     if (merged.status) params.set("status", merged.status);
+    if (merged.placement) params.set("placement", merged.placement);
+    if (merged.from) params.set("from", merged.from);
+    if (merged.to) params.set("to", merged.to);
     if (next.page && next.page > 1) params.set("page", String(next.page));
     router.push(`/admin-dashboard/drives/${driveId}?${params.toString()}`);
   }
@@ -196,11 +213,39 @@ export function DriveApplicationsWorkspace({
             </option>
           ))}
         </select>
+        <select
+          value={draft.placement}
+          onChange={(e) => go({ ...draft, placement: e.target.value, page: 1 })}
+          aria-label="Placement"
+          style={selectStyle}
+        >
+          <option value="">Any placement</option>
+          <option value="unplaced">Not placed</option>
+          <option value="placed">Placed</option>
+        </select>
+        <label className="text-secondary" style={{ fontSize: 12, display: "flex", gap: 4, alignItems: "center" }}>
+          Applied
+          <input
+            type="date"
+            value={draft.from}
+            aria-label="Applied from"
+            style={selectStyle}
+            onChange={(e) => go({ ...draft, from: e.target.value, page: 1 })}
+          />
+          –
+          <input
+            type="date"
+            value={draft.to}
+            aria-label="Applied to"
+            style={selectStyle}
+            onChange={(e) => go({ ...draft, to: e.target.value, page: 1 })}
+          />
+        </label>
         <button type="submit" className="btn btn-outline btn-sm">
           Search
         </button>
         {filtersActive && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => go({ q: "", batch: "", stage: "", status: "", page: 1 })}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => go({ q: "", batch: "", stage: "", status: "", placement: "", from: "", to: "", page: 1 })}>
             Clear filters
           </button>
         )}

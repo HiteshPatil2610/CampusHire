@@ -4,12 +4,23 @@ import { requireSuperAdmin } from "@/lib/auth";
 import { getSuperAdminDriveApplications } from "@/features/applications/queries/get-super-admin-drive-applications";
 import { formatDeadline } from "@/lib/drive-date-helpers";
 import { SuperAdminApplicationsClient } from "./super-admin-applications-client";
+import { ExportMenu } from "@/features/exports/components/export-menu";
+import { EXPORT_DATASETS } from "@/features/exports/domain/export-datasets";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ page?: string; dept?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    dept?: string;
+    q?: string;
+    batch?: string;
+    status?: string;
+    placement?: string;
+    from?: string;
+    to?: string;
+  }>;
 }
 
 export default async function SuperAdminDriveApplicationsPage({
@@ -19,7 +30,14 @@ export default async function SuperAdminDriveApplicationsPage({
   await requireSuperAdmin();
 
   const { id: driveId } = await params;
-  const { page: pageParam, dept } = await searchParams;
+  const filters = await searchParams;
+  const { page: pageParam, dept } = filters;
+  const batch = Number.parseInt(filters.batch ?? "", 10);
+  const status = ["IN_PROGRESS", "SELECTED", "REJECTED", "WITHDRAWN"].find(
+    (value) => value === filters.status
+  ) as "IN_PROGRESS" | "SELECTED" | "REJECTED" | "WITHDRAWN" | undefined;
+  const placement =
+    filters.placement === "placed" || filters.placement === "unplaced" ? filters.placement : undefined;
   const parsedPage = Number.parseInt(pageParam ?? "1", 10);
   const page = Number.isFinite(parsedPage) && parsedPage >= 1 ? parsedPage : 1;
 
@@ -29,6 +47,12 @@ export default async function SuperAdminDriveApplicationsPage({
       page,
       pageSize: 50,
       departmentCode: dept || undefined,
+      search: filters.q,
+      batchYear: Number.isFinite(batch) ? batch : undefined,
+      status,
+      placement,
+      appliedFrom: filters.from,
+      appliedTo: filters.to,
     });
   } catch {
     notFound();
@@ -83,7 +107,67 @@ export default async function SuperAdminDriveApplicationsPage({
             </span>
           )}
         </div>
+        {/* Every department's rows for the chosen dataset. "Eligible
+            students" is a per-department judgement, so it is not offered. */}
+        <div style={{ marginTop: 12 }}>
+          <ExportMenu
+            driveId={driveId}
+            datasets={EXPORT_DATASETS.filter((dataset) => dataset !== "eligible")}
+          />
+        </div>
       </div>
+
+      {/* Filters: a plain GET form, so a filtered view is a shareable link.
+          Every value is validated again by the query. */}
+      <form
+        method="get"
+        style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}
+      >
+        {dept && <input type="hidden" name="dept" value={dept} />}
+        <input
+          name="q"
+          defaultValue={filters.q ?? ""}
+          placeholder="Search name, roll no or email"
+          aria-label="Search"
+          className="input"
+          style={{ maxWidth: 260 }}
+        />
+        <select name="status" defaultValue={status ?? ""} aria-label="Status" className="input" style={{ maxWidth: 150 }}>
+          <option value="">Any status</option>
+          <option value="IN_PROGRESS">In progress</option>
+          <option value="SELECTED">Selected</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="WITHDRAWN">Withdrawn</option>
+        </select>
+        <input
+          name="batch"
+          type="number"
+          min={1900}
+          max={2999}
+          defaultValue={Number.isFinite(batch) ? batch : ""}
+          placeholder="Batch"
+          aria-label="Batch year"
+          className="input"
+          style={{ maxWidth: 100 }}
+        />
+        <select name="placement" defaultValue={placement ?? ""} aria-label="Placement" className="input" style={{ maxWidth: 150 }}>
+          <option value="">Any placement</option>
+          <option value="unplaced">Not placed</option>
+          <option value="placed">Placed</option>
+        </select>
+        <label className="text-secondary" style={{ fontSize: 12, display: "flex", gap: 4, alignItems: "center" }}>
+          Applied
+          <input name="from" type="date" defaultValue={filters.from ?? ""} aria-label="Applied from" className="input" />
+          –
+          <input name="to" type="date" defaultValue={filters.to ?? ""} aria-label="Applied to" className="input" />
+        </label>
+        <button type="submit" className="btn btn-outline btn-sm">
+          Filter
+        </button>
+        <Link href={`/super-admin-dashboard/drives/${driveId}/applications`} className="btn btn-ghost btn-sm">
+          Clear
+        </Link>
+      </form>
 
       {/* Per-department summary tiles */}
       {result.byDepartment.length > 0 && (

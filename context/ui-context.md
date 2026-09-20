@@ -595,6 +595,13 @@ Every motion trigger verifies `window.matchMedia('(prefers-reduced-motion: reduc
 - **Inviting says what it does**: "they get an email from the sign-in provider and choose their own password; CampusHire never creates or sends one", so nobody waits for a password to pass on.
 - **Disabling is a dialog, not a confirm**: it lists what survives (account, drives published, applications moved, audit entries) and takes an optional reason that is shown to the admin.
 
+### 8.15 Action-Required, Filter & Export Patterns
+
+- **Action required** is the first card on each dashboard: a list of linked rows, each a priority badge (`badge-red` urgent with a red left spine, `badge-amber` soon, `badge-gray` to do), a bold title, a one-line reason and an arrow. Nothing waiting shows "✓" and a plain sentence, never a blank card.
+- **Filters** live in one wrapping row above the list: search, then `select`s, then date inputs, with "Clear" only while any filter is active. Server-paged lists put filters in the URL so a filtered view is a link; the Super Admin's applications page uses a plain GET form for the same reason.
+- **Export** is a `select` of dataset names and a "Download CSV" button. While the file is built the button says "Preparing…"; an empty dataset says so in a toast rather than downloading a header-only file; a refusal states why. The per-table export is labelled "Export this page" so nobody mistakes it for the whole dataset.
+- **Reminder** is a ghost button that expands to an inline confirmation stating who it reaches and that it goes out once a day.
+
 ---
 
 ## 9. Screen Inventory Reference

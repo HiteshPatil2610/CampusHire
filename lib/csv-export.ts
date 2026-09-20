@@ -1,82 +1,50 @@
 /**
- * CSV Export Utility
- * 
- * Pure client-side utility function to export data as CSV and trigger browser download.
- * No server round-trip required.
+ * CSV download in the browser.
+ *
+ * The formatting itself is `lib/csv-format.ts`, shared with the server-side
+ * dataset export, so a value is escaped — and a spreadsheet formula defused —
+ * the same way whichever path produced the file.
  */
+
+import { rowsToCsv } from "./csv-format";
 
 /**
- * Export array of objects to CSV and trigger browser download
- * 
- * @param filename - Name of the CSV file (without .csv extension)
- * @param rows - Array of objects to export. All objects should have the same keys.
- * 
- * @example
- * ```ts
- * exportToCsv('students', [
- *   { name: 'John Doe', roll: 'CS001', cgpa: 8.5 },
- *   { name: 'Jane Smith', roll: 'CS002', cgpa: 9.0 },
- * ]);
- * // Downloads: students.csv
- * ```
+ * Trigger a browser download of CSV text that is already built.
+ *
+ * @param filename - Name of the file, without the .csv extension
+ * @param csv - The CSV content
  */
-export function exportToCsv(
-  filename: string,
-  rows: Record<string, unknown>[]
-): void {
-  if (!rows.length) {
-    console.warn('exportToCsv: No data to export');
-    return;
-  }
-
-  // Extract headers from first row
-  const headers = Object.keys(rows[0]);
-
-  // Build CSV content: header row + data rows
-  const csv = [
-    // Header row
-    headers.join(','),
-    // Data rows
-    ...rows.map((row) =>
-      headers
-        .map((header) => {
-          const value = row[header];
-          // Handle null/undefined
-          if (value === null || value === undefined) {
-            return '';
-          }
-          // Stringify and escape quotes. A text value that a spreadsheet would
-          // run as a formula (a student typing =HYPERLINK(...) as their name) is
-          // defused with a leading apostrophe; numbers are left alone.
-          const stringValue =
-            typeof value === 'string' && /^[=+\-@\t\r]/.test(value) ? `'${value}` : String(value);
-          // If value contains comma, quote, or newline, wrap in quotes and escape internal quotes
-          if (
-            stringValue.includes(',') ||
-            stringValue.includes('"') ||
-            stringValue.includes('\n')
-          ) {
-            return `"${stringValue.replace(/"/g, '""')}"`;
-          }
-          return stringValue;
-        })
-        .join(',')
-    ),
-  ].join('\n');
-
-  // Create blob and trigger download
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+export function downloadCsv(filename: string, csv: string): void {
+  // A leading BOM so Excel opens UTF-8 (names with accents) correctly.
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
+  const link = document.createElement("a");
   link.href = url;
   link.download = `${filename}.csv`;
-  link.style.display = 'none';
+  link.style.display = "none";
 
-  // Trigger download
   document.body.appendChild(link);
   link.click();
 
-  // Cleanup
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Export array of objects to CSV and trigger browser download. Exports what
+ * the caller already holds — for a whole dataset use the server export, which
+ * checks scope and columns before anything is built.
+ *
+ * @example
+ * ```ts
+ * exportToCsv('students', [{ name: 'John Doe', roll: 'CS001', cgpa: 8.5 }]);
+ * // Downloads: students.csv
+ * ```
+ */
+export function exportToCsv(filename: string, rows: Record<string, unknown>[]): void {
+  if (!rows.length) {
+    console.warn("exportToCsv: No data to export");
+    return;
+  }
+  downloadCsv(filename, rowsToCsv(rows));
 }

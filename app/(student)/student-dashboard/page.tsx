@@ -5,6 +5,8 @@ import { getOrCreateUser } from '@/lib/auth';
 import { getStudentProfileByUserId } from '@/features/students/queries/get-profile';
 import { calculateProfileCompletion } from '@/features/students/queries/profile-completion';
 import { getStudentDashboardData } from '@/features/students/queries/get-dashboard-data';
+import { getStudentActionItems } from '@/features/dashboard/queries/get-action-items';
+import { ActionRequiredPanel } from '@/features/dashboard/components/action-required-panel';
 import { getNotifications } from '@/features/notifications/queries/get-notifications';
 import {
   sortByPriority,
@@ -145,6 +147,24 @@ export default async function StudentDashboardPage() {
   const eligibilityFor = (drive: (typeof eligible.data)[number]) =>
     isStudentEligibleForDrive(eligibilityStudent, drive);
 
+  // What needs the student now. Eligibility is the evaluator's answer
+  // (`eligibilityFor`), never recomputed here.
+  const actionItems = await getStudentActionItems({
+    user,
+    studentId: profile.student.id,
+    profileCompletion: completion.percentage,
+    hasAcademicRecord: profile.academic !== null,
+    eligibleDrives: dashboard.all
+      .filter((item) => item.application !== null || eligibilityFor(item.drive))
+      .map((item) => ({
+        driveId: item.drive.id,
+        companyName: item.drive.companyName,
+        roleName: item.drive.roleName,
+        deadline: item.drive.applicationDeadline,
+        applied: item.application !== null,
+      })),
+  });
+
   const firstName = profile.student.name.split(' ')[0];
   const initials = profile.student.name
     .split(' ')
@@ -173,6 +193,11 @@ export default async function StudentDashboardPage() {
           Welcome back, {firstName}
         </h1>
       </div>
+
+      <ActionRequiredPanel
+        items={actionItems}
+        emptyMessage="You are all caught up. New drives and updates will show up here."
+      />
 
       {/* Scores */}
       <div className="dash-grid-3">

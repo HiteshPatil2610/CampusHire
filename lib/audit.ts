@@ -45,6 +45,8 @@ export const AuditAction = {
   RESEND: "RESEND",
   DISABLE: "DISABLE",
   REACTIVATE: "REACTIVATE",
+  EXPORT: "EXPORT",
+  BULK_TRANSITION: "BULK_TRANSITION",
 } as const;
 
 /**

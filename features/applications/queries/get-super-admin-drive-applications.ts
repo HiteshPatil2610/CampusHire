@@ -43,7 +43,19 @@ export interface SuperAdminDriveApplicationsResult {
  */
 export async function getSuperAdminDriveApplications(
   driveId: string,
-  params: { page?: number; pageSize?: number; departmentCode?: string } = {}
+  params: {
+    page?: number;
+    pageSize?: number;
+    departmentCode?: string;
+    /** Matches name, roll number or email. */
+    search?: string;
+    batchYear?: number;
+    status?: "IN_PROGRESS" | "SELECTED" | "REJECTED" | "WITHDRAWN";
+    placement?: "placed" | "unplaced";
+    /** ISO dates (YYYY-MM-DD), inclusive, on the day the application was made. */
+    appliedFrom?: string;
+    appliedTo?: string;
+  } = {}
 ): Promise<SuperAdminDriveApplicationsResult> {
   await requireSuperAdmin();
 
@@ -76,9 +88,54 @@ export async function getSuperAdminDriveApplications(
   // one department rather than see all at once. The URL carries the
   // department's code; it is matched against a department that actually runs
   // this drive, so it can never widen what is shown.
-  const where = params.departmentCode
-    ? { driveId, student: { department: { code: params.departmentCode } } }
-    : { driveId };
+  // Every filter comes from a URL, so each is checked before it reaches the
+  // query.
+  const search = params.search?.trim().slice(0, 100) || undefined;
+  const batchYear =
+    Number.isInteger(params.batchYear) && params.batchYear! > 1900 && params.batchYear! < 3000
+      ? params.batchYear
+      : undefined;
+  const status =
+    params.status && ["IN_PROGRESS", "SELECTED", "REJECTED", "WITHDRAWN"].includes(params.status)
+      ? params.status
+      : undefined;
+  const day = (value: string | undefined, end: boolean) => {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+    const date = new Date(`${value}T${end ? "23:59:59.999" : "00:00:00.000"}Z`);
+    return Number.isNaN(date.getTime()) ? undefined : date;
+  };
+  const appliedFrom = day(params.appliedFrom, false);
+  const appliedTo = day(params.appliedTo, true);
+
+  const studentFilter = {
+      ...(params.departmentCode ? { department: { code: params.departmentCode } } : {}),
+      ...(batchYear ? { batchYear } : {}),
+      ...(params.placement === "placed"
+        ? { placements: { some: ACTIVE_PLACEMENT_WHERE } }
+        : params.placement === "unplaced"
+          ? { placements: { none: ACTIVE_PLACEMENT_WHERE } }
+          : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" as const } },
+              { rollNumber: { contains: search, mode: "insensitive" as const } },
+              { email: { contains: search, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+  };
+
+  // With no student-level filter the clause is left out altogether, so an
+  // unfiltered view is exactly `{ driveId }`.
+  const where = {
+    driveId,
+    ...(status ? { status } : {}),
+    ...(appliedFrom || appliedTo
+      ? { appliedAt: { ...(appliedFrom ? { gte: appliedFrom } : {}), ...(appliedTo ? { lte: appliedTo } : {}) } }
+      : {}),
+    ...(Object.keys(studentFilter).length > 0 ? { student: studentFilter } : {}),
+  };
 
   const [totalCount, applications, grouped] = await Promise.all([
     prisma.driveApplication.count({ where }),

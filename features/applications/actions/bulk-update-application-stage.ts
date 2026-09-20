@@ -141,7 +141,11 @@ async function run(input: BulkStageMoveInput, dryRun: boolean): Promise<BulkStag
         entityId: driveId,
         metadata: {
           event: "bulk-stage-move",
+          operation: "bulk-stage-move",
+          departmentId: actor.department.id,
           departmentCode: actor.department.code,
+          driveId,
+          targetCount: outcomes.length,
           toStage: target?.name ?? null,
           toStatus: status,
           requested: outcomes.length,

@@ -671,6 +671,45 @@ placement, batch). It never reconstructs those from today's data.
 columns (`origin: LEGACY_COLUMNS`), and is scoped: the student's own, a
 department admin's own applicant on a drive they run, or a Super Admin.
 
+## Action-required dashboards, exports and reminders
+
+- **Action items are computed, never stored.** `features/dashboard` builds each
+  role's "Action required" panel from current state on every render, so an item
+  vanishes the moment the thing it asks for is done — a profile completed, an
+  application submitted, a request decided — and cannot be stale. The pure
+  builders (`action-items.ts`) hold the rules: urgent leads, a long list is
+  grouped, a closed deadline or a submitted application is never listed. The
+  department admin's and Super Admin's queries take no id from a request and
+  are scoped by their authority; the student's eligible drives arrive already
+  judged by the evaluator, so nothing is re-derived. "Ready to publish" asks
+  `evaluateDepartmentDriveReadiness`, the same check the Publish button and the
+  ready-to-publish notification use.
+- **One CSV formatter.** `lib/csv-format.ts` (`csvCell`, `rowsToCsv`) is the
+  only place a value becomes a CSV cell and the only place a spreadsheet
+  formula is defused. The browser download (`lib/csv-export.ts`) and the
+  server export both use it; there is no second export library.
+- **An export is a dataset name, never a query.** `exportDriveDataset` takes
+  one of eight datasets (eligible, applicants, shortlisted, test, interview,
+  selected, rejected, placed) and decides everything else: who is asking (live
+  authorization), that the drive is theirs (a drive they do not run reads as
+  not found), which rows (a department admin's are always their own
+  department's, whatever the request says), and which columns (an allowlist per
+  dataset and role — no ids, credentials or document links). "Eligible" comes
+  from the central evaluator and is a department admin's export, because
+  eligibility is decided per department. Oversized exports are refused, not
+  truncated, and every export is audited (who, dataset, scope, row count).
+- **Bulk stage moves** are unit 6's validate-then-apply (`moveApplication`
+  underneath, per-application results, SELECTED refused); the one audit entry
+  now names the operation, drive, department, target/moved/failed counts.
+- **Reminders are the existing notification machinery.** "Remind eligible
+  students" is a keyed fan-out (`sendDeadlineReminder`): the same audience as
+  the publish announcement (evaluator, department, batch, placement
+  exclusion), the same per-student key as the automatic closing-soon reminder —
+  so nobody is reminded twice — and at most one per drive per department per
+  day. Applicants are left out; a closed, unpublished or cancelled drive
+  cannot be reminded about. It is recorded, retried and audited like any other
+  fan-out.
+
 ## Department admins are invited, not created
 
 CampusHire issues no credential. A Super Admin invites an email address; the
@@ -885,6 +924,7 @@ is worth more than any query-level optimisation in this file.
 15. Being promoted to an admin role ends an account's student-ness in the same transaction as the promotion: its `Student` row is retired and any *pending* `StudentAccessRequest` is deleted, so a promoted account leaves the waiting list and gets its new role's access immediately (`retireStudentAccess`). The pending request is deleted rather than given a terminal status — `REJECTED` would permanently block re-registration if the account is later demoted back to `STUDENT`, and `APPROVED` would claim a `Student` row was created when none was. Approval is independently refused for any applicant who is no longer a `STUDENT`, so a stale queue open in another tab cannot put an admin back in the roster. A student record carrying `DriveApplication` history is never silently deleted: it refuses, and the refusal aborts the promotion.
 13. `Student.rollNumber` is nullable but not optional: a lateral-entry student may register before one is issued, and `applyToDrive` refuses any application without one. It is registrar-owned once set — the student's profile can fill a blank, never overwrite an existing value.
 14. Anything that can be computed is computed, not stored. `getDriveStatus()` derives open/closed from a deadline and `placement-status.ts` derives placement from active placement records. A stored equivalent has to be set correctly at every write site, and the first caller that forgets produces a silently wrong value — which is exactly how `placementStatus` came to read zero everywhere. A notification's category and priority *are* stored, but no caller chooses them: one writer sets them from the event registry, which is the same "one place decides" guarantee by another route.
+21. An export is a dataset name the server resolves, never a query the client shapes: the actor, the drive, the department and the columns are all decided server-side, an allowlist bounds every column, and every export is audited. Action-required items are computed from current state and never stored.
 19. Department admin authorization is a live `DepartmentAdmin` row with status ACTIVE in an active department, asked through `requireDepartmentAdmin` or `getActiveDepartmentAdmin` and nowhere else. Disabling an admin takes access away and keeps everything they did. Admins are invited through Clerk — CampusHire never creates, emails or stores a password — and an invitation is accepted only when one was actually issued for that address and department.
 20. A setting exists only if something reads it, and it applies to what happens next: enforcing a placement season refuses new drive dates, it never re-judges drives or applications that already exist. A department's settings are written for the department in the caller's session; the action takes no department from the request.
 18. A notification is written by exactly one function, for a recipient whose role the event is defined for, under a dedupe key that makes the same event a no-op the second time. Students are told about a drive only where it is published and only if the shared evaluator finds them eligible; a department admin's announcement reaches their own department's students and nobody else, with the scope taken from their session. An announcement is the record and its notifications only point at it.

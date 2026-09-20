@@ -6,6 +6,7 @@ import {
   fanOutDriveUpdated,
 } from "../actions/notify-drive-lifecycle";
 import { fanOutAnnouncement } from "../producers/announcement-events";
+import { fanOutDeadlineReminder } from "../actions/send-deadline-reminder";
 
 /**
  * How a failed fan-out is run again.
@@ -37,7 +38,12 @@ export const DISPATCH_RETRIES: Partial<Record<NotificationEvent, DispatchRetry>>
       dispatchId
     ),
   DRIVE_DEADLINE: (payload, dispatchId) =>
-    fanOutDeadlineExtended(
+    payload.kind === "reminder"
+      ? fanOutDeadlineReminder(
+          { driveId: String(payload.driveId), departmentId: String(payload.departmentId) },
+          dispatchId
+        )
+      : fanOutDeadlineExtended(
       {
         driveId: String(payload.driveId),
         companyName: String(payload.companyName ?? "the company"),
