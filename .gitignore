@@ -43,3 +43,7 @@ DATABASE_SETUP.md
 
 # local database dumps (real data — never commit)
 backups/
+
+# spec/planning folders — not part of the deployable codebase
+context/arch-fix/
+context/integration-units/
