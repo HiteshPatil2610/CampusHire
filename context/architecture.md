@@ -710,6 +710,34 @@ department admin's own applicant on a drive they run, or a Super Admin.
   cannot be reminded about. It is recorded, retried and audited like any other
   fan-out.
 
+## Authorization is a property of the function, not of the page
+
+- **A function that reads the database carries its own authorization.** Being
+  rendered beside a guarded page is not a guard: a server action is callable
+  directly, and a query a client component can reach is a server action
+  whether or not it says so. Every exported action and every query a client
+  component imports asks `lib/auth` for the caller before it reads anything,
+  and the department, the student and the drive scope all come from that
+  answer rather than from the request.
+- **A refusal says no more than a permitted answer would.** Not found and not
+  yours read the same wherever an id can be guessed — applications, drives,
+  placements, students — so no path can be used to discover which ids exist in
+  another department.
+- **A refusal is recognised by its type.** `AuthenticationError` and
+  `AuthorizationError` are what an action catches; nothing tests the words in
+  an error message, because a message that is reworded then silently turns a
+  refusal into an unexplained failure.
+- **Query filters are typed.** Every `where` is a `Prisma.<Model>WhereInput`,
+  never `any`, and the clause that carries the department scope is written so
+  no optional filter can overwrite it. An untyped filter is how a misspelled
+  key becomes a clause Postgres ignores — and a scoped query becomes an
+  unscoped one — without anything failing.
+- **The middleware is a redirect, not a gate.** It reads Clerk metadata for
+  speed and sends the wrong role home; it is never the thing that decides.
+  Disabling a department admin does not change their Clerk metadata, so the
+  only reason a disabled admin gets nothing is that every department-scoped
+  path goes through `requireDepartmentAdmin`.
+
 ## Department admins are invited, not created
 
 CampusHire issues no credential. A Super Admin invites an email address; the
@@ -924,6 +952,7 @@ is worth more than any query-level optimisation in this file.
 15. Being promoted to an admin role ends an account's student-ness in the same transaction as the promotion: its `Student` row is retired and any *pending* `StudentAccessRequest` is deleted, so a promoted account leaves the waiting list and gets its new role's access immediately (`retireStudentAccess`). The pending request is deleted rather than given a terminal status — `REJECTED` would permanently block re-registration if the account is later demoted back to `STUDENT`, and `APPROVED` would claim a `Student` row was created when none was. Approval is independently refused for any applicant who is no longer a `STUDENT`, so a stale queue open in another tab cannot put an admin back in the roster. A student record carrying `DriveApplication` history is never silently deleted: it refuses, and the refusal aborts the promotion.
 13. `Student.rollNumber` is nullable but not optional: a lateral-entry student may register before one is issued, and `applyToDrive` refuses any application without one. It is registrar-owned once set — the student's profile can fill a blank, never overwrite an existing value.
 14. Anything that can be computed is computed, not stored. `getDriveStatus()` derives open/closed from a deadline and `placement-status.ts` derives placement from active placement records. A stored equivalent has to be set correctly at every write site, and the first caller that forgets produces a silently wrong value — which is exactly how `placementStatus` came to read zero everywhere. A notification's category and priority *are* stored, but no caller chooses them: one writer sets them from the event registry, which is the same "one place decides" guarantee by another route.
+22. Authorization belongs to the function: an exported action or a query a client component can reach checks the caller itself, typed `where` clauses keep the scope from being lost to a typo, refusals are recognised by error type, and not-found and not-yours read alike.
 21. An export is a dataset name the server resolves, never a query the client shapes: the actor, the drive, the department and the columns are all decided server-side, an allowlist bounds every column, and every export is audited. Action-required items are computed from current state and never stored.
 19. Department admin authorization is a live `DepartmentAdmin` row with status ACTIVE in an active department, asked through `requireDepartmentAdmin` or `getActiveDepartmentAdmin` and nowhere else. Disabling an admin takes access away and keeps everything they did. Admins are invited through Clerk — CampusHire never creates, emails or stores a password — and an invitation is accepted only when one was actually issued for that address and department.
 20. A setting exists only if something reads it, and it applies to what happens next: enforcing a placement season refuses new drive dates, it never re-judges drives or applications that already exist. A department's settings are written for the department in the caller's session; the action takes no department from the request.

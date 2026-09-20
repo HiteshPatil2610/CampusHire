@@ -1,7 +1,7 @@
 "use server";
 
 import { getUnreadCount } from "../queries/get-unread-count";
-import { requireAuth } from "@/lib/auth";
+import { AuthenticationError, AuthorizationError, requireAuth } from "@/lib/auth";
 
 /**
  * Server action to fetch unread notification count for authenticated user
@@ -20,11 +20,11 @@ export async function getUnreadCountAction() {
       success: true,
       count,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Failed to fetch unread count:", error);
-    
-    // Handle authorization errors
-    if (error.message?.includes("Unauthorized") || error.message?.includes("signed in")) {
+
+    // Recognised by type rather than by the words in a message.
+    if (error instanceof AuthenticationError || error instanceof AuthorizationError) {
       return {
         success: false,
         error: "You must be signed in to view notifications.",

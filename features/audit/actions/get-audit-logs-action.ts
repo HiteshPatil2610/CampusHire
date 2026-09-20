@@ -2,7 +2,7 @@
 
 import { getAuditLogs } from "../queries/get-audit-logs";
 import { getAuditLogsSchema } from "../schemas/audit";
-import { requireSuperAdmin } from "@/lib/auth";
+import { AuthenticationError, AuthorizationError, requireSuperAdmin } from "@/lib/auth";
 
 /**
  * Server action to fetch audit logs (Super Admin only)
@@ -44,11 +44,13 @@ export async function getAuditLogsAction(input: {
       success: true,
       data: result,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Failed to fetch audit logs:", error);
-    
-    // Handle authorization errors
-    if (error.message?.includes("Unauthorized") || error.message?.includes("Super Admin")) {
+
+    // Recognised by type, not by matching the words in a message: the
+    // previous test looked for "Super Admin" and `requireRole` writes
+    // "SUPER_ADMIN", so a refusal read as an unexplained failure.
+    if (error instanceof AuthorizationError || error instanceof AuthenticationError) {
       return {
         success: false,
         error: "You don't have permission to view audit logs.",

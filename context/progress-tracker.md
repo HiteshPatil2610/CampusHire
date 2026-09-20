@@ -53,11 +53,58 @@ Update this file after every meaningful implementation change.
 ## Current Goal
 
 - All V1 frontend integration units complete ✅
-- ARCH-FIX2 units 1–4, 7, 8 and 9 complete (unit 9 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Units 10–11 in `context/arch-fix/` are not started.
+- ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 946 tests pass, 27 pre-existing failures (the excel-import database-duplicates test also times out intermittently) (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
+- Current baseline: 959 tests pass, 28 pre-existing failures (the excel-import database-duplicates test also times out intermittently) (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
 
 ## Completed
+
+- **Security, authorization, audit and type-safety hardening pass — ARCH-FIX2
+  unit-10 (COMPLETE — no database change):**
+  - **Audited:** every `"use server"` action and query (81 files), all six API
+    routes, the middleware, and every page and layout, for the attack paths
+    the unit names — department A reaching department B's students, drives,
+    applications, placements and notifications; a department admin editing a
+    master drive, a locked published configuration or another department's
+    applicants; a student reaching an unpublished drive, another student's
+    application, a forged eligibility result or a read-only field; a disabled
+    admin reaching anything.
+  - **Held up:** `applyToDrive` (standing, lifecycle, evaluator, deadline,
+    duplicate, declaration and form all re-decided server-side);
+    `saveDriveDepartmentConfig` (department from the session, locked fields and
+    the Super Admin's field permissions enforced against stored state);
+    `moveApplication`, `manage-placement`, `manage-pipeline` (self-approval
+    refused in code and by a CHECK), `getApplicationRecord`,
+    `markNotificationRead` (scoped `updateMany`), `exportDriveDataset`, and
+    every notification path (audience from the evaluator, dedupe keys,
+    dispatch retry).
+  - **Fixed:** `getAvailableUsers` was exported with no authorization at all
+    and called straight from the admin-accounts client component — it is now a
+    `"use server"` action behind `requireSuperAdmin`, validates its input and
+    no longer returns Clerk ids to a browser. `getStudentDetailForAdmin` gave a
+    different error for a student id that does not exist than for one in
+    another department, which let an admin enumerate other departments'
+    rosters; both now read alike. Three actions recognised a refusal by
+    searching the error message for "Unauthorized" or "Super Admin" —
+    `requireRole` writes "SUPER_ADMIN", so the audit-log action's permission
+    branch never fired and a refused admin was told the log had failed to
+    load; all three now test the error's type. Five untyped `where: any`
+    filters and `createAuditLogInTransaction`'s `tx: any` are now Prisma
+    types.
+  - **Tests:** `query-authorization` (8), `audit-log-access` (5).
+    Full suite 959 passed / 28 failed — the same 28 as before this unit
+    (admin-assignment 12, admin-security 3, department-crud 9, excel-import 4,
+    plus notification-authorization and lib/auth failing to load), confirmed
+    by running the excel-import suite against the unmodified tree. `tsc`,
+    lint and `next build` clean.
+  - **Open (reported, not changed):** `broadcastDepartmentNotification` and
+    `removeDepartmentAdmin` are dead code that predates units 7 and 8 and
+    bypasses their architecture; the Super Admin drive list loads one page of
+    100 and filters and re-sorts it in memory, so past 100 central drives it
+    silently truncates; `getDepartmentDriveEligibleStudents` loads a whole
+    department roster uncapped by design; `DriveApplication` would benefit
+    from an `@@index([driveId, appliedAt])` for its hot list query, which
+    needs a migration and has not been applied.
 
 - **Operational dashboards, filters, exports & reminders — ARCH-FIX2 unit-9
   (COMPLETE — no database change):**

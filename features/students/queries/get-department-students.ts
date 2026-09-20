@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 import type { Student, StudentAcademic, Department } from "@prisma/client";
 import {
   ACTIVE_PLACEMENT_WHERE,
@@ -59,31 +60,33 @@ export async function getDepartmentStudents(
   const search = params.search?.trim();
   const status = params.status ?? "all";
 
-  // Build where clause — departmentId is ALWAYS fixed to admin's own dept
-  const where: any = {
+  // Typed, so a filter key that does not exist on Student is a compile error
+  // rather than a clause Postgres ignores. departmentId is ALWAYS fixed to the
+  // admin's own department and is written first so nothing below can reach it.
+  const statusFilter: Prisma.StudentWhereInput =
+    status === "placed"
+      ? PLACED_STUDENT_FILTER
+      : status === "unplaced"
+        ? { ...UNPLACED_STUDENT_FILTER, isPending: false, optedIn: true }
+        : status === "pending"
+          ? { isPending: true }
+          : status === "opted-out"
+            ? { isPending: false, optedIn: false }
+            : {};
+
+  const where: Prisma.StudentWhereInput = {
+    ...statusFilter,
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            { rollNumber: { contains: search, mode: "insensitive" as const } },
+            { email: { contains: search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
     departmentId: department.id, // CRITICAL: never trust client-provided dept
   };
-
-  if (search) {
-    where.OR = [
-      { name: { contains: search, mode: "insensitive" } },
-      { rollNumber: { contains: search, mode: "insensitive" } },
-      { email: { contains: search, mode: "insensitive" } },
-    ];
-  }
-
-  if (status === "placed") {
-    Object.assign(where, PLACED_STUDENT_FILTER);
-  } else if (status === "unplaced") {
-    Object.assign(where, UNPLACED_STUDENT_FILTER);
-    where.isPending = false;
-    where.optedIn = true;
-  } else if (status === "pending") {
-    where.isPending = true;
-  } else if (status === "opted-out") {
-    where.isPending = false;
-    where.optedIn = false;
-  }
 
   // The total and the page are independent queries, so they go out
   // together rather than paying two serial round trips for one screen.

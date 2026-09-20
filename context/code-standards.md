@@ -103,6 +103,15 @@
 - `features/recruitment/` — Pipeline domain, versions, change requests and approval, master pipeline, recruitment counts and panels.
 - `features/admin-accounts/` — Department admin invitations (issued through Clerk, never a password), the invitation record, and enabling, disabling and moving an authorization. Resolve a department admin anywhere else through `getActiveDepartmentAdmin` or `requireDepartmentAdmin`, never by reading the row.
 - `features/notifications/` — In-app notifications: the event registry, the single writer (`lib/notifications.ts`), keyed fan-outs with their delivery record and retry, producers per event, and the role-specific centres. Add a notification by adding an event to the registry and a producer — never by writing a `Notification` row directly.
+**Authorization is written into the function, never inferred from where it is
+called.** An exported server action, and any query a client component imports,
+asks `lib/auth` for the caller before it reads anything. Scope — department,
+student, drive — comes from that answer, never from the request. Where an id
+can be guessed, "not found" and "not yours" return the same message. Catch
+`AuthenticationError`/`AuthorizationError` by type; never match words in an
+error message. Every `where` is a `Prisma.<Model>WhereInput`, and the clause
+carrying the scope is written so no optional filter can overwrite it.
+
 - `features/dashboard/` — The role-specific "action required" items: pure builders plus queries scoped to the viewer's authority. Items are computed on render, never stored.
 - `features/exports/` — Dataset exports resolved server-side (actor, drive, department, columns). Format values only through `lib/csv-format.ts`; never add a second CSV writer.
 - `features/settings/` — The institution's and each department's settings. Add a setting only with the code that reads it; a stored value nothing honours is a lie to whoever sets it.

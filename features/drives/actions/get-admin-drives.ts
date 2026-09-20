@@ -3,6 +3,7 @@
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getDriveStatus } from "../utils/drive-status";
+import { Prisma } from "@prisma/client";
 import type { Drive } from "@prisma/client";
 
 export interface AdminDrivesParams {
@@ -42,25 +43,25 @@ export async function getAdminDrives(
   const status = params.status || "all";
   const search = params.search?.trim();
 
-  // Build where clause
-  const where: any = {
+  // Typed, so a filter key Prisma does not know is a compile error rather than
+  // a clause Postgres ignores. The department is written last and comes from
+  // the session, so no filter above can widen past it.
+  const where: Prisma.DriveWhereInput = {
+    ...(status === "open"
+      ? { applicationDeadline: { gt: new Date() } }
+      : status === "closed"
+        ? { applicationDeadline: { lte: new Date() } }
+        : {}),
+    ...(search
+      ? {
+          OR: [
+            { companyName: { contains: search, mode: "insensitive" as const } },
+            { roleName: { contains: search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
     departmentId: department.id, // Only admin's department
   };
-
-  // Status filter
-  if (status === "open") {
-    where.applicationDeadline = { gt: new Date() };
-  } else if (status === "closed") {
-    where.applicationDeadline = { lte: new Date() };
-  }
-
-  // Search filter
-  if (search) {
-    where.OR = [
-      { companyName: { contains: search, mode: "insensitive" } },
-      { roleName: { contains: search, mode: "insensitive" } },
-    ];
-  }
 
   // The total and the page are independent queries, so they go out
   // together rather than paying two serial round trips for one screen.

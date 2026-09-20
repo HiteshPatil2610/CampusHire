@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 
 /**
@@ -136,7 +137,9 @@ export async function createAuditLog(input: CreateAuditLogInput): Promise<void> 
  * @param userId - User ID (must be provided since we can't call getCurrentUser in transaction)
  */
 export async function createAuditLogInTransaction(
-  tx: any, // Prisma transaction client
+  // The transaction client, typed: an audit row written inside a transaction
+  // goes through the same checked `auditLog.create` as one written outside it.
+  tx: Prisma.TransactionClient,
   input: CreateAuditLogInput,
   userId: string
 ): Promise<void> {

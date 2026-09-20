@@ -2,7 +2,7 @@
 
 import { getNotifications } from "../queries/get-notifications";
 import { getNotificationsSchema } from "../schemas/notification";
-import { requireAuth } from "@/lib/auth";
+import { AuthenticationError, AuthorizationError, requireAuth } from "@/lib/auth";
 
 /**
  * Server action to fetch notifications for authenticated user
@@ -36,11 +36,11 @@ export async function getNotificationsAction(input: {
       success: true,
       data: result,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Failed to fetch notifications:", error);
-    
-    // Handle authorization errors
-    if (error.message?.includes("Unauthorized") || error.message?.includes("signed in")) {
+
+    // Recognised by type rather than by the words in a message.
+    if (error instanceof AuthenticationError || error instanceof AuthorizationError) {
       return {
         success: false,
         error: "You must be signed in to view notifications.",

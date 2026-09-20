@@ -1,5 +1,6 @@
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { getDepartments } from "@/features/departments/queries/get-departments";
 import { SuperAdminStudentsClient } from "./super-admin-students-client";
 import {
@@ -30,38 +31,40 @@ export default async function SuperAdminStudentsPage({
   const status = awaitedParams.status || 'all';
   const search = awaitedParams.search || '';
 
-  // Build query filters
-  const where: any = {};
-
-  if (deptId) {
-    where.departmentId = deptId;
-  }
-
+  // Typed, so a filter key that does not exist on Student is a compile error
+  // rather than a clause Postgres ignores. The Super Admin sees every
+  // department, so `deptId` narrows this listing and can never widen it.
   // Placement is derived from applications, not stored on Student.
-  if (status === 'placed') {
-    Object.assign(where, PLACED_STUDENT_FILTER);
-  } else if (status === 'eligible') {
-    Object.assign(where, UNPLACED_STUDENT_FILTER);
-    where.isPending = false;
-    where.optedIn = true;
-  } else if (status === 'pending') {
-    where.isPending = true;
-  } else if (status === 'opted-out') {
-    where.isPending = false;
-    where.optedIn = false;
-  } else if (status === 'attention') {
-    Object.assign(where, UNPLACED_STUDENT_FILTER);
-    where.optedIn = true;
-    where.academic = { activeBacklogs: { gt: 0 } };
-  }
+  const statusFilter: Prisma.StudentWhereInput =
+    status === 'placed'
+      ? PLACED_STUDENT_FILTER
+      : status === 'eligible'
+        ? { ...UNPLACED_STUDENT_FILTER, isPending: false, optedIn: true }
+        : status === 'pending'
+          ? { isPending: true }
+          : status === 'opted-out'
+            ? { isPending: false, optedIn: false }
+            : status === 'attention'
+              ? {
+                  ...UNPLACED_STUDENT_FILTER,
+                  optedIn: true,
+                  academic: { activeBacklogs: { gt: 0 } },
+                }
+              : {};
 
-  if (search) {
-    where.OR = [
-      { name: { contains: search, mode: 'insensitive' } },
-      { rollNumber: { contains: search, mode: 'insensitive' } },
-      { email: { contains: search, mode: 'insensitive' } },
-    ];
-  }
+  const where: Prisma.StudentWhereInput = {
+    ...statusFilter,
+    ...(deptId ? { departmentId: deptId } : {}),
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' as const } },
+            { rollNumber: { contains: search, mode: 'insensitive' as const } },
+            { email: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : {}),
+  };
 
   const [students, totalCount, departments] = await Promise.all([
     prisma.student.findMany({

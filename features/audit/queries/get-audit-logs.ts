@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import type { GetAuditLogsInput } from "../schemas/audit";
 
 /**
@@ -15,31 +16,22 @@ export async function getAuditLogs(input: GetAuditLogsInput) {
 
   const skip = (page - 1) * pageSize;
 
-  // Build where clause from filters
-  const where: any = {};
-
-  if (action) {
-    where.action = action;
-  }
-
-  if (entityType) {
-    where.entityType = entityType;
-  }
-
-  if (userId) {
-    where.userId = userId;
-  }
-
-  // Date range filter
-  if (startDate || endDate) {
-    where.createdAt = {};
-    if (startDate) {
-      where.createdAt.gte = startDate;
-    }
-    if (endDate) {
-      where.createdAt.lte = endDate;
-    }
-  }
+  // Built as a typed filter, so a misspelled column is a compile error rather
+  // than a clause Postgres quietly ignores — a filter that silently does
+  // nothing is how a scoped query becomes an unscoped one.
+  const where: Prisma.AuditLogWhereInput = {
+    ...(action ? { action } : {}),
+    ...(entityType ? { entityType } : {}),
+    ...(userId ? { userId } : {}),
+    ...(startDate || endDate
+      ? {
+          createdAt: {
+            ...(startDate ? { gte: startDate } : {}),
+            ...(endDate ? { lte: endDate } : {}),
+          },
+        }
+      : {}),
+  };
 
   // The total and the page are independent queries, so they go out
   // together rather than paying two serial round trips for one screen.

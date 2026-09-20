@@ -777,12 +777,10 @@ describe("Admin Assignment Operations", () => {
         },
         take: 10,
         orderBy: { email: "asc" },
+        // Only what the picker shows — the Clerk id stays on the server.
         select: {
           id: true,
           email: true,
-          clerkId: true,
-          role: true,
-          createdAt: true,
         },
       });
     });

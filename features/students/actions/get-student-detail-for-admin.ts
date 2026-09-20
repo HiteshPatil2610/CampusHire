@@ -23,14 +23,10 @@ export async function getStudentDetailForAdmin(studentId: string) {
     select: { departmentId: true },
   });
 
-  if (!student) {
-    throw new Error("Student not found");
-  }
-
-  if (student.departmentId !== department.id) {
-    throw new AuthorizationError(
-      "You do not have permission to view this student's details"
-    );
+  // Not found and not in your department read the same, so an admin cannot
+  // use this to discover which student ids exist in other departments.
+  if (!student || student.departmentId !== department.id) {
+    throw new AuthorizationError("Student not found in your department");
   }
 
   // 3. Return full profile (now safe — ownership verified)
