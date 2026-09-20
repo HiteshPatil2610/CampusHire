@@ -69,8 +69,11 @@ A department can have more than one department admin (e.g. a primary and a backu
 
 ### Super Admin — Institution Oversight
 - Manage departments (add, view student counts, activate/deactivate)
-- Manage department-admin accounts (add, assign to exactly one department, edit). A department may have multiple admins assigned to it (e.g. primary + backup); all admins on a department share identical, undifferentiated access to that department's data — there is no primary/backup permission distinction in the system itself, it's purely an organizational label the college uses.
-- System-wide audit log of imports, drive postings, and admin/department changes
+- Manage department-admin accounts. An admin is **invited by email**, never created here: CampusHire issues no credential and Clerk owns the sign-up and the password. Access is taken away by **disabling**, not deleting — the account, its history and the drives it published all stay, and from that moment every department-scoped path refuses it. An admin belongs to exactly one department and can be moved to another. A department may have multiple admins (e.g. primary + backup); all of them share identical, undifferentiated access to that department's data — there is no primary/backup permission distinction in the system itself, it's purely an organizational label the college uses.
+- **Announcements and notifications.** One notification architecture with a single writer, per-event mutes, and a delivery record the Super Admin can inspect and re-send. Announcements are a first-class entity: a draft notifies nobody, publishing notifies once, archiving expires what it sent. Targeting is decided from the session, never the request.
+- **Institution and department settings** — the placement season, default eligibility bars, the default pipeline — and only settings something actually reads.
+- **Dashboards and exports.** Each role's "action required" list is computed from current state on every render and never stored, so it cannot go stale. A drive's datasets (eligible, applicants, shortlisted, selected, placed and so on) export to CSV with the actor, the drive, the department and the columns all decided server-side.
+- System-wide audit log of imports, drive postings, admin and department changes, exports and bulk operations
 
 ## Scope
 

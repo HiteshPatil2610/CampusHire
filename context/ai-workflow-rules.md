@@ -59,5 +59,7 @@ Update the relevant context file whenever implementation changes:
 1. The current unit works end to end within its defined scope, including the relevant role/department access checks.
 2. No invariant defined in `architecture.md` was violated.
 3. Vitest coverage exists for any new eligibility, validation, or profile-completion logic, and passes.
-4. `progress-tracker.md` reflects the completed work, updated open questions, and next unit.
-5. `npm run build` passes with no TypeScript errors and no console errors in the affected role dashboard(s).
+4. **The whole suite passes — zero failures.** A failing test is either a defect to fix or a test that has outlived its subject and must be rewritten against what the code now does. It is never a number carried forward in a report as a "known baseline"; that is how a real regression hides among stale ones.
+5. No test reaches the real database, the network or a real Clerk instance. `@/lib/prisma` is mocked; a test that needs a request-scoped React API gets it from `vitest.setup.ts`.
+6. `progress-tracker.md` reflects the completed work, updated open questions, and next unit.
+7. `npm run build` passes with no TypeScript errors and no console errors in the affected role dashboard(s).
