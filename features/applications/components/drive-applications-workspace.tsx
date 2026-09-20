@@ -9,6 +9,7 @@ import { STAGE_LABELS, STATUS_LABELS } from "../utils/application-progress";
 import { ApplicationStageControl, type StageOption } from "./application-stage-control";
 import { BulkStageMoveDialog } from "./bulk-stage-move-dialog";
 import { StageHistory } from "./stage-history";
+import { SubmissionRecord } from "./submission-record";
 import { MAX_BULK_MOVES } from "../domain/bulk-limits";
 
 /**
@@ -79,7 +80,13 @@ export function DriveApplicationsWorkspace({
   const router = useRouter();
   const [draft, setDraft] = useState(filters);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // One expanded panel at a time, keyed "<applicationId>:<panel>" so opening
+  // the submission closes the history rather than stacking two rows.
   const [open, setOpen] = useState<string | null>(null);
+  const toggleDetail = (applicationId: string, panel: "history" | "submission") => {
+    const key = `${applicationId}:${panel}`;
+    setOpen((current) => (current === key ? null : key));
+  };
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkStage, setBulkStage] = useState("");
   const [bulkStatus, setBulkStatus] = useState<"IN_PROGRESS" | "REJECTED">("IN_PROGRESS");
@@ -394,23 +401,40 @@ export function DriveApplicationsWorkspace({
                           />
                         )}
                       </td>
-                      <td style={{ textAlign: "right" }}>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         <button
                           type="button"
                           className="btn btn-ghost btn-sm"
                           style={{ fontSize: 11 }}
-                          aria-expanded={open === app.id}
-                          onClick={() => setOpen(open === app.id ? null : app.id)}
+                          aria-expanded={open === `${app.id}:submission`}
+                          onClick={() => toggleDetail(app.id, "submission")}
                         >
-                          {open === app.id ? "Hide history" : "History"}
+                          {open === `${app.id}:submission` ? "Hide" : "Submission"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: 11 }}
+                          aria-expanded={open === `${app.id}:history`}
+                          onClick={() => toggleDetail(app.id, "history")}
+                        >
+                          {open === `${app.id}:history` ? "Hide" : "History"}
                         </button>
                       </td>
                     </tr>
-                    {open === app.id && (
+                    {open === `${app.id}:history` && (
                       <tr>
                         <td />
                         <td colSpan={6} style={{ background: "var(--surface-1)" }}>
                           <StageHistory applicationId={app.id} />
+                        </td>
+                      </tr>
+                    )}
+                    {open === `${app.id}:submission` && (
+                      <tr>
+                        <td />
+                        <td colSpan={6} style={{ background: "var(--surface-1)" }}>
+                          <SubmissionRecord applicationId={app.id} />
                         </td>
                       </tr>
                     )}

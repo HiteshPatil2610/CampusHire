@@ -55,9 +55,55 @@ Update this file after every meaningful implementation change.
 - All V1 frontend integration units complete ✅
 - ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 1034 tests pass, 0 failures (the excel-import database-duplicates test also times out intermittently) (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
+- Current baseline: 1049 tests pass, 0 failures (the excel-import database-duplicates test also times out intermittently) (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
 
 ## Completed
+
+- **Final system verification & compliance audit — ARCH-FIX2 unit-12
+  (COMPLETE — no database change):**
+  - **Architecture: no duplicate systems.** Verified by tracing writers, not by
+    reading names. `DriveApplication` has exactly two writers (one insert in
+    `applyToDrive`, one update in `moveApplication`) and no delete;
+    `StudentPlacement` has three (selection, manual record, conditional
+    revoke) and no delete; the snapshot is written in one nested create;
+    `Notification` has a single writer (`lib/notifications.ts`); eligibility
+    is one pure evaluator behind one facade; CSV is one formatter used by both
+    the browser and server paths. No N+1: the only database call inside a loop
+    is the announcement release, bounded at 10 and needing its own transaction
+    per claim.
+  - **Fixed — a dangerous duplicate authorization helper.** `lib/clerk.ts`
+    exported `hasRole` / `hasAnyRole` / `getCurrentUserRole` that read the
+    role from **Clerk metadata**, shadowing the database-backed helpers of the
+    same name in `lib/auth.ts`. It had no callers, but an import of the wrong
+    one would have trusted a role claim alone — the thing every unit forbids.
+    Deleted.
+  - **Fixed — the submission snapshot was unreachable.** `getApplicationRecord`
+    (authorized, tested, correct) had no caller anywhere: the snapshot was
+    written and protected but no screen could show it, so unit 6's "applications
+    show authorized snapshot information" was unmet and unit 1's snapshot
+    existed only as data. Added `domain/submission-record.ts` (a pure reader)
+    and a "Submission" panel beside the existing "History" one in the
+    department admin's applications table. It shows the answers as the student
+    saw them, which came from the profile rather than being typed, the
+    eligibility criteria **as they stood at submission**, and the declaration
+    and form/rule hashes. 15 tests; 8 of 8 mutations caught.
+  - **Reported, not changed:** 13 further exports have no non-test caller —
+    nine profile actions (add/update/remove × certifications, experience,
+    projects) superseded by the `sync*` actions the UI calls, plus
+    `remindDepartmentsAboutDrive`, `getCentralDriveById`,
+    `getCentralDrivesForDepartment` and `getNotificationsAction`. All are
+    authorized and harmless; they are duplicate write paths and dead reads.
+  - **Type safety:** no `@ts-ignore`, no `@ts-expect-error`. The remaining
+    `as unknown as Record<string, unknown>` casts are the generic
+    column-comparison helpers and are justified; two `any` remain (a Node
+    `Buffer` into `NextResponse`, and `AuditLog.metadata`, which is arbitrary
+    JSON).
+  - **Suite: 1049 passing, 0 failing.** `tsc`, lint (0 errors) and
+    `next build` clean.
+  - **NOT VERIFIED (unchanged):** the three end-to-end browser journeys,
+    including the new Submission panel, which is CODE VERIFIED (compiles, unit
+    tested) but not ACTUALLY EXECUTED — the dashboards need a signed-in account
+    and this environment's Clerk keys do not match its instance.
 
 - **Final production-readiness verification — ARCH-FIX2 unit-11 (COMPLETE —
   no database change):**

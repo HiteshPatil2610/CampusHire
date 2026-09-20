@@ -710,6 +710,22 @@ department admin's own applicant on a drive they run, or a Super Admin.
   cannot be reminded about. It is recorded, retried and audited like any other
   fan-out.
 
+## A submitted application can be read back exactly as it was
+
+The snapshot is not an archive nobody opens. `getApplicationRecord` is the one
+authorized read — the student's own, an applicant from the admin's own
+department on a drive they run, or any for the Super Admin, with not-found and
+not-yours saying the same thing — and `domain/submission-record.ts` turns it
+into what a person sees: the answers under the labels the student was shown,
+which of them came from the profile rather than being typed, and **the
+eligibility criteria as they stood at submission**, never as the drive's rules
+stand today. A drive republished under a different rule set therefore cannot
+rewrite the history of who was eligible under the old one. The document is read
+defensively — it was written by an older version of this code — so a missing
+piece reads as "not recorded" rather than throwing inside a table row, and
+`origin` always says whether it was recorded at submission, reconstructed
+later, or predates snapshots entirely.
+
 ## The Clerk webhook is the one unauthenticated entry point
 
 `/api/webhooks/clerk` is the only route a stranger can POST to, so it refuses
