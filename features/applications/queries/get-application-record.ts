@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { AuthorizationError, requireAuth } from "@/lib/auth";
+import { AuthorizationError, requireAuth, getActiveDepartmentAdmin } from "@/lib/auth";
 import {
   readApplicationRecord,
   type ApplicationRecord,
@@ -50,10 +50,7 @@ export async function getApplicationRecord(
   if (user.role === "STUDENT") {
     if (application.student.userId !== user.id) throw denied;
   } else if (user.role === "DEPT_ADMIN") {
-    const admin = await prisma.departmentAdmin.findUnique({
-      where: { userId: user.id },
-      select: { departmentId: true },
-    });
+    const admin = await getActiveDepartmentAdmin(user.id);
     const departmentId = admin?.departmentId;
     const runsDrive =
       application.drive.departmentId === departmentId ||

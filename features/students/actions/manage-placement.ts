@@ -10,6 +10,7 @@ import {
   AuthorizationError,
   requireAnyRole,
   requireDepartmentAdmin,
+  getActiveDepartmentAdmin,
 } from "@/lib/auth";
 import {
   createAuditLogInTransaction,
@@ -155,10 +156,7 @@ export async function revokePlacement(
     if (!placement) return denied;
 
     if (user.role === "DEPT_ADMIN") {
-      const admin = await prisma.departmentAdmin.findUnique({
-        where: { userId: user.id },
-        select: { departmentId: true },
-      });
+      const admin = await getActiveDepartmentAdmin(user.id);
       if (!admin || admin.departmentId !== placement.student.departmentId) return denied;
     }
 

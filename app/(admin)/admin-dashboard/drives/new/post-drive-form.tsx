@@ -22,6 +22,16 @@ interface Department {
   code: string;
 }
 
+/** The department's saved defaults, prefilled into a drive that does not exist yet. */
+export interface DriveLogisticsDefaults {
+  venue: string | null;
+  reportingTime: string | null;
+  coordinatorName: string | null;
+  coordinatorPhone: string | null;
+  coordinatorEmail: string | null;
+  instructions: string | null;
+}
+
 interface PostDriveFormProps {
   departmentId: string;
   departmentName: string;
@@ -29,6 +39,7 @@ interface PostDriveFormProps {
   allDepartments: Department[];
   /** Batch years this department's students have. */
   batchYears: DepartmentBatchYear[];
+  defaults?: DriveLogisticsDefaults;
 }
 
 export function PostDriveForm({
@@ -37,6 +48,7 @@ export function PostDriveForm({
   departmentCode,
   allDepartments,
   batchYears,
+  defaults,
 }: PostDriveFormProps) {
   const router = useRouter();
   const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
@@ -58,10 +70,12 @@ export function PostDriveForm({
     applyMethod: "IN_APP" as "IN_APP" | "EXTERNAL",
     externalApplyUrl: "",
     selectionRounds: ["Aptitude Test", "Technical Interview", "HR Interview"],
-    venue: "",
-    reportingTime: "",
-    contactPerson: "",
-    contactPhone: "",
+    // Prefilled from the department's settings; every one of them can be
+    // typed over before the drive is posted.
+    venue: defaults?.venue ?? "",
+    reportingTime: defaults?.reportingTime ?? "",
+    contactPerson: defaults?.coordinatorName ?? "",
+    contactPhone: defaults?.coordinatorPhone ?? "",
     pptLink: "",
   });
 

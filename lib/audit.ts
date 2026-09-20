@@ -41,6 +41,10 @@ export const AuditAction = {
   NOTIFY_FAILED: "NOTIFY_FAILED",
   RETRY: "RETRY",
   REMIND: "REMIND",
+  INVITE: "INVITE",
+  RESEND: "RESEND",
+  DISABLE: "DISABLE",
+  REACTIVATE: "REACTIVATE",
 } as const;
 
 /**
@@ -60,6 +64,9 @@ export const AuditEntityType = {
   BULK_IMPORT: "BulkImport",
   ANNOUNCEMENT: "Announcement",
   NOTIFICATION_DISPATCH: "NotificationDispatch",
+  ADMIN_INVITATION: "AdminInvitation",
+  INSTITUTION_SETTINGS: "InstitutionSettings",
+  DEPARTMENT_SETTINGS: "DepartmentSettings",
 } as const;
 
 /**

@@ -1,6 +1,7 @@
 import type { Role, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deliverNotification } from "@/lib/notifications";
+import { getActiveDepartmentAdmin } from "@/lib/auth";
 import { getDriveStatus } from "@/features/drives/utils/drive-status";
 import { releaseDueAnnouncements } from "@/features/announcements/domain/release-due";
 import { recordDepartmentAdminFirstSeen } from "../producers/workflow-events";
@@ -117,10 +118,7 @@ async function remindStudentOfClosingDrives(userId: string): Promise<void> {
 
 /** A department admin is reminded that one of their drives closes within a day. */
 async function remindAdminOfClosingDrives(userId: string): Promise<void> {
-  const admin = await prisma.departmentAdmin.findUnique({
-    where: { userId },
-    select: { departmentId: true },
-  });
+  const admin = await getActiveDepartmentAdmin(userId);
   if (!admin) return;
 
   const now = new Date();

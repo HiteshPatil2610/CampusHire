@@ -118,6 +118,71 @@ export default function SettingsClient({
 
         <div className="card">
           <h3 className="section-title" style={{ fontSize: 16, marginBottom: 6 }}>
+            Account
+          </h3>
+          <p className="text-secondary" style={{ fontSize: 12, marginBottom: 12 }}>
+            Your name, roll number and academic record belong to your profile;
+            your email and password are held by the sign-in provider.
+          </p>
+          <div className="pref-row">
+            <div style={{ fontSize: 13 }}>Profile, academics, documents</div>
+            <Link href="/student-dashboard/profile" className="btn btn-outline btn-sm">
+              Edit profile →
+            </Link>
+          </div>
+          <div className="pref-row" style={{ borderBottom: 'none' }}>
+            <div style={{ fontSize: 13 }}>Email and password</div>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => openUserProfile()}
+            >
+              Manage account →
+            </button>
+          </div>
+          <p className="text-muted" style={{ fontSize: 11, marginTop: 10 }}>
+            Your roll number is set by the registrar. You can fill it in once,
+            but not change it afterwards.
+          </p>
+        </div>
+
+        <div className="card">
+          <h3 className="section-title" style={{ fontSize: 16, marginBottom: 6 }}>
+            Privacy
+          </h3>
+          <p className="text-secondary" style={{ fontSize: 12, marginBottom: 12 }}>
+            Who can see your record, and why. None of this is a switch —
+            saying otherwise would not be true.
+          </p>
+          <ul
+            className="text-secondary"
+            style={{ fontSize: 12, lineHeight: 1.7, paddingLeft: 18, margin: 0 }}
+          >
+            <li>
+              Your department&apos;s admins see your profile, your eligibility
+              and your applications — that is how they run your drives.
+            </li>
+            <li>
+              The placement office sees the same across every department.
+            </li>
+            <li>
+              Other students never see your profile, your applications or your
+              results.
+            </li>
+            <li>
+              When you apply, the details on the form at that moment are saved
+              with the application and cannot be edited afterwards, by you or
+              by an admin.
+            </li>
+            <li>
+              Opting out of placement stops new drives from reaching you; it
+              does not delete anything you have already submitted.
+            </li>
+          </ul>
+        </div>
+
+        <div className="card">
+          <h3 className="section-title" style={{ fontSize: 16, marginBottom: 6 }}>
             Password & Security
           </h3>
           <p className="text-secondary" style={{ fontSize: 12, marginBottom: 16 }}>

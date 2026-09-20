@@ -1,5 +1,6 @@
 import type { Prisma, Role, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getActiveDepartmentAdmin } from "@/lib/auth";
 import {
   announcementReaches,
   canManageAnnouncement,
@@ -70,10 +71,7 @@ export async function announcementViewerFor(user: User): Promise<AnnouncementVie
     };
   }
   if (user.role === "DEPT_ADMIN") {
-    const admin = await prisma.departmentAdmin.findUnique({
-      where: { userId: user.id },
-      select: { departmentId: true },
-    });
+    const admin = await getActiveDepartmentAdmin(user.id);
     return { role: "DEPT_ADMIN", departmentId: admin?.departmentId ?? null, batchYear: null };
   }
   return { role: "SUPER_ADMIN", departmentId: null, batchYear: null };

@@ -191,7 +191,9 @@ export async function departmentAdminRecipients(
   exceptUserId?: string
 ): Promise<NotificationRecipient[]> {
   const admins = await prisma.departmentAdmin.findMany({
-    where: { departmentId, ...(exceptUserId ? { userId: { not: exceptUserId } } : {}) },
+    // A disabled admin no longer runs the department, so they are not told
+    // about its work either.
+    where: { departmentId, status: "ACTIVE", ...(exceptUserId ? { userId: { not: exceptUserId } } : {}) },
     select: { userId: true },
   });
   return admins.map((admin) => ({ userId: admin.userId }));

@@ -1,13 +1,18 @@
 import { requireSuperAdmin } from "@/lib/auth";
-import { getDepartmentAdmins } from "@/features/admin-accounts/queries/get-department-admins";
+import { getAdminAccounts } from "@/features/admin-accounts/queries/get-admin-accounts";
 import { getDepartments } from "@/features/departments/queries/get-departments";
 import { AdminAccountsClient } from "./admin-accounts-client";
 
+export const dynamic = "force-dynamic";
+
 interface SearchParams {
-  page?: string;
   departmentId?: string;
 }
 
+/**
+ * Who can administer a department — the people who do, and the invitations
+ * nobody has accepted yet.
+ */
 export default async function AdminAccountsPage({
   searchParams,
 }: {
@@ -15,35 +20,34 @@ export default async function AdminAccountsPage({
 }) {
   await requireSuperAdmin();
 
-  const awaitedParams = await searchParams;
-  const page = Number(awaitedParams.page) || 1;
-  const departmentId = awaitedParams.departmentId || undefined;
+  const { departmentId } = await searchParams;
 
-  const [adminsResult, departmentsResult] = await Promise.all([
-    getDepartmentAdmins({
-      page,
-      pageSize: 25,
-      departmentId,
-    }),
-    getDepartments({
-      page: 1,
-      pageSize: 100,
-      includeInactive: false,
-    }),
+  const [accounts, departmentsResult] = await Promise.all([
+    getAdminAccounts({ departmentId }),
+    getDepartments({ page: 1, pageSize: 100, includeInactive: false }),
   ]);
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h1 className="page-title">Admin Accounts</h1>
+      <div style={{ marginBottom: 20 }}>
+        <h1 className="page-title" style={{ margin: 0 }}>
+          Admin Accounts
+        </h1>
+        <p className="text-secondary" style={{ fontSize: 13, margin: "4px 0 0" }}>
+          Invite a department admin and they set their own password with the
+          sign-in provider — CampusHire never creates or sends one. Disabling
+          takes away access while keeping everything they did.
+        </p>
       </div>
 
       <AdminAccountsClient
-        admins={adminsResult.data}
-        page={adminsResult.page}
-        pageSize={adminsResult.pageSize}
-        totalCount={adminsResult.totalCount}
-        departments={departmentsResult.data}
+        rows={accounts.rows}
+        counts={accounts.counts}
+        departments={departmentsResult.data.map((department) => ({
+          id: department.id,
+          name: department.name,
+          code: department.code,
+        }))}
         selectedDepartmentId={departmentId}
       />
     </div>

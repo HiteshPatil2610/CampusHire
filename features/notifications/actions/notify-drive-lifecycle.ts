@@ -88,7 +88,7 @@ export async function fanOutDriveCancelled(
   let admins = { delivered: 0 };
   if (payload.notifyDepartmentAdmins) {
     const rows = await prisma.departmentAdmin.findMany({
-      where: { departmentId: { in: payload.departmentIds } },
+      where: { departmentId: { in: payload.departmentIds }, status: "ACTIVE" },
       select: { userId: true },
     });
     admins = await deliverNotification(prisma, {
@@ -178,7 +178,7 @@ export async function fanOutDeadlineExtended(
   });
 
   const adminRows = await prisma.departmentAdmin.findMany({
-    where: { departmentId: payload.departmentId },
+    where: { departmentId: payload.departmentId, status: "ACTIVE" },
     select: { userId: true },
   });
   const admins = await deliverNotification(prisma, {

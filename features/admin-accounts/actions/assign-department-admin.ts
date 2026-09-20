@@ -130,6 +130,9 @@ export async function assignDepartmentAdmin(input: AssignDepartmentAdminInput) {
         data: {
           userId: validated.userId,
           departmentId: validated.departmentId,
+          // Already a user of CampusHire, so they have arrived already: their
+          // next sign-in is not an invitation being accepted.
+          firstSeenAt: new Date(),
         },
         include: {
           user: {

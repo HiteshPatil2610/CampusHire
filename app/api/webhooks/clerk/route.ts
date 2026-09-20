@@ -2,6 +2,7 @@ import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { WebhookEvent } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import { applyAdminInvitation } from "@/features/admin-accounts/domain/accept-invitation";
 import { clerkClient } from "@clerk/nextjs/server";
 
 /**
@@ -130,6 +131,24 @@ async function handleUserCreated(evt: WebhookEvent) {
       role: "STUDENT", // Default role for self-registration
     },
   });
+
+  // Someone signing up from a department admin invitation: the role and the
+  // department come from the invitation the Super Admin issued, matched
+  // against an open invitation for this address. Everyone else stays a
+  // student. Idempotent, and never trusted from the email alone.
+  try {
+    const accepted = await applyAdminInvitation({
+      userId: user.id,
+      email,
+      metadata: evt.data.public_metadata as Record<string, unknown> | undefined,
+    });
+    if (accepted.applied) {
+      user.role = "DEPT_ADMIN";
+      console.log(`Admin invitation accepted by ${email}`);
+    }
+  } catch (error) {
+    console.error("Applying the admin invitation failed:", error);
+  }
 
   console.log(`User created/updated in database:`, {
     id: user.id,

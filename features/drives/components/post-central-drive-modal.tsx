@@ -33,6 +33,8 @@ interface PostCentralDriveModalProps {
   /** Active departments the drive can be assigned to — none are preselected. */
   departments: { id: string; name: string; code: string }[];
   onCreated: (driveId: string) => void;
+  /** The institution's saved defaults, prefilled into a drive that does not exist yet. */
+  defaults?: { minCGPA: number | null; stages: StageDraft[] };
 }
 
 /**
@@ -118,17 +120,23 @@ export function PostCentralDriveModal({
   onOpenChange,
   departments,
   onCreated,
+  defaults,
 }: PostCentralDriveModalProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(() => ({
+    ...EMPTY_FORM,
+    minCGPA: defaults?.minCGPA !== null && defaults?.minCGPA !== undefined ? String(defaults.minCGPA) : "",
+  }));
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const restored = useRef(false);
   const [step, setStep] = useState(0);
   // Locked unless opened: a department may override only what is ticked here.
   const [editable, setEditable] = useState<DepartmentEditableField[]>([]);
-  const [stages, setStages] = useState<StageDraft[]>(DEFAULT_STAGES);
+  const [stages, setStages] = useState<StageDraft[]>(
+    () => defaults?.stages ?? DEFAULT_STAGES()
+  );
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
 
   const pipelineCheck = validatePipelineStages(fromStageDrafts(stages));

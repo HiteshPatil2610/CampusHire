@@ -671,6 +671,66 @@ placement, batch). It never reconstructs those from today's data.
 columns (`origin: LEGACY_COLUMNS`), and is scoped: the student's own, a
 department admin's own applicant on a drive they run, or a Super Admin.
 
+## Department admins are invited, not created
+
+CampusHire issues no credential. A Super Admin invites an email address; the
+invitation goes out through Clerk, which owns the sign-up and the password.
+No password is generated, emailed or stored, and there is no second identity
+system — the previous flow, which created a Clerk account with a placeholder
+password and told the admin to use "forgot password", is gone.
+
+- **The invitation is a record.** `AdminInvitation` holds who was invited, by
+  whom, to which department, when, how often it was resent, and what became of
+  it (INVITED → ACCEPTED or REVOKED). Resending revokes the old Clerk
+  invitation first, so only one link is ever live, and a partial unique index
+  allows one INVITED row per address.
+- **Acceptance is trusted on the invitation, not the email.** The role and
+  department travel in the Clerk invitation's public metadata; on sign-up
+  (`applyAdminInvitation`, called by the webhook and by `getOrCreateUser`,
+  whichever arrives first) they are matched against an open invitation *for
+  that address and that department*. Metadata alone promotes nobody. The
+  status change is a compare-and-set, so both callers can run and only one
+  applies.
+- **Conflicts are named, never overwritten.** Every way an address can already
+  be known — a waiting invitation, an active or disabled admin, a Super Admin,
+  a student, any existing user, a Clerk account CampusHire has never seen —
+  has one answer in `invitation-conflicts.ts`, and each says which action
+  would be right instead (resend, reactivate, or assign the existing account).
+- **Disabling replaces deletion.** `DepartmentAdmin.status` is the
+  authorization. Disabling keeps the row, the drives they published, the
+  applications they moved and every audit entry naming them; what stops is
+  access. `getActiveDepartmentAdmin` and `requireDepartmentAdmin` are the two
+  places that answer "does this person run a department", so a disabled admin
+  is refused everywhere at once — and they stop being a recipient of that
+  department's notifications too. Reactivation restores the role if it was
+  changed while they were out. Moving an admin to another department leaves
+  what they did in the old one exactly where it is.
+- **Audited:** invited, resent, revoked, accepted, disabled, reactivated,
+  department changed.
+
+## Settings are only what the app honours
+
+A stored setting nothing reads is worse than no setting: it tells an
+administrator something is in force when it is not. Every field in
+`InstitutionSettings` and `DepartmentSettings` names its reader.
+
+- **Institution (Super Admin):** the institution's name; the placement season,
+  which — when `enforceSeasonWindow` is on — refuses a drive *date* outside it
+  as the drive is created (never retroactively, so drives and applications
+  that exist are untouched); the default CGPA and backlog bar and the default
+  recruitment stages, which prefill a new drive and are judged by the same
+  validators a real drive's are. One row, enforced by a CHECK.
+- **Department (its own admins):** venue, reporting time, coordinator, contact
+  and instructions, prefilled into a drive that is not yet published, and a
+  default batch year for adding students. The department comes from the
+  session — the action's input has no department field at all — so there is no
+  request that writes another department's settings, and defaults never
+  override a field the Super Admin locked, never touch a published drive and
+  never bypass the lifecycle.
+- **Identity and passwords are Clerk's.** Every settings screen says so and
+  links there. CampusHire has no password setting of its own.
+- Sensitive changes are audited; display preferences are not.
+
 ## Notifications and announcements
 
 One `Notification` table serves all three roles; what differs is the event,
@@ -825,6 +885,8 @@ is worth more than any query-level optimisation in this file.
 15. Being promoted to an admin role ends an account's student-ness in the same transaction as the promotion: its `Student` row is retired and any *pending* `StudentAccessRequest` is deleted, so a promoted account leaves the waiting list and gets its new role's access immediately (`retireStudentAccess`). The pending request is deleted rather than given a terminal status — `REJECTED` would permanently block re-registration if the account is later demoted back to `STUDENT`, and `APPROVED` would claim a `Student` row was created when none was. Approval is independently refused for any applicant who is no longer a `STUDENT`, so a stale queue open in another tab cannot put an admin back in the roster. A student record carrying `DriveApplication` history is never silently deleted: it refuses, and the refusal aborts the promotion.
 13. `Student.rollNumber` is nullable but not optional: a lateral-entry student may register before one is issued, and `applyToDrive` refuses any application without one. It is registrar-owned once set — the student's profile can fill a blank, never overwrite an existing value.
 14. Anything that can be computed is computed, not stored. `getDriveStatus()` derives open/closed from a deadline and `placement-status.ts` derives placement from active placement records. A stored equivalent has to be set correctly at every write site, and the first caller that forgets produces a silently wrong value — which is exactly how `placementStatus` came to read zero everywhere. A notification's category and priority *are* stored, but no caller chooses them: one writer sets them from the event registry, which is the same "one place decides" guarantee by another route.
+19. Department admin authorization is a live `DepartmentAdmin` row with status ACTIVE in an active department, asked through `requireDepartmentAdmin` or `getActiveDepartmentAdmin` and nowhere else. Disabling an admin takes access away and keeps everything they did. Admins are invited through Clerk — CampusHire never creates, emails or stores a password — and an invitation is accepted only when one was actually issued for that address and department.
+20. A setting exists only if something reads it, and it applies to what happens next: enforcing a placement season refuses new drive dates, it never re-judges drives or applications that already exist. A department's settings are written for the department in the caller's session; the action takes no department from the request.
 18. A notification is written by exactly one function, for a recipient whose role the event is defined for, under a dedupe key that makes the same event a no-op the second time. Students are told about a drive only where it is published and only if the shared evaluator finds them eligible; a department admin's announcement reaches their own department's students and nobody else, with the scope taken from their session. An announcement is the record and its notifications only point at it.
 17. Eligibility is decided in one place (the evaluator). Screens that list students for a drive show what `getDriveStudents` returns and never re-derive it. An application moves only through `moveApplication`, and a placement is confirmed by a person before it is created; a bulk move never selects.
 16. A department admin may override a master content field only if the Super Admin opened it (`Drive.departmentEditableFields`), checked in `saveDriveDepartmentConfig` against the stored list — never against what the form shows. A department drive is published only when `departmentDriveReadiness` says it is ready, computed on the server from the stored configuration. A drive is never deleted to stop it: it is CANCELLED, with who, when and why recorded, and its applications and snapshots are kept.

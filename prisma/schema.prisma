@@ -184,6 +184,12 @@ model User {
   cancelledDrives         Drive[]                      @relation("DriveCancelledBy")
   cancelledDeptDrives     DriveDepartmentConfig[]      @relation("DepartmentDriveCancelledBy")
   notificationPreference  NotificationPreference?
+  adminInvitationsSent    AdminInvitation[]            @relation("InvitationInvitedBy")
+  adminInvitationAccepted AdminInvitation[]            @relation("InvitationAcceptedBy")
+  adminInvitationsRevoked AdminInvitation[]            @relation("InvitationRevokedBy")
+  adminsDisabled          DepartmentAdmin[]            @relation("AdminDisabledBy")
+  institutionSettings     InstitutionSettings[]        @relation("InstitutionSettingsUpdatedBy")
+  departmentSettings      DepartmentSettings[]         @relation("DepartmentSettingsUpdatedBy")
   notificationDispatches  NotificationDispatch[]       @relation("DispatchTriggeredBy")
   announcements           Announcement[]               @relation("AnnouncementAuthor")
   archivedAnnouncements   Announcement[]               @relation("AnnouncementArchivedBy")
@@ -206,25 +212,88 @@ model Department {
   accessRequests        StudentAccessRequest[]
   eligibleForDriveLinks DriveEligibleDepartment[]
   announcements         Announcement[]
+  adminInvitations      AdminInvitation[]
+  settings              DepartmentSettings?
 }
 
 // Department Admin model - links DEPT_ADMIN users to departments
 model DepartmentAdmin {
-  id           String    @id @default(cuid())
-  userId       String    @unique
-  departmentId String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String                @id @default(cuid())
+  userId        String                @unique
+  departmentId  String
+  // Whether this authorization is live. A disabled admin keeps their account,
+  // their history and their audit trail, but `requireDepartmentAdmin` refuses
+  // them, so every department-scoped action refuses them too.
+  status        DepartmentAdminStatus @default(ACTIVE)
+  disabledAt    DateTime?
+  disabledById  String?
+  disableReason String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
   // When the admin first opened CampusHire after being made an admin - the
   // moment an invitation counts as accepted. Existing admins were backfilled
   // with createdAt, so only admins invited from now on produce the event.
-  firstSeenAt  DateTime?
+  firstSeenAt   DateTime?
 
   // Relations
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  disabledBy User?      @relation("AdminDisabledBy", fields: [disabledById], references: [id], onDelete: SetNull)
 
   @@index([departmentId])
+  @@index([status])
+}
+
+// Whether a department admin's authorization is live.
+enum DepartmentAdminStatus {
+  ACTIVE
+  DISABLED
+}
+
+// How far an invitation has got.
+enum AdminInvitationStatus {
+  // Sent through Clerk; the person has not signed up yet.
+  INVITED
+  // They signed up: a User and a DepartmentAdmin now exist.
+  ACCEPTED
+  // Withdrawn by a Super Admin before it was used.
+  REVOKED
+}
+
+// An invitation to become a department admin.
+//
+// CampusHire never creates credentials: the invitation is issued through
+// Clerk, which emails it and owns the sign-up. This row is the institution's
+// record of who was invited, by whom, to which department, and what became of
+// it. The department and role travel in the Clerk invitation's public
+// metadata, so acceptance can be trusted without believing an email address.
+model AdminInvitation {
+  id                String                @id @default(cuid())
+  email             String
+  name              String
+  departmentId      String
+  status            AdminInvitationStatus @default(INVITED)
+  // The invitation in Clerk, so it can be revoked or replaced there.
+  clerkInvitationId String?               @unique
+  invitedById       String
+  invitedAt         DateTime              @default(now())
+  resentAt          DateTime?
+  resendCount       Int                   @default(0)
+  acceptedAt        DateTime?
+  acceptedByUserId  String?
+  revokedAt         DateTime?
+  revokedById       String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  department     Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  invitedBy      User       @relation("InvitationInvitedBy", fields: [invitedById], references: [id], onDelete: Restrict)
+  acceptedByUser User?      @relation("InvitationAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  revokedBy      User?      @relation("InvitationRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([status, invitedAt])
+  @@index([departmentId])
+  @@index([email])
 }
 
 // ============================================================================
@@ -1204,6 +1273,64 @@ model ApplicationStageEvent {
   actor           User?                      @relation("StageEventActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([applicationId])
+}
+
+// ============================================================================
+// 12 — SETTINGS
+// ============================================================================
+
+// The institution's own configuration: one row, held by the Super Admin.
+//
+// Only settings the application actually honours live here — a stored value
+// nothing reads is worse than no setting at all, because it tells a Super
+// Admin something is in force when it is not. Each field below names what
+// reads it.
+model InstitutionSettings {
+  // One row. The singleton id makes a second one impossible.
+  id                    String    @id @default("institution")
+  // Shown wherever the placement office is named to students and admins.
+  institutionName       String    @default("CampusHire")
+  // The placement year. When `enforceSeasonWindow` is on, a drive date
+  // outside it is refused at creation (never retroactively).
+  seasonStart           DateTime?
+  seasonEnd             DateTime?
+  enforceSeasonWindow   Boolean   @default(false)
+  // Prefilled into a new drive's eligibility, and used as the default when a
+  // drive sets no bar of its own. Defaults only: a drive's own rules win.
+  defaultMinCGPA        Float?
+  defaultMaxBacklogs    Int?
+  // The stages a new master drive starts with (JSON array, as every JSON
+  // column here). A drive's own pipeline, once created, is independent.
+  defaultPipelineStages String?   @db.Text
+  updatedById           String?
+  updatedAt             DateTime  @updatedAt
+
+  updatedBy User? @relation("InstitutionSettingsUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+// One department's own defaults, set by its admins.
+//
+// Defaults only. They are read when a form is first opened for a drive that
+// is not yet published; they never change a published drive, never bypass the
+// Super Admin's field permissions, and never reach another department — the
+// department comes from the session on every read and write.
+model DepartmentSettings {
+  departmentId         String   @id
+  // Drive logistics defaults (DriveDepartmentConfig.venue, reportingTime,
+  // coordinatorName, coordinatorPhone, coordinatorEmail, specialInstructions).
+  defaultVenue         String?
+  defaultReportingTime String?
+  coordinatorName      String?
+  coordinatorPhone     String?
+  coordinatorEmail     String?
+  defaultInstructions  String?  @db.Text
+  // Student management: prefilled when a student is added by hand or imported.
+  defaultBatchYear     Int?
+  updatedById          String?
+  updatedAt            DateTime @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  updatedBy  User?      @relation("DepartmentSettingsUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 }
 
 // A department admin's proposed change to a published drive's pipeline,

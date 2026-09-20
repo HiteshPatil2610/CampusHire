@@ -96,7 +96,10 @@ export async function fanOutAnnouncement(
 
   if (announcement.audience === "ADMINS" || announcement.audience === "EVERYONE") {
     const admins = await prisma.departmentAdmin.findMany({
-      where: announcement.departmentId ? { departmentId: announcement.departmentId } : {},
+      where: {
+        status: "ACTIVE",
+        ...(announcement.departmentId ? { departmentId: announcement.departmentId } : {}),
+      },
       select: { userId: true },
     });
     const result = await deliverNotification(prisma, {

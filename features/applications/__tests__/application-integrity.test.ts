@@ -35,6 +35,7 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/auth", () => ({
   requireStudent: vi.fn(),
   requireAuth: vi.fn(),
+  getActiveDepartmentAdmin: vi.fn(),
   AuthorizationError: class AuthorizationError extends Error {},
 }));
 
@@ -69,7 +70,7 @@ import { ACTIVE_PIPELINE, withActivePipeline } from "@/features/recruitment/__te
 
 // Every department drive here already has an active recruitment pipeline.
 beforeEach(() => withActivePipeline(prisma));
-import { requireStudent, requireAuth } from "@/lib/auth";
+import { requireStudent, requireAuth, getActiveDepartmentAdmin } from "@/lib/auth";
 import { createAuditLogInTransaction } from "@/lib/audit";
 import { notifyApplicationSubmitted } from "@/features/notifications/producers/application-events";
 import { checkApplicationExists } from "../queries/check-application-exists";
@@ -630,13 +631,13 @@ describe("getApplicationRecord — authorization", () => {
 
   it("gives a department admin their own department's applicant", async () => {
     vi.mocked(requireAuth).mockResolvedValue({ id: "admin-cse", role: "DEPT_ADMIN" } as never);
-    vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValue({ departmentId: CSE } as never);
+    vi.mocked(getActiveDepartmentAdmin).mockResolvedValue({ departmentId: CSE } as never);
     await expect(getApplicationRecord("app-1")).resolves.toBeTruthy();
   });
 
   it("refuses another department's admin", async () => {
     vi.mocked(requireAuth).mockResolvedValue({ id: "admin-ece", role: "DEPT_ADMIN" } as never);
-    vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValue({ departmentId: ECE } as never);
+    vi.mocked(getActiveDepartmentAdmin).mockResolvedValue({ departmentId: ECE } as never);
     await expect(getApplicationRecord("app-1")).rejects.toThrow();
   });
 

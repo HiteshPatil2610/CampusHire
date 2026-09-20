@@ -217,7 +217,10 @@ export async function notifyMasterDriveUpdated(params: {
     if (!drive || drive.departmentConfigs.length === 0) return;
 
     const admins = await prisma.departmentAdmin.findMany({
-      where: { departmentId: { in: drive.departmentConfigs.map((config) => config.departmentId) } },
+      where: {
+        departmentId: { in: drive.departmentConfigs.map((config) => config.departmentId) },
+        status: "ACTIVE",
+      },
       select: { userId: true },
     });
     const { key } = startOfIndianDay();
@@ -417,13 +420,13 @@ export async function notifyAdminInvited(params: {
 export async function recordDepartmentAdminFirstSeen(userId: string): Promise<void> {
   try {
     const claimed = await prisma.departmentAdmin.updateMany({
-      where: { userId, firstSeenAt: null },
+      where: { userId, firstSeenAt: null, status: "ACTIVE" },
       data: { firstSeenAt: new Date() },
     });
     if (claimed.count === 0) return;
 
-    const admin = await prisma.departmentAdmin.findUnique({
-      where: { userId },
+    const admin = await prisma.departmentAdmin.findFirst({
+      where: { userId, status: "ACTIVE" },
       select: { user: { select: { name: true, email: true } }, department: { select: { name: true } } },
     });
     if (!admin) return;

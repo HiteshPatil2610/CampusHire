@@ -13,6 +13,11 @@ const envSchema = z.object({
   NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: z.string().default("/"),
   NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: z.string().default("/"),
 
+  // Where the app is reachable, for links CampusHire asks Clerk to send
+  // (an admin invitation). Optional: without it Clerk uses its own default
+  // redirect, which still works.
+  NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+
   // Vercel Blob Storage
   BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(), // Optional for local dev without Blob
 

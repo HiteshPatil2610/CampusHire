@@ -127,6 +127,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
           icon: Bell,
           badge: true,
         },
+        { label: 'Settings', href: '/admin-dashboard/settings', icon: Settings },
       ],
     },
   ],

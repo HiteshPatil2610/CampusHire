@@ -340,6 +340,10 @@ describe('Department Scope Authorization', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         firstSeenAt: null,
+        status: "ACTIVE" as const,
+        disabledAt: null,
+        disabledById: null,
+        disableReason: null,
       };
 
       vi.mocked(auth).mockResolvedValue({ userId: 'clerk_user_123' } as any);
@@ -368,6 +372,10 @@ describe('Department Scope Authorization', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         firstSeenAt: null,
+        status: "ACTIVE" as const,
+        disabledAt: null,
+        disabledById: null,
+        disableReason: null,
       };
 
       vi.mocked(auth).mockResolvedValue({ userId: 'clerk_user_123' } as any);
@@ -510,6 +518,10 @@ describe('Department Scope Authorization', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         firstSeenAt: null,
+        status: "ACTIVE" as const,
+        disabledAt: null,
+        disabledById: null,
+        disableReason: null,
       };
 
       vi.mocked(auth).mockResolvedValue({ userId: 'clerk_user_123' } as any);

@@ -50,6 +50,7 @@ vi.mock("@/lib/auth", () => ({
   requireStudent: vi.fn(),
   requireDepartmentAdmin: vi.fn(),
   requireAnyRole: vi.fn(),
+  getActiveDepartmentAdmin: vi.fn(),
   AuthorizationError: class AuthorizationError extends Error {},
 }));
 
@@ -81,7 +82,12 @@ import { withActivePipeline } from "@/features/recruitment/__tests__/pipeline-fi
 
 // Every department drive here already has an active recruitment pipeline.
 beforeEach(() => withActivePipeline(prisma));
-import { requireStudent, requireDepartmentAdmin, requireAnyRole } from "@/lib/auth";
+import {
+  requireStudent,
+  requireDepartmentAdmin,
+  requireAnyRole,
+  getActiveDepartmentAdmin,
+} from "@/lib/auth";
 import {
   evaluateEligibility,
   STANDING_REASONS,
@@ -531,7 +537,7 @@ describe("revoking a placement", () => {
 
   it("lets the student's department admin revoke it, keeping the record", async () => {
     vi.mocked(requireAnyRole).mockResolvedValue({ id: "admin-cse", role: "DEPT_ADMIN" } as never);
-    vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValue({ departmentId: CSE } as never);
+    vi.mocked(getActiveDepartmentAdmin).mockResolvedValue({ departmentId: CSE } as never);
 
     const result = await revokePlacement({ placementId: "plc-1", reason: "Recorded against the wrong student" });
 
@@ -546,7 +552,7 @@ describe("revoking a placement", () => {
 
   it("refuses another department's admin", async () => {
     vi.mocked(requireAnyRole).mockResolvedValue({ id: "admin-ece", role: "DEPT_ADMIN" } as never);
-    vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValue({ departmentId: ECE } as never);
+    vi.mocked(getActiveDepartmentAdmin).mockResolvedValue({ departmentId: ECE } as never);
 
     const result = await revokePlacement({ placementId: "plc-1", reason: "Recorded by mistake" });
 

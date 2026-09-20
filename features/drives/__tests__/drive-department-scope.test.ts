@@ -39,6 +39,21 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/auth", () => ({
   requireDepartmentAdmin: vi.fn(),
   requireSuperAdmin: vi.fn(),
+  getActiveDepartmentAdmin: vi.fn(),
+}));
+
+vi.mock("@/features/settings/queries/get-settings", () => ({
+  getInstitutionSettings: vi.fn(async () => ({
+    institutionName: "CampusHire",
+    seasonStart: null,
+    seasonEnd: null,
+    enforceSeasonWindow: false,
+    defaultMinCGPA: null,
+    defaultMaxBacklogs: null,
+    defaultPipelineStages: null,
+    updatedAt: new Date(0),
+    updatedByName: null,
+  })),
 }));
 
 vi.mock("@/lib/audit", () => ({

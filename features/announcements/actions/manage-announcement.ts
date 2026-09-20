@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { Announcement, Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireAnyRole, AuthorizationError } from "@/lib/auth";
+import { requireAnyRole, getActiveDepartmentAdmin, AuthorizationError } from "@/lib/auth";
 import { AuditAction, AuditEntityType, createAuditLogInTransaction } from "@/lib/audit";
 import { isAnnouncementAttachmentUrl, uploadAnnouncementAttachment } from "@/lib/blob";
 import { notifyAnnouncementPublished } from "@/features/notifications/producers/announcement-events";
@@ -52,12 +52,11 @@ async function authorContext() {
   if (user.role === "SUPER_ADMIN") {
     return { user, role: "SUPER_ADMIN" as Role, departmentId: null as string | null };
   }
-  const admin = await prisma.departmentAdmin.findUnique({
-    where: { userId: user.id },
-    select: { departmentId: true, department: { select: { isActive: true } } },
-  });
-  if (!admin || !admin.department.isActive) {
-    throw new AuthorizationError("Your account is not associated with an active department.");
+  const admin = await getActiveDepartmentAdmin(user.id);
+  if (!admin) {
+    throw new AuthorizationError(
+      "Your account is not associated with an active department, or your access has been disabled."
+    );
   }
   return { user, role: "DEPT_ADMIN" as Role, departmentId: admin.departmentId };
 }

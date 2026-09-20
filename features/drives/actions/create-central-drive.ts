@@ -10,6 +10,8 @@ import {
 } from "../schemas/central-drive";
 import { buildCentralDriveData } from "../domain/drive-write-data";
 import { assertDeadlineInFuture } from "../domain/drive-window";
+import { checkDriveDateInSeason } from "@/features/settings/domain/season-window";
+import { getInstitutionSettings } from "@/features/settings/queries/get-settings";
 import { legacyMasterRules } from "../domain/eligibility-rules";
 import { normalizeEditableFields } from "../domain/drive-lifecycle";
 import { roundsOf, validatePipelineStages } from "@/features/recruitment/domain/pipeline";
@@ -52,6 +54,14 @@ export async function createCentralDrive(
     );
     if (!deadline.ok) {
       return { success: false, error: deadline.error };
+    }
+
+    // The placement season, when the institution enforces one. Checked as the
+    // drive is written, never retroactively: changing the season later does
+    // not invalidate drives that already exist.
+    const season = checkDriveDateInSeason(new Date(data.driveDate), await getInstitutionSettings());
+    if (!season.ok) {
+      return { success: false, error: season.error! };
     }
 
     // Only departments that actually exist and are active can be made eligible

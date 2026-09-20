@@ -53,11 +53,63 @@ Update this file after every meaningful implementation change.
 ## Current Goal
 
 - All V1 frontend integration units complete ✅
-- ARCH-FIX2 units 1–4 and 7 complete and applied to production (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Units 8–11 in `context/arch-fix/` are not started.
+- ARCH-FIX2 units 1–4, 7 and 8 complete and applied to production (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Units 9–11 in `context/arch-fix/` are not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 807 tests pass, 27 pre-existing failures (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
+- Current baseline: 863 tests pass, 27 pre-existing failures (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
 
 ## Completed
+
+- **Admin invitations & role-specific settings — ARCH-FIX2 unit-8 (COMPLETE —
+  migration `20260927000000_admin_invitations_settings` applied to
+  production):**
+  - **Found:** `createAdminAccount` created a Clerk user with
+    `skipPasswordRequirement` and told the admin to use "forgot password" —
+    an account the person never asked for, and no invitation record.
+    `DepartmentAdmin` had no status, so the only way to take access away was
+    to delete the row and demote the account. Super Admin "System Settings"
+    was a form that saved to component state and said "stored locally"; the
+    student settings page offered email and SMS toggles for channels that do
+    not exist; there was no department admin settings page at all.
+  - **Database (additive):** `DepartmentAdminStatus`,
+    `AdminInvitationStatus`; `DepartmentAdmin` gained status, disabledAt,
+    disabledById, disableReason; new `AdminInvitation`,
+    `InstitutionSettings` (one row, CHECK-enforced) and
+    `DepartmentSettings`; 14 CHECKs and a partial unique index (one INVITED
+    invitation per email). Backfill: existing admins ACTIVE, one institution
+    row with defaults that enforce nothing.
+  - **Part A — invitations:** `inviteDepartmentAdmin` (Clerk invitation with
+    role and department in its metadata), `resendAdminInvitation` (revokes
+    the old link first), `revokeAdminInvitation`; `applyAdminInvitation`
+    runs from the webhook and the lazy user path and is idempotent;
+    `checkInvitationConflict` names every conflicting identity;
+    `disableDepartmentAdmin`, `reactivateDepartmentAdmin`,
+    `changeAdminDepartment`. `getActiveDepartmentAdmin` added and used by
+    every path that resolves a department outside `requireDepartmentAdmin`;
+    a disabled admin is also dropped from notification fan-outs.
+    `createAdminAccount` removed.
+  - **Part B — settings:** `InstitutionSettings` (name, placement season with
+    optional enforcement on new drive dates, default CGPA/backlogs, default
+    recruitment stages) and `DepartmentSettings` (drive logistics defaults,
+    default batch year), each with one reader; consumers wired:
+    `createCentralDrive` and `createDrive` check the season, the create-drive
+    form and master-drive wizard prefill the defaults.
+  - **Part C — UI:** rebuilt Admin Accounts (invite, resend, withdraw,
+    disable with reason, reactivate, change department, state badges and
+    history), new `/admin-dashboard/settings` (6 sections), rewritten
+    `/super-admin-dashboard/settings` (8 sections, real persistence), student
+    settings gained Account and Privacy and lost the fake email/SMS toggles.
+  - **Tests:** `admin-invitations` (20), `admin-status` (11),
+    `disabled-admin-access` (7, including a source check that no feature
+    module reads a department admin without the status), `settings` (18).
+    Mutation check: 15 of 15 invariants caught. Full suite 863 passed / 27
+    failed (the known 27); `tsc`, lint and `next build` clean.
+  - **Verified on production after deploy:** 4 new columns, 3 new tables, 14
+    CHECKs, the partial unique index, both admins ACTIVE, the institution row
+    present and enforcing nothing, and user/student/drive/notification/audit
+    counts unchanged.
+  - **Open:** `NEXT_PUBLIC_APP_URL` is optional — without it Clerk uses its
+    own redirect after an invitation is accepted; not browser-verified (an
+    end-to-end invitation needs a real Clerk email).
 
 - **Notifications & announcements — ARCH-FIX2 unit-7 (COMPLETE — migration
   `20260926000000_notifications_announcements` applied to production):**

@@ -7,6 +7,8 @@ import { withEligibleDepartmentLinks } from "../utils/eligible-departments";
 import { resolveDeptAdminEligibleDepartments } from "../utils/department-scope";
 import { buildDepartmentDriveData } from "../domain/drive-write-data";
 import { assertDeadlineInFuture } from "../domain/drive-window";
+import { checkDriveDateInSeason } from "@/features/settings/domain/season-window";
+import { getInstitutionSettings } from "@/features/settings/queries/get-settings";
 import { createDriveWithEligibility } from "../domain/persist-drive";
 import { legacyMasterRules } from "../domain/eligibility-rules";
 import { withTargetedBatchYears } from "../domain/batch-targeting";
@@ -54,6 +56,16 @@ export async function createDrive(input: DriveInput): Promise<CreateDriveResult>
     );
     if (!deadline.ok) {
       return { success: false, error: deadline.error };
+    }
+
+    // The placement season, when the institution enforces one. Checked as the
+    // drive is written, never retroactively.
+    const season = checkDriveDateInSeason(
+      new Date(validated.driveDate),
+      await getInstitutionSettings()
+    );
+    if (!season.ok) {
+      return { success: false, error: season.error! };
     }
 
     // A department posting its own drive is already its author, so its

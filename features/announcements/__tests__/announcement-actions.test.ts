@@ -29,6 +29,7 @@ vi.mock("@/lib/prisma", () => {
 
 vi.mock("@/lib/auth", () => ({
   requireAnyRole: vi.fn(),
+  getActiveDepartmentAdmin: vi.fn(),
   AuthorizationError: class AuthorizationError extends Error {},
 }));
 
@@ -51,7 +52,7 @@ vi.mock("@/features/notifications/producers/announcement-events", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { prisma } from "@/lib/prisma";
-import { requireAnyRole } from "@/lib/auth";
+import { requireAnyRole, getActiveDepartmentAdmin } from "@/lib/auth";
 import { createAuditLogInTransaction } from "@/lib/audit";
 import { notifyAnnouncementPublished } from "@/features/notifications/producers/announcement-events";
 import {
@@ -66,7 +67,7 @@ const tx = (prisma as unknown as { __tx: Record<string, Record<string, ReturnTyp
 
 const asDeptAdmin = () => {
   vi.mocked(requireAnyRole).mockResolvedValue({ id: "admin-cse", role: "DEPT_ADMIN" } as never);
-  vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValue({
+  vi.mocked(getActiveDepartmentAdmin).mockResolvedValue({
     departmentId: CSE,
     department: { isActive: true },
   } as never);

@@ -1,6 +1,6 @@
 "use server";
 
-import { getOrCreateUser, requireStudent, requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
+import { getOrCreateUser, requireStudent, requireDepartmentAdmin, AuthorizationError, getActiveDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ACTIVE_PLACEMENTS_SELECT } from "@/features/students/utils/placement-status";
 import { isStudentEligibleForDrive } from "./drive-eligibility";
@@ -88,9 +88,7 @@ export async function getDriveDetail(driveId: string): Promise<DriveWithDepartme
   // Authorization based on role
   if (user.role === "DEPT_ADMIN") {
     // Department admin can view drives from own department
-    const admin = await prisma.departmentAdmin.findUnique({
-      where: { userId: user.id },
-    });
+    const admin = await getActiveDepartmentAdmin(user.id);
 
     if (!admin || admin.departmentId !== drive.departmentId) {
       throw new AuthorizationError("You do not have permission to view this drive");

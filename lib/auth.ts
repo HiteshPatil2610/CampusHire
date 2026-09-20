@@ -92,7 +92,9 @@ export const getOrCreateUser = cache(async (): Promise<User | null> => {
         return null;
       }
 
-      // Create user with STUDENT role (default for self-registration)
+      // Create user with STUDENT role (default for self-registration). An
+      // invited department admin is promoted right after, from the
+      // invitation Clerk carries — see below.
       try {
         user = await prisma.user.create({
           data: {
@@ -125,6 +127,24 @@ export const getOrCreateUser = cache(async (): Promise<User | null> => {
         } else {
           throw error;
         }
+      }
+
+      // The webhook usually does this first; when it has not arrived yet,
+      // an invited admin must still land as an admin rather than a student.
+      try {
+        const { applyAdminInvitation } = await import(
+          "@/features/admin-accounts/domain/accept-invitation"
+        );
+        const accepted = await applyAdminInvitation({
+          userId: user.id,
+          email: primaryEmail.emailAddress,
+          metadata: clerkUser.publicMetadata as Record<string, unknown> | undefined,
+        });
+        if (accepted.applied) {
+          user = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+        }
+      } catch (error) {
+        console.error("Applying the admin invitation failed:", error);
       }
 
       // Sync role to Clerk metadata
@@ -263,6 +283,30 @@ export interface DepartmentAdminContext {
  * @throws AuthenticationError if not authenticated
  * @throws AuthorizationError if not DEPT_ADMIN or no department association
  */
+export async function getActiveDepartmentAdmin(
+  userId: string
+): Promise<(DepartmentAdmin & { department: Department }) | null> {
+  const admin = await prisma.departmentAdmin.findUnique({
+    where: { userId },
+    include: { department: true },
+  });
+
+  if (!admin || admin.status !== "ACTIVE" || !admin.department.isActive) {
+    return null;
+  }
+  return admin;
+}
+
+/**
+ * Require department admin role with a live department authorization.
+ *
+ * Department access needs all of it: a CampusHire user, the DEPT_ADMIN role,
+ * a `DepartmentAdmin` row, that row still ACTIVE, and an active department.
+ * A Super Admin can disable an admin without deleting anything — their
+ * history, their audit trail and the drives they published stay — and from
+ * that moment every department-scoped path refuses them, because they all
+ * come through here.
+ */
 export const requireDepartmentAdmin = cache(async (): Promise<DepartmentAdminContext> => {
   const user = await requireRole("DEPT_ADMIN");
 
@@ -275,6 +319,13 @@ export const requireDepartmentAdmin = cache(async (): Promise<DepartmentAdminCon
   if (!admin) {
     throw new AuthorizationError(
       "Your account is not associated with a department. Please contact the administrator."
+    );
+  }
+
+  // Disabled by a Super Admin: the record stays, the authorization does not.
+  if (admin.status !== "ACTIVE") {
+    throw new AuthorizationError(
+      "Your department admin access has been disabled. Please contact the administrator."
     );
   }
 
@@ -311,10 +362,9 @@ export async function canAccessDepartment(departmentId: string): Promise<boolean
   }
 
   // Department admin can only access their own department
+  // Only while their authorization is live.
   if (user.role === "DEPT_ADMIN") {
-    const admin = await prisma.departmentAdmin.findUnique({
-      where: { userId: user.id },
-    });
+    const admin = await getActiveDepartmentAdmin(user.id);
 
     return admin?.departmentId === departmentId;
   }

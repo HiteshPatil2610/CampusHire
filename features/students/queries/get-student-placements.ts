@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { AuthorizationError, requireAuth } from "@/lib/auth";
+import { AuthorizationError, requireAuth, getActiveDepartmentAdmin } from "@/lib/auth";
 
 export interface PlacementView {
   id: string;
@@ -42,10 +42,7 @@ export async function getStudentPlacements(studentId: string): Promise<Placement
   if (user.role === "STUDENT") {
     if (student.userId !== user.id) throw denied;
   } else if (user.role === "DEPT_ADMIN") {
-    const admin = await prisma.departmentAdmin.findUnique({
-      where: { userId: user.id },
-      select: { departmentId: true },
-    });
+    const admin = await getActiveDepartmentAdmin(user.id);
     if (!admin || admin.departmentId !== student.departmentId) throw denied;
   } else if (user.role !== "SUPER_ADMIN") {
     throw denied;

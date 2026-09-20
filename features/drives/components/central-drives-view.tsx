@@ -6,6 +6,7 @@ import { formatDriveDate, formatDeadline } from "@/lib/drive-date-helpers";
 import { getDriveStatus } from "../utils/drive-status";
 import { CentralDriveDetailPanel } from "./central-drive-detail-panel";
 import { PostCentralDriveModal } from "./post-central-drive-modal";
+import type { StageDraft } from "@/features/recruitment/components/pipeline-editor";
 import type { CentralDriveListItem, DriveDeptStatusSummary } from "../queries/get-central-drives";
 import { formatPackage } from "../utils/format-package";
 
@@ -18,6 +19,8 @@ interface DepartmentOption {
 interface CentralDrivesViewProps {
   drives: CentralDriveListItem[];
   departments: DepartmentOption[];
+  /** The institution's defaults for a new drive (Settings → Institution). */
+  driveDefaults?: { minCGPA: number | null; stages: StageDraft[] };
 }
 
 /** Color class for each dept instance status. */
@@ -65,6 +68,7 @@ function DeptStatusHierarchy({ summary }: { summary: DriveDeptStatusSummary[] })
 export function CentralDrivesView({
   drives,
   departments,
+  driveDefaults,
 }: CentralDrivesViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -306,6 +310,7 @@ export function CentralDrivesView({
         onOpenChange={setModalOpen}
         departments={departments}
         onCreated={(driveId) => setSelectedId(driveId)}
+        defaults={driveDefaults}
       />
     </div>
   );

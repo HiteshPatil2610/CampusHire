@@ -586,6 +586,15 @@ Every motion trigger verifies `window.matchMedia('(prefers-reduced-motion: reduc
 - **Composing** is one card: title, body, then scope controls (department, audience, batches, priority) that only the Super Admin sees, publish/expiry times and an attachment. Two buttons: "Save draft" (outline) and "Publish now"/"Schedule" (primary). The managed list below shows status badges (`badge-gray` draft/archived, `badge-amber` scheduled, `badge-green` published) with Edit, Publish and Archive.
 - **Deliveries** (Super Admin) is a `table-wrap` of fan-outs with status, how many were notified, attempts, the error and a "Re-send" button; the copy says plainly that re-sending skips anyone already notified.
 
+### 8.14 Settings & Admin Account Patterns
+
+- **Settings are sectioned, not scrolled.** A left column of `filter-pill` buttons (`aria-current`) switches one card at a time. Every role has its own page under its own dashboard.
+- **Editable, read-only and role-restricted look different.** An editable setting is a `field` with an input; something another role owns is a label/value row with a line saying who sets it (a department admin sees the placement season, greyed, and knows why a drive date was refused); identity and password are a sentence plus a link to the sign-in provider, never a form.
+- **Every setting says when it takes effect** — "prefilled into new drives", "applies to drives created from now on", "a drive you have already published is unchanged". A saved card shows when it was last changed and by whom.
+- **Admin accounts is one table of people and invitations**: `badge-amber` invited, `badge-green` active, `badge-gray` disabled, with the history in its own column (invited when and by whom, resent count, accepted, disabled when, by whom and why).
+- **Inviting says what it does**: "they get an email from the sign-in provider and choose their own password; CampusHire never creates or sends one", so nobody waits for a password to pass on.
+- **Disabling is a dialog, not a confirm**: it lists what survives (account, drives published, applications moved, audit entries) and takes an optional reason that is shown to the admin.
+
 ---
 
 ## 9. Screen Inventory Reference
