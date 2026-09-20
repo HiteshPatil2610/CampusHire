@@ -55,9 +55,50 @@ Update this file after every meaningful implementation change.
 - All V1 frontend integration units complete ✅
 - ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 1018 tests pass, 0 failures (the excel-import database-duplicates test also times out intermittently) (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
+- Current baseline: 1034 tests pass, 0 failures (the excel-import database-duplicates test also times out intermittently) (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
 
 ## Completed
+
+- **Final production-readiness verification — ARCH-FIX2 unit-11 (COMPLETE —
+  no database change):**
+  - **Verified against the live database (read-only, over Neon's SQL-over-HTTPS
+    endpoint, because port 5432 is intercepted from this machine — TCP connects
+    and the Postgres session never starts):** all 15 migrations applied and none
+    rolled back; 33 tables, 66 foreign keys, 48 unique constraints, 58 CHECK
+    constraints, 101 indexes, **every one VALIDATED**; the 7 immutability
+    triggers present (application submission, snapshot, stage event,
+    recruitment stage, pipeline version, pipeline change request, placement).
+    **25 integrity queries, all 0** — no orphan department drives or snapshots,
+    no duplicate applications, no application pointing at another drive's
+    stage, no department drive outside its master's eligible list, no student
+    with two active placements, no SELECTED application without a placement, no
+    dispatch stuck PENDING or FAILED, no self-reviewed pipeline request, no
+    account that is both a student and an admin.
+  - **25 business rules, 17 security paths:** every one has a real test, checked
+    by name rather than by assumption. The three weakest-looking matches were
+    confirmed individually — withdrawal ("no path exists": no action, no
+    schema, no caller, refused at the write boundary and in the pure rule),
+    self-review ("nobody reviews their own request", plus a CHECK), and
+    rejected pipeline requests ("leaves the pipeline exactly as it was").
+  - **Legacy fields reviewed, nothing dropped:** the dual-written mirrors
+    (`Drive.minCGPA` / `maxActiveBacklogs` and their instance overrides, the
+    `applicationFields` JSON, `Notification.type`) all agree with their
+    relational replacements, and those replacements are populated. A drop needs
+    a migration and is not part of this unit.
+  - **Gap found and closed:** the Clerk webhook — the one route an
+    unauthenticated stranger can POST to — had no test at all. 16 tests now
+    cover it, and 6 of 6 mutations are caught: signature verification removed,
+    missing Svix headers accepted, running with no configured secret, new
+    accounts defaulting to DEPT_ADMIN, the invitation check skipped, and a
+    blank name overwriting a stored one.
+  - **Suite: 1034 passing, 0 failing.** `tsc`, lint (0 errors, 2 pre-existing
+    `<img>` warnings) and `next build` clean.
+  - **NOT VERIFIED:** sections 1–3, the three end-to-end journeys through the
+    browser. Every step's server side is covered by tests, but no screen was
+    opened: the dashboards need a signed-in account and this environment's
+    Clerk keys do not match its instance (the dev server logs an infinite
+    redirect loop). Also unverified: real Clerk invitation email delivery, and
+    Vercel Blob uploads.
 
 - **Security, authorization, audit and type-safety hardening pass — ARCH-FIX2
   unit-10 (COMPLETE — no database change):**

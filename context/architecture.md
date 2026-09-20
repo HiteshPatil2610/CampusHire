@@ -710,6 +710,20 @@ department admin's own applicant on a drive they run, or a Super Admin.
   cannot be reminded about. It is recorded, retried and audited like any other
   fan-out.
 
+## The Clerk webhook is the one unauthenticated entry point
+
+`/api/webhooks/clerk` is the only route a stranger can POST to, so it refuses
+before it reads: no Svix headers, a signature that does not verify, or no
+configured `CLERK_WEBHOOK_SECRET` each return without touching the database.
+Past that it is deliberately dull — it upserts on `clerkId`, so Clerk's retries
+cannot create a second account, and it writes `STUDENT`. **A webhook promotes
+nobody.** The public metadata on the event is passed to
+`applyAdminInvitation` as evidence, never applied as fact; only an open
+invitation for that address and department can make an admin. The role is then
+mirrored into Clerk's metadata for the middleware, best-effort: the database is
+the authority, so a failed mirror never loses the account. A failed write
+returns 200 rather than inviting an endless retry, and is logged for review.
+
 ## Authorization is a property of the function, not of the page
 
 - **A function that reads the database carries its own authorization.** Being
