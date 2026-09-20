@@ -344,6 +344,14 @@ describe('Department Scope Authorization', () => {
         disabledAt: null,
         disabledById: null,
         disableReason: null,
+        // `getActiveDepartmentAdmin` reads the department, not just the row:
+        // an admin of a department that has been deactivated has no access.
+        department: {
+          id: 'dept_123',
+          name: 'Computer Science',
+          code: 'CSE',
+          isActive: true,
+        },
       };
 
       vi.mocked(auth).mockResolvedValue({ userId: 'clerk_user_123' } as any);
@@ -376,6 +384,14 @@ describe('Department Scope Authorization', () => {
         disabledAt: null,
         disabledById: null,
         disableReason: null,
+        // `getActiveDepartmentAdmin` reads the department, not just the row:
+        // an admin of a department that has been deactivated has no access.
+        department: {
+          id: 'dept_123',
+          name: 'Computer Science',
+          code: 'CSE',
+          isActive: true,
+        },
       };
 
       vi.mocked(auth).mockResolvedValue({ userId: 'clerk_user_123' } as any);
@@ -522,6 +538,14 @@ describe('Department Scope Authorization', () => {
         disabledAt: null,
         disabledById: null,
         disableReason: null,
+        // `getActiveDepartmentAdmin` reads the department, not just the row:
+        // an admin of a department that has been deactivated has no access.
+        department: {
+          id: 'dept_123',
+          name: 'Computer Science',
+          code: 'CSE',
+          isActive: true,
+        },
       };
 
       vi.mocked(auth).mockResolvedValue({ userId: 'clerk_user_123' } as any);

@@ -1,6 +1,29 @@
 import { z } from "zod";
 
 /**
+ * A department code.
+ *
+ * Normalised first, then judged: "cse" typed into a form is the same
+ * department as "CSE", so it is upper-cased and accepted. The pattern is
+ * applied to the normalised value, so it still refuses "CS!" or a code with a
+ * space in it — it refuses what is actually wrong, not a shift key.
+ *
+ * (It used to test the pattern before upper-casing, which made the
+ * normalisation unreachable: any lowercase code was rejected outright.)
+ */
+const departmentCode = z
+  .string()
+  .trim()
+  .transform((value) => value.toUpperCase())
+  .pipe(
+    z
+      .string()
+      .min(2, "Department code must be at least 2 characters")
+      .max(10, "Department code must be 10 characters or less")
+      .regex(/^[A-Z0-9]+$/, "Department code must contain only letters and numbers")
+  );
+
+/**
  * Schema for creating a new department
  */
 export const createDepartmentSchema = z.object({
@@ -9,13 +32,7 @@ export const createDepartmentSchema = z.object({
     .trim()
     .min(1, "Department name is required")
     .max(100, "Department name must be 100 characters or less"),
-  code: z
-    .string()
-    .trim()
-    .min(2, "Department code must be at least 2 characters")
-    .max(10, "Department code must be 10 characters or less")
-    .regex(/^[A-Z0-9]+$/, "Department code must contain only uppercase letters and numbers")
-    .transform((val) => val.toUpperCase()), // Normalize to uppercase
+  code: departmentCode,
   isActive: z.boolean().default(true),
 });
 
@@ -32,14 +49,7 @@ export const updateDepartmentSchema = z.object({
     .min(1, "Department name is required")
     .max(100, "Department name must be 100 characters or less")
     .optional(),
-  code: z
-    .string()
-    .trim()
-    .min(2, "Department code must be at least 2 characters")
-    .max(10, "Department code must be 10 characters or less")
-    .regex(/^[A-Z0-9]+$/, "Department code must contain only uppercase letters and numbers")
-    .transform((val) => val.toUpperCase())
-    .optional(),
+  code: departmentCode.optional(),
   isActive: z.boolean().optional(),
 });
 

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { assignDepartmentAdmin } from "../actions/assign-department-admin";
-import { removeDepartmentAdmin } from "../actions/remove-department-admin";
 import { AuthenticationError, AuthorizationError } from "@/lib/auth";
 
 // Mock dependencies
@@ -52,7 +51,9 @@ import { requireSuperAdmin } from "@/lib/auth";
 
 describe("Admin Assignment Security", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // Not `clearAllMocks`: that leaves the `mockResolvedValueOnce` queues in
+    // place, so a value one test never consumed was handed to the next.
+    vi.resetAllMocks();
   });
 
   describe("Authentication", () => {
@@ -62,8 +63,8 @@ describe("Admin Assignment Security", () => {
       );
 
       const result = await assignDepartmentAdmin({
-        userId: "user-1",
-        departmentId: "dept-1",
+        userId: "cuser00000000000000001",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(result.success).toBe(false);
@@ -73,18 +74,6 @@ describe("Admin Assignment Security", () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it("should block unauthenticated user from removing admin", async () => {
-      vi.mocked(requireSuperAdmin).mockRejectedValueOnce(
-        new AuthenticationError("You must be signed in")
-      );
-
-      const result = await removeDepartmentAdmin({
-        userId: "user-1",
-      });
-
-      expect(result.success).toBe(false);
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-    });
   });
 
   describe("Authorization", () => {
@@ -96,8 +85,8 @@ describe("Admin Assignment Security", () => {
       );
 
       const result = await assignDepartmentAdmin({
-        userId: "user-1",
-        departmentId: "dept-1",
+        userId: "cuser00000000000000001",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(result.success).toBe(false);
@@ -115,43 +104,15 @@ describe("Admin Assignment Security", () => {
       );
 
       const result = await assignDepartmentAdmin({
-        userId: "user-1",
-        departmentId: "dept-1",
+        userId: "cuser00000000000000001",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(result.success).toBe(false);
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it("should block DEPT_ADMIN from removing admin", async () => {
-      vi.mocked(requireSuperAdmin).mockRejectedValueOnce(
-        new AuthorizationError(
-          "This action requires SUPER_ADMIN role. You have DEPT_ADMIN role."
-        )
-      );
 
-      const result = await removeDepartmentAdmin({
-        userId: "user-1",
-      });
-
-      expect(result.success).toBe(false);
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-    });
-
-    it("should block STUDENT from removing admin", async () => {
-      vi.mocked(requireSuperAdmin).mockRejectedValueOnce(
-        new AuthorizationError(
-          "This action requires SUPER_ADMIN role. You have STUDENT role."
-        )
-      );
-
-      const result = await removeDepartmentAdmin({
-        userId: "user-1",
-      });
-
-      expect(result.success).toBe(false);
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-    });
   });
 
   describe("Role Protection", () => {
@@ -167,7 +128,7 @@ describe("Admin Assignment Security", () => {
       });
 
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
-        id: "super-user",
+        id: "csuper0000000000000001",
         clerkId: "clerk-super",
         name: null,
         email: "super@college.edu",
@@ -177,8 +138,8 @@ describe("Admin Assignment Security", () => {
       });
 
       const result = await assignDepartmentAdmin({
-        userId: "super-user",
-        departmentId: "dept-1",
+        userId: "csuper0000000000000001",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(result.success).toBe(false);
@@ -188,95 +149,6 @@ describe("Admin Assignment Security", () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it("should prevent removing SUPER_ADMIN account", async () => {
-      vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
-        id: "super-admin-id",
-        clerkId: "clerk-super-admin",
-        name: null,
-        email: "super@college.edu",
-        role: "SUPER_ADMIN",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValueOnce({
-        id: "admin-1",
-        userId: "super-user",
-        departmentId: "dept-1",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        user: {
-          id: "super-user",
-          clerkId: "clerk-super",
-          name: null,
-          email: "super@college.edu",
-          role: "SUPER_ADMIN", // Should not be removed
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      } as any);
-
-      const result = await removeDepartmentAdmin({
-        userId: "super-user",
-      });
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain("Cannot remove Super Admin");
-      }
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-    });
   });
 
-  describe("Identity Preservation", () => {
-    it("should not delete Clerk identity when removing admin", async () => {
-      vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
-        id: "super-admin-id",
-        clerkId: "clerk-super-admin",
-        name: null,
-        email: "super@college.edu",
-        role: "SUPER_ADMIN",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValueOnce({
-        id: "admin-1",
-        userId: "user-1",
-        departmentId: "dept-1",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        user: {
-          id: "user-1",
-          clerkId: "clerk-user-1",
-          name: null,
-          email: "admin@college.edu",
-          role: "DEPT_ADMIN",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      } as any);
-
-      // User record still exists after removal
-      const updatedUser = {
-        id: "user-1",
-        clerkId: "clerk-user-1",
-        name: null,
-        email: "admin@college.edu",
-        role: "STUDENT", // Reverted role
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      vi.mocked(prisma.$transaction).mockResolvedValueOnce(updatedUser);
-
-      const result = await removeDepartmentAdmin({
-        userId: "user-1",
-      });
-
-      expect(result.success).toBe(true);
-      // Should only update role and delete DepartmentAdmin
-      // Should NOT delete User or Clerk identity
-    });
-  });
 });

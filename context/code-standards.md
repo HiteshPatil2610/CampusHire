@@ -112,6 +112,17 @@ can be guessed, "not found" and "not yours" return the same message. Catch
 error message. Every `where` is a `Prisma.<Model>WhereInput`, and the clause
 carrying the scope is written so no optional filter can overwrite it.
 
+**The test suite is green, and stays green.** A failing test is either a
+defect to fix or a test that has outlived its subject and must be rewritten
+against what the code now does — never a number carried forward in a report.
+Two traps this repo has already paid for: `vi.clearAllMocks()` leaves
+`mockResolvedValueOnce` queues in place, so a value one test never consumed is
+handed to the next (use `vi.resetAllMocks()`); and a mocked module factory's
+implementations are wiped by `clearAllMocks` too, so defaults belong in
+`beforeEach`. Tests never reach the real database — `@/lib/prisma` is mocked.
+`vitest.setup.ts` supplies React's `cache`, which lives in React's server
+build.
+
 - `features/dashboard/` — The role-specific "action required" items: pure builders plus queries scoped to the viewer's authority. Items are computed on render, never stored.
 - `features/exports/` — Dataset exports resolved server-side (actor, drive, department, columns). Format values only through `lib/csv-format.ts`; never add a second CSV writer.
 - `features/settings/` — The institution's and each department's settings. Add a setting only with the code that reads it; a stored value nothing honours is a lie to whoever sets it.

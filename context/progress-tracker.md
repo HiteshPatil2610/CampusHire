@@ -55,7 +55,7 @@ Update this file after every meaningful implementation change.
 - All V1 frontend integration units complete ✅
 - ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 959 tests pass, 28 pre-existing failures (the excel-import database-duplicates test also times out intermittently) (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
+- Current baseline: 1018 tests pass, 0 failures (the excel-import database-duplicates test also times out intermittently) (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
 
 ## Completed
 
@@ -97,14 +97,38 @@ Update this file after every meaningful implementation change.
     plus notification-authorization and lib/auth failing to load), confirmed
     by running the excel-import suite against the unmodified tree. `tsc`,
     lint and `next build` clean.
-  - **Open (reported, not changed):** `broadcastDepartmentNotification` and
-    `removeDepartmentAdmin` are dead code that predates units 7 and 8 and
-    bypasses their architecture; the Super Admin drive list loads one page of
-    100 and filters and re-sorts it in memory, so past 100 central drives it
-    silently truncates; `getDepartmentDriveEligibleStudents` loads a whole
-    department roster uncapped by design; `DriveApplication` would benefit
-    from an `@@index([driveId, appliedAt])` for its hot list query, which
-    needs a migration and has not been applied.
+  - **Then: the suite goes green.** All 28 remaining failures were stale
+    tests, not product defects, and every one is now fixed rather than
+    tolerated: `vitest.setup.ts` supplies React's `cache` (a server-build API
+    Next resolves and a test run does not), which is why two suites could not
+    even load; `notification-authorization` was rewritten against unit 7's
+    architecture (it asserted a `findUnique`-then-`update` ownership check
+    that the scoped `updateMany` replaced); admin and department fixtures
+    gained real cuids, real `PrismaClientKnownRequestError`s and
+    `resetAllMocks` (`clearAllMocks` leaves `mockResolvedValueOnce` queues in
+    place, so one bailed-out test shifted every later one's fixture by one);
+    the excel-import suite now mocks the database — it was reaching Neon and
+    timing out — and its fetch fixtures handed the parser a Node Buffer's
+    whole allocation pool instead of its own bytes. **1018 tests, 0 failures.**
+  - **Also fixed:** a department code typed in lowercase was rejected outright,
+    because the schema tested the uppercase pattern *before* the transform that
+    upper-cases it. It now normalises first, so "cse" is accepted as "CSE" and
+    "CS!" is still refused.
+  - **Retired:** `broadcastDepartmentNotification` (no callers; wrote
+    `Notification` rows directly, bypassing unit 7's mutes, dedupe keys, event
+    registry and dispatch record) and `removeDepartmentAdmin` (no callers;
+    unit 8's disable path replaces it and keeps the history). Their schemas and
+    tests went with them. `assignDepartmentAdmin` stays: it is the still-wired
+    way to promote an account that already exists.
+  - **Open (reported, not changed):** the Super Admin drive list loads one page
+    of 100 and filters and re-sorts it in memory, so past 100 central drives it
+    silently truncates and "open first" holds only within a page;
+    `getDepartmentDriveEligibleStudents` loads a whole department roster
+    uncapped by design; `DriveApplication` would benefit from an
+    `@@index([driveId, appliedAt])` for its hot list query, which needs a
+    migration and has not been applied. Nothing is browser-verified: the
+    screens need a signed-in account, and this environment's Clerk keys do not
+    match its instance.
 
 - **Operational dashboards, filters, exports & reminders — ARCH-FIX2 unit-9
   (COMPLETE — no database change):**

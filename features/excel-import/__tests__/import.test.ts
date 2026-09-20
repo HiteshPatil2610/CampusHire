@@ -5,6 +5,20 @@ import { validateImportRows, checkDatabaseDuplicates } from "../validator/valida
 import { commitImport } from "../actions/commit-import";
 import { prisma } from "@/lib/prisma";
 
+/** A Node Buffer's own bytes as a standalone ArrayBuffer. */
+const toArrayBuffer = (buffer: Buffer): ArrayBuffer =>
+  buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+
+// The database. Mocked, so no test in this file reaches Neon: the duplicate
+// check used to go out over the network and time out.
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    student: { findMany: vi.fn(async () => []), create: vi.fn() },
+    studentAcademic: { create: vi.fn() },
+    $transaction: vi.fn(),
+  },
+}));
+
 // Mock auth
 vi.mock("@/lib/auth", () => ({
   requireDepartmentAdmin: vi.fn(async () => ({
@@ -244,7 +258,16 @@ describe("Excel/CSV Import - Validator", () => {
 
 describe("Excel/CSV Import - Commit Action", () => {
   beforeEach(() => {
+    // `clearAllMocks` wipes the implementations the mock factory set, so the
+    // defaults are restored here: nothing in the database yet, and a
+    // transaction that runs its callback.
     vi.clearAllMocks();
+    vi.mocked(prisma.student.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.$transaction).mockImplementation((async (callback: unknown) =>
+      (callback as (tx: unknown) => unknown)({
+        student: { create: vi.fn(async () => ({ id: "student-1" })) },
+        studentAcademic: { create: vi.fn() },
+      })) as never);
   });
 
   it("should re-validate on commit and reject invalid data", async () => {
@@ -259,7 +282,7 @@ describe("Excel/CSV Import - Commit Action", () => {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Students");
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        return buffer.buffer;
+        return toArrayBuffer(buffer);
       },
     });
 
@@ -270,8 +293,12 @@ describe("Excel/CSV Import - Commit Action", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toContain("failed");
+      // Nothing was importable, and the reason travels back with the refusal
+      // rather than being swallowed — the admin has to be able to fix the row.
+      expect(result.error).toContain("No importable rows");
+      expect(result.validationErrors).toBeDefined();
     }
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("should perform atomic transaction - zero inserts on any error", async () => {
@@ -287,7 +314,7 @@ describe("Excel/CSV Import - Commit Action", () => {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Students");
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        return buffer.buffer;
+        return toArrayBuffer(buffer);
       },
     });
 
@@ -309,14 +336,15 @@ describe("Excel/CSV Import - Commit Action", () => {
       ok: true,
       arrayBuffer: async () => {
         const ws = XLSX.utils.aoa_to_sheet([
-          ["Roll Number", "Name", "Email", "Phone"],
-          ["CS001", "John Doe", "john@example.com", "9876543210"],
-          ["CS002", "Jane Smith", "jane@example.com", "9876543211"],
+          // "Diploma" is the 1/0 entry-type flag, and it is required.
+          ["Roll Number", "Name", "Email", "Phone", "Diploma"],
+          ["CS001", "John Doe", "john@example.com", "9876543210", 0],
+          ["CS002", "Jane Smith", "jane@example.com", "9876543211", 1],
         ]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Students");
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        return buffer.buffer;
+        return toArrayBuffer(buffer);
       },
     });
 
@@ -355,13 +383,13 @@ describe("Excel/CSV Import - Commit Action", () => {
       ok: true,
       arrayBuffer: async () => {
         const ws = XLSX.utils.aoa_to_sheet([
-          ["Roll Number", "Name", "Email"],
-          ["CS001", "John Doe", "john@example.com"],
+          ["Roll Number", "Name", "Email", "Phone", "Diploma"],
+          ["CS001", "John Doe", "john@example.com", "9876543210", 0],
         ]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Students");
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        return buffer.buffer;
+        return toArrayBuffer(buffer);
       },
     });
 
@@ -381,11 +409,14 @@ describe("Excel/CSV Import - Commit Action", () => {
     // Mock DB duplicate checks
     vi.spyOn(prisma.student, 'findMany').mockResolvedValue([]);
 
-    await commitImport({
+    const result = await commitImport({
       blobUrl: "https://example.com/test.xlsx",
       fileName: "test.xlsx",
     });
 
+    // The upload is transient: once the rows are in, the file goes, in the
+    // same flow rather than a background job.
+    expect(result.success).toBe(true);
     expect(deleteImportFile).toHaveBeenCalledWith("https://example.com/test.xlsx");
   });
 });

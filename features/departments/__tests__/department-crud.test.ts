@@ -20,6 +20,7 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/auth", () => ({
   requireSuperAdmin: vi.fn(),
+  getCurrentUser: vi.fn(async () => ({ id: "super-admin-id", role: "SUPER_ADMIN" })),
 }));
 
 vi.mock("next/cache", () => ({
@@ -28,10 +29,26 @@ vi.mock("next/cache", () => ({
 
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
+
+/** The duplicate-code error Prisma actually raises, not a lookalike. */
+const uniqueViolation = (target: string[]) =>
+  new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+    code: "P2002",
+    clientVersion: "6.19.0",
+    meta: { target },
+  });
+
+/** Ids are validated as cuids, so the fixtures use real ones. */
+const DEPT_ID = "cl123456789012345678901";
 
 describe("Department CRUD Operations", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // Not `clearAllMocks`: that leaves the `mockResolvedValueOnce` queues in
+    // place, so a value a bailed-out test never consumed was handed to the
+    // next one and every assertion after it was reading someone else's
+    // fixture.
+    vi.resetAllMocks();
   });
 
   describe("createDepartment", () => {
@@ -80,10 +97,9 @@ describe("Department CRUD Operations", () => {
         updatedAt: new Date(),
       });
 
-      const error = new Error("Unique constraint failed");
-      (error as any).code = "P2002";
-      (error as any).meta = { target: ["code"] };
-      vi.mocked(prisma.department.create).mockRejectedValueOnce(error);
+      vi.mocked(prisma.department.create).mockRejectedValueOnce(
+        uniqueViolation(["code"])
+      );
 
       const result = await createDepartment({
         name: "Computer Science",
@@ -168,7 +184,7 @@ describe("Department CRUD Operations", () => {
       });
 
       vi.mocked(prisma.department.findUnique).mockResolvedValueOnce({
-        id: "dept-1",
+        id: DEPT_ID,
         name: "Computer Science",
         code: "CS",
         isActive: true,
@@ -177,7 +193,7 @@ describe("Department CRUD Operations", () => {
       });
 
       vi.mocked(prisma.department.update).mockResolvedValueOnce({
-        id: "dept-1",
+        id: DEPT_ID,
         name: "Computer Science & Engineering",
         code: "CSE",
         isActive: true,
@@ -186,7 +202,7 @@ describe("Department CRUD Operations", () => {
       });
 
       const result = await updateDepartment({
-        id: "dept-1",
+        id: DEPT_ID,
         name: "Computer Science & Engineering",
         code: "CSE",
       });
@@ -217,10 +233,9 @@ describe("Department CRUD Operations", () => {
         updatedAt: new Date(),
       });
 
-      const error = new Error("Unique constraint failed");
-      (error as any).code = "P2002";
-      (error as any).meta = { target: ["code"] };
-      vi.mocked(prisma.department.update).mockRejectedValueOnce(error);
+      vi.mocked(prisma.department.update).mockRejectedValueOnce(
+        uniqueViolation(["code"])
+      );
 
       const result = await updateDepartment({
         id: "cl123456789012345678901",

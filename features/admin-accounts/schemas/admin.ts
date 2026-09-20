@@ -11,15 +11,6 @@ export const assignDepartmentAdminSchema = z.object({
 export type AssignDepartmentAdminInput = z.infer<typeof assignDepartmentAdminSchema>;
 
 /**
- * Schema for removing department admin assignment
- */
-export const removeDepartmentAdminSchema = z.object({
-  userId: z.string().cuid("Invalid user ID"),
-});
-
-export type RemoveDepartmentAdminInput = z.infer<typeof removeDepartmentAdminSchema>;
-
-/**
  * Schema for listing department admins with pagination
  */
 export const getDepartmentAdminsSchema = z.object({

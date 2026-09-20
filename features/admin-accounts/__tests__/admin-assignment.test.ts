@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { assignDepartmentAdmin } from "../actions/assign-department-admin";
-import { removeDepartmentAdmin } from "../actions/remove-department-admin";
 import { getDepartmentAdmins } from "../queries/get-department-admins";
 import { getAvailableUsers } from "../queries/get-available-users";
 
@@ -55,7 +54,9 @@ import { requireSuperAdmin } from "@/lib/auth";
 
 describe("Admin Assignment Operations", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // Not `clearAllMocks`: that leaves the `mockResolvedValueOnce` queues in
+    // place, so a value one test never consumed was handed to the next.
+    vi.resetAllMocks();
   });
 
   describe("assignDepartmentAdmin", () => {
@@ -71,7 +72,7 @@ describe("Admin Assignment Operations", () => {
       });
 
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
-        id: "user-1",
+        id: "cuser00000000000000001",
         clerkId: "clerk-user-1",
         name: null,
         email: "user@college.edu",
@@ -83,7 +84,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValueOnce(null);
 
       vi.mocked(prisma.department.findUnique).mockResolvedValueOnce({
-        id: "dept-1",
+        id: "cdept00000000000000001",
         name: "Computer Science",
         code: "CS",
         isActive: true,
@@ -93,7 +94,7 @@ describe("Admin Assignment Operations", () => {
 
       vi.mocked(prisma.$transaction).mockResolvedValueOnce({
         updatedUser: {
-          id: "user-1",
+          id: "cuser00000000000000001",
           clerkId: "clerk-user-1",
           name: null,
           email: "user@college.edu",
@@ -103,8 +104,8 @@ describe("Admin Assignment Operations", () => {
         },
         admin: {
           id: "admin-1",
-          userId: "user-1",
-          departmentId: "dept-1",
+          userId: "cuser00000000000000001",
+          departmentId: "cdept00000000000000001",
           createdAt: new Date(),
           updatedAt: new Date(),
           firstSeenAt: null,
@@ -113,14 +114,14 @@ describe("Admin Assignment Operations", () => {
           disabledById: null,
           disableReason: null,
           user: {
-            id: "user-1",
+            id: "cuser00000000000000001",
             email: "user@college.edu",
             clerkId: "clerk-user-1",
             name: null,
             role: "DEPT_ADMIN",
           },
           department: {
-            id: "dept-1",
+            id: "cdept00000000000000001",
             name: "Computer Science",
             code: "CS",
           },
@@ -128,14 +129,14 @@ describe("Admin Assignment Operations", () => {
       } as any);
 
       const result = await assignDepartmentAdmin({
-        userId: "user-1",
-        departmentId: "dept-1",
+        userId: "cuser00000000000000001",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.userId).toBe("user-1");
-        expect(result.data.departmentId).toBe("dept-1");
+        expect(result.data.userId).toBe("cuser00000000000000001");
+        expect(result.data.departmentId).toBe("cdept00000000000000001");
       }
       expect(requireSuperAdmin).toHaveBeenCalledOnce();
     });
@@ -152,7 +153,7 @@ describe("Admin Assignment Operations", () => {
       });
 
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
-        id: "user-1",
+        id: "cuser00000000000000001",
         clerkId: "clerk-user-1",
         name: null,
         email: "student@college.edu",
@@ -164,7 +165,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValueOnce(null);
 
       vi.mocked(prisma.department.findUnique).mockResolvedValueOnce({
-        id: "dept-1",
+        id: "cdept00000000000000001",
         name: "Computer Science",
         code: "CS",
         isActive: true,
@@ -174,7 +175,7 @@ describe("Admin Assignment Operations", () => {
 
       vi.mocked(prisma.$transaction).mockResolvedValueOnce({
         updatedUser: {
-          id: "user-1",
+          id: "cuser00000000000000001",
           clerkId: "clerk-user-1",
           name: null,
           email: "student@college.edu",
@@ -184,8 +185,8 @@ describe("Admin Assignment Operations", () => {
         },
         admin: {
           id: "admin-1",
-          userId: "user-1",
-          departmentId: "dept-1",
+          userId: "cuser00000000000000001",
+          departmentId: "cdept00000000000000001",
           createdAt: new Date(),
           updatedAt: new Date(),
           firstSeenAt: null,
@@ -194,14 +195,14 @@ describe("Admin Assignment Operations", () => {
           disabledById: null,
           disableReason: null,
           user: {
-            id: "user-1",
+            id: "cuser00000000000000001",
             email: "student@college.edu",
             clerkId: "clerk-user-1",
             name: null,
             role: "DEPT_ADMIN",
           },
           department: {
-            id: "dept-1",
+            id: "cdept00000000000000001",
             name: "Computer Science",
             code: "CS",
           },
@@ -209,8 +210,8 @@ describe("Admin Assignment Operations", () => {
       } as any);
 
       const result = await assignDepartmentAdmin({
-        userId: "user-1",
-        departmentId: "dept-1",
+        userId: "cuser00000000000000001",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(result.success).toBe(true);
@@ -228,7 +229,7 @@ describe("Admin Assignment Operations", () => {
       });
 
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
-        id: "user-1",
+        id: "cuser00000000000000001",
         clerkId: "clerk-user-1",
         name: null,
         email: "admin@college.edu",
@@ -239,8 +240,8 @@ describe("Admin Assignment Operations", () => {
 
       vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValueOnce({
         id: "admin-1",
-        userId: "user-1",
-        departmentId: "dept-1",
+        userId: "cuser00000000000000001",
+        departmentId: "cdept00000000000000001",
         createdAt: new Date(),
         updatedAt: new Date(),
         firstSeenAt: null,
@@ -251,8 +252,8 @@ describe("Admin Assignment Operations", () => {
       });
 
       const result = await assignDepartmentAdmin({
-        userId: "user-1",
-        departmentId: "dept-1",
+        userId: "cuser00000000000000001",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(result.success).toBe(false);
@@ -273,7 +274,7 @@ describe("Admin Assignment Operations", () => {
       });
 
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
-        id: "super-user",
+        id: "csuper0000000000000001",
         clerkId: "clerk-super",
         name: null,
         email: "super@college.edu",
@@ -283,8 +284,8 @@ describe("Admin Assignment Operations", () => {
       });
 
       const result = await assignDepartmentAdmin({
-        userId: "super-user",
-        departmentId: "dept-1",
+        userId: "csuper0000000000000001",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(result.success).toBe(false);
@@ -307,8 +308,8 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(null);
 
       const result = await assignDepartmentAdmin({
-        userId: "non-existent",
-        departmentId: "dept-1",
+        userId: "cmissing000000000000001",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(result.success).toBe(false);
@@ -329,7 +330,7 @@ describe("Admin Assignment Operations", () => {
       });
 
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
-        id: "user-1",
+        id: "cuser00000000000000001",
         clerkId: "clerk-user-1",
         name: null,
         email: "user@college.edu",
@@ -343,8 +344,8 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.department.findUnique).mockResolvedValueOnce(null);
 
       const result = await assignDepartmentAdmin({
-        userId: "user-1",
-        departmentId: "non-existent",
+        userId: "cuser00000000000000001",
+        departmentId: "cmissing000000000000001",
       });
 
       expect(result.success).toBe(false);
@@ -365,7 +366,7 @@ describe("Admin Assignment Operations", () => {
       });
 
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
-        id: "user-1",
+        id: "cuser00000000000000001",
         clerkId: "clerk-user-1",
         name: null,
         email: "user@college.edu",
@@ -377,7 +378,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValueOnce(null);
 
       vi.mocked(prisma.department.findUnique).mockResolvedValueOnce({
-        id: "dept-1",
+        id: "cdept00000000000000001",
         name: "Computer Science",
         code: "CS",
         isActive: false, // Inactive
@@ -386,8 +387,8 @@ describe("Admin Assignment Operations", () => {
       });
 
       const result = await assignDepartmentAdmin({
-        userId: "user-1",
-        departmentId: "dept-1",
+        userId: "cuser00000000000000001",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(result.success).toBe(false);
@@ -410,7 +411,7 @@ describe("Admin Assignment Operations", () => {
       });
 
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
-        id: "user-1",
+        id: "cuser00000000000000001",
         clerkId: "clerk-user-1",
         name: null,
         email: "user@college.edu",
@@ -423,7 +424,7 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValueOnce(null);
 
       vi.mocked(prisma.department.findUnique).mockResolvedValueOnce({
-        id: "dept-1",
+        id: "cdept00000000000000001",
         name: "Computer Science",
         code: "CS",
         isActive: true,
@@ -433,7 +434,7 @@ describe("Admin Assignment Operations", () => {
 
       vi.mocked(prisma.$transaction).mockResolvedValueOnce({
         updatedUser: {
-          id: "user-1",
+          id: "cuser00000000000000001",
           clerkId: "clerk-user-1",
           name: null,
           email: "user@college.edu",
@@ -443,8 +444,8 @@ describe("Admin Assignment Operations", () => {
         },
         admin: {
           id: "admin-1",
-          userId: "user-1",
-          departmentId: "dept-1",
+          userId: "cuser00000000000000001",
+          departmentId: "cdept00000000000000001",
           createdAt: new Date(),
           updatedAt: new Date(),
           firstSeenAt: null,
@@ -453,14 +454,14 @@ describe("Admin Assignment Operations", () => {
           disabledById: null,
           disableReason: null,
           user: {
-            id: "user-1",
+            id: "cuser00000000000000001",
             email: "user@college.edu",
             clerkId: "clerk-user-1",
             name: null,
             role: "DEPT_ADMIN",
           },
           department: {
-            id: "dept-1",
+            id: "cdept00000000000000001",
             name: "Computer Science",
             code: "CS",
           },
@@ -468,8 +469,8 @@ describe("Admin Assignment Operations", () => {
       } as any);
 
       const result = await assignDepartmentAdmin({
-        userId: "user-1",
-        departmentId: "dept-1",
+        userId: "cuser00000000000000001",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(result.success).toBe(true);
@@ -477,180 +478,6 @@ describe("Admin Assignment Operations", () => {
     });
   });
 
-  describe("removeDepartmentAdmin", () => {
-    it("should allow Super Admin to remove admin", async () => {
-      vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
-        id: "super-admin-id",
-        clerkId: "clerk-super-admin",
-        name: null,
-        email: "super@college.edu",
-        role: "SUPER_ADMIN",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValueOnce({
-        id: "admin-1",
-        userId: "user-1",
-        departmentId: "dept-1",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        firstSeenAt: null,
-        status: "ACTIVE" as const,
-        disabledAt: null,
-        disabledById: null,
-        disableReason: null,
-        user: {
-          id: "user-1",
-          clerkId: "clerk-user-1",
-          name: null,
-          email: "admin@college.edu",
-          role: "DEPT_ADMIN",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      } as any);
-
-      vi.mocked(prisma.$transaction).mockResolvedValueOnce({
-        id: "user-1",
-        clerkId: "clerk-user-1",
-        name: null,
-        email: "admin@college.edu",
-        role: "STUDENT", // Reverted to STUDENT
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      const result = await removeDepartmentAdmin({ userId: "user-1" });
-
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.userId).toBe("user-1");
-      }
-    });
-
-    it("should revert role to STUDENT after removal", async () => {
-      vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
-        id: "super-admin-id",
-        clerkId: "clerk-super-admin",
-        name: null,
-        email: "super@college.edu",
-        role: "SUPER_ADMIN",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValueOnce({
-        id: "admin-1",
-        userId: "user-1",
-        departmentId: "dept-1",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        firstSeenAt: null,
-        status: "ACTIVE" as const,
-        disabledAt: null,
-        disabledById: null,
-        disableReason: null,
-        user: {
-          id: "user-1",
-          clerkId: "clerk-user-1",
-          name: null,
-          email: "admin@college.edu",
-          role: "DEPT_ADMIN",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      } as any);
-
-      const updatedUser = {
-        id: "user-1",
-        clerkId: "clerk-user-1",
-        name: null,
-        email: "admin@college.edu",
-        role: "STUDENT", // Reverted
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      vi.mocked(prisma.$transaction).mockResolvedValueOnce(updatedUser);
-
-      const result = await removeDepartmentAdmin({ userId: "user-1" });
-
-      expect(result.success).toBe(true);
-      // Role should be STUDENT after removal (safe default)
-    });
-
-    it("should preserve User record after removal", async () => {
-      vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
-        id: "super-admin-id",
-        clerkId: "clerk-super-admin",
-        name: null,
-        email: "super@college.edu",
-        role: "SUPER_ADMIN",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValueOnce({
-        id: "admin-1",
-        userId: "user-1",
-        departmentId: "dept-1",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        firstSeenAt: null,
-        status: "ACTIVE" as const,
-        disabledAt: null,
-        disabledById: null,
-        disableReason: null,
-        user: {
-          id: "user-1",
-          clerkId: "clerk-user-1",
-          name: null,
-          email: "admin@college.edu",
-          role: "DEPT_ADMIN",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      } as any);
-
-      vi.mocked(prisma.$transaction).mockResolvedValueOnce({
-        id: "user-1",
-        clerkId: "clerk-user-1",
-        name: null,
-        email: "admin@college.edu",
-        role: "STUDENT",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      const result = await removeDepartmentAdmin({ userId: "user-1" });
-
-      expect(result.success).toBe(true);
-      // Removal should only delete DepartmentAdmin record
-      // User record should still exist (returned from transaction)
-    });
-
-    it("should handle admin not found", async () => {
-      vi.mocked(requireSuperAdmin).mockResolvedValueOnce({
-        id: "super-admin-id",
-        clerkId: "clerk-super-admin",
-        name: null,
-        email: "super@college.edu",
-        role: "SUPER_ADMIN",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValueOnce(null);
-
-      const result = await removeDepartmentAdmin({ userId: "non-existent" });
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain("not found");
-      }
-    });
-  });
 
   describe("getDepartmentAdmins", () => {
     it("should return paginated admin list", async () => {
@@ -659,8 +486,8 @@ describe("Admin Assignment Operations", () => {
       vi.mocked(prisma.departmentAdmin.findMany).mockResolvedValueOnce([
         {
           id: "admin-1",
-          userId: "user-1",
-          departmentId: "dept-1",
+          userId: "cuser00000000000000001",
+          departmentId: "cdept00000000000000001",
           createdAt: new Date(),
           updatedAt: new Date(),
           firstSeenAt: null,
@@ -669,7 +496,7 @@ describe("Admin Assignment Operations", () => {
           disabledById: null,
           disableReason: null,
           user: {
-            id: "user-1",
+            id: "cuser00000000000000001",
             email: "admin1@college.edu",
             clerkId: "clerk-user-1",
             name: null,
@@ -677,7 +504,7 @@ describe("Admin Assignment Operations", () => {
             createdAt: new Date(),
           },
           department: {
-            id: "dept-1",
+            id: "cdept00000000000000001",
             name: "Computer Science",
             code: "CS",
             isActive: true,
@@ -685,8 +512,8 @@ describe("Admin Assignment Operations", () => {
         },
         {
           id: "admin-2",
-          userId: "user-2",
-          departmentId: "dept-2",
+          userId: "cuser00000000000000002",
+          departmentId: "cdept00000000000000002",
           createdAt: new Date(),
           updatedAt: new Date(),
           firstSeenAt: null,
@@ -695,7 +522,7 @@ describe("Admin Assignment Operations", () => {
           disabledById: null,
           disableReason: null,
           user: {
-            id: "user-2",
+            id: "cuser00000000000000002",
             email: "admin2@college.edu",
             clerkId: "clerk-user-2",
             name: null,
@@ -703,7 +530,7 @@ describe("Admin Assignment Operations", () => {
             createdAt: new Date(),
           },
           department: {
-            id: "dept-2",
+            id: "cdept00000000000000002",
             name: "Electronics",
             code: "ECE",
             isActive: true,
@@ -730,11 +557,11 @@ describe("Admin Assignment Operations", () => {
       await getDepartmentAdmins({
         page: 1,
         pageSize: 25,
-        departmentId: "dept-1",
+        departmentId: "cdept00000000000000001",
       });
 
       expect(prisma.departmentAdmin.count).toHaveBeenCalledWith({
-        where: { departmentId: "dept-1" },
+        where: { departmentId: "cdept00000000000000001" },
       });
     });
   });
@@ -748,7 +575,7 @@ describe("Admin Assignment Operations", () => {
 
       vi.mocked(prisma.user.findMany).mockResolvedValueOnce([
         {
-          id: "user-1",
+          id: "cuser00000000000000001",
           email: "student1@college.edu",
           clerkId: "clerk-user-1",
           name: null,
@@ -756,7 +583,7 @@ describe("Admin Assignment Operations", () => {
           createdAt: new Date(),
         },
         {
-          id: "user-2",
+          id: "cuser00000000000000002",
           email: "student2@college.edu",
           clerkId: "clerk-user-2",
           name: null,
