@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import {
+  notifyPlacementRecorded,
+  notifyPlacementRevoked,
+} from "@/features/notifications/producers/application-events";
 import { prisma } from "@/lib/prisma";
 import {
   AuthorizationError,
@@ -98,6 +102,13 @@ export async function recordManualPlacement(
       return created;
     });
 
+    await notifyPlacementRecorded({
+      placementId: placement.id,
+      studentId: student.id,
+      companyName: data.companyName,
+      roleName: data.roleName,
+    });
+
     revalidatePlacementViews();
     return { success: true, placementId: placement.id };
   } catch (error) {
@@ -180,6 +191,13 @@ export async function revokePlacement(
         },
         user.id
       );
+    });
+
+    await notifyPlacementRevoked({
+      placementId: placement.id,
+      studentId: placement.student.id,
+      companyName: placement.companyName,
+      reason,
     });
 
     revalidatePlacementViews();

@@ -8,7 +8,8 @@ import {
   AuditAction,
   AuditEntityType,
 } from "@/lib/audit";
-import { createNotification, NotificationType } from "@/lib/notifications";
+import { deliverNotification } from "@/lib/notifications";
+import { applicationMoveEvent } from "@/features/notifications/domain/application-event";
 import { STATUS_LABELS } from "../utils/application-progress";
 import {
   legacyStageFor,
@@ -68,7 +69,7 @@ export async function moveApplication(
     where: { id: applicationId },
     include: {
       student: { select: { id: true, departmentId: true, userId: true } },
-      currentStage: { select: { id: true, name: true, pipelineVersionId: true } },
+      currentStage: { select: { id: true, name: true, pipelineVersionId: true, stageType: true } },
       drive: {
         select: {
           id: true,
@@ -193,7 +194,7 @@ export async function moveApplication(
     });
 
     // The move, in the history, under the version it happened in.
-    await tx.applicationStageEvent.create({
+    const stageEvent = await tx.applicationStageEvent.create({
       data: {
         applicationId,
         pipelineVersionId: target.pipelineVersionId,
@@ -205,6 +206,33 @@ export async function moveApplication(
         note: note || null,
       },
     });
+
+    // Tell the student, in the same transaction as the move: the move and the
+    // notification exist together or not at all. Keyed by the history row, so
+    // a retried transaction cannot notify twice. A pending (bulk-imported)
+    // student has no account yet, so there is nobody to tell.
+    if (application.student.userId) {
+      await deliverNotification(tx, {
+        event: applicationMoveEvent({
+          fromStageType: application.currentStage?.stageType ?? null,
+          toStageType: target.stageType,
+          status,
+        }),
+        role: "STUDENT",
+        recipients: [{ userId: application.student.userId }],
+        content: {
+          title: `${application.drive.companyName} — ${target.name}`,
+          message:
+            status === "IN_PROGRESS"
+              ? `Your application for ${roleName} has moved to the ${target.name} stage.`
+              : `Your application for ${roleName} is now marked ${STATUS_LABELS[status]}.`,
+          actionUrl: "/student-dashboard/applications",
+        },
+        dedupeKey: `stage-event:${stageEvent.id}`,
+        resourceType: "Application",
+        resourceId: applicationId,
+      });
+    }
 
     if (status === "SELECTED") {
       const placement = await tx.studentPlacement.create({
@@ -259,22 +287,6 @@ export async function moveApplication(
       toStatus: status,
     },
   });
-
-  // Tell the student their application moved. A pending (bulk-imported)
-  // student has no User row yet, so there is nobody to notify.
-  if (application.student.userId) {
-    await createNotification({
-      userId: application.student.userId,
-      type: NotificationType.APPLICATION,
-      title: `${application.drive.companyName} — ${target.name}`,
-      message:
-        status === "IN_PROGRESS"
-          ? `Your application for ${roleName} has moved to the ${target.name} stage.`
-          : `Your application for ${roleName} is now marked ${STATUS_LABELS[status]}.`,
-      resourceType: "Drive",
-      resourceId: application.drive.id,
-    });
-  }
 
   if (options.revalidate !== false) {
     revalidateApplicationViews(application.drive.id);

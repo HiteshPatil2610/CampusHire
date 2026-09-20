@@ -40,7 +40,7 @@
 
 - If a value can be computed from data already stored, compute it — do not add a column for it. A stored equivalent has to be set correctly at every write site, and the first caller that forgets produces a silently wrong value that nothing catches.
 - This is not theoretical: `Student.placementStatus` was written by exactly one code path with a casing no reader used, so every "Placed" KPI in the product read zero from the day it shipped.
-- Established examples: `getDriveStatus()` (open/closed from a deadline), `features/students/utils/placement-status.ts` (placement from applications), `features/notifications/utils/notification-priority.ts` (urgency from type and title).
+- Established examples: `getDriveStatus()` (open/closed from a deadline), `features/students/utils/placement-status.ts` (placement from applications). A notification's category and priority are the exception that proves the rule: they are stored, but one writer sets them from `features/notifications/domain/events.ts`, so there is still exactly one place that decides.
 - Put the derivation in one exported function and route every screen through it, so two panels cannot disagree about what the same word means.
 - Where a decision is genuinely a rule rather than a lookup — whether a stage transition is legal, whether a student record can be retired, whether a sign-up matches the roster — write it as a pure function taking plain arguments, and unit test it. The server action stays thin around it.
 
@@ -101,7 +101,8 @@
 - `features/drives/` — Master and department drive actions, lifecycle, overrides, eligibility engine, application-form configuration, batch targeting, readiness, preview.
 - `features/applications/` — Applying (server-decided), snapshots, stage moves, a student's application history.
 - `features/recruitment/` — Pipeline domain, versions, change requests and approval, master pipeline, recruitment counts and panels.
-- `features/notifications/` — In-app notifications, including drive announcements, cancellation and deadline-extension fan-out.
+- `features/notifications/` — In-app notifications: the event registry, the single writer (`lib/notifications.ts`), keyed fan-outs with their delivery record and retry, producers per event, and the role-specific centres. Add a notification by adding an event to the registry and a producer — never by writing a `Notification` row directly.
+- `features/announcements/` — The `Announcement` entity: targeting (one pure rule plus its query form), authoring scoped to the author's own department, publish/schedule/archive, and the notifications publishing generates.
 - `features/departments/` — Department CRUD (super admin).
 - `features/admin-accounts/` — Department-admin account CRUD (super admin), audit log writes.
 - `components/ui/` — shadcn/ui components, generated via CLI, not hand-edited beyond that.

@@ -137,6 +137,7 @@ async function cancelInstance(params: {
     companyName: instance.drive.companyName,
     reason: params.reason,
     notifyDepartmentAdmins: !params.byDepartment,
+    actorId: params.actorId,
   });
 
   revalidateDriveViews();
@@ -270,6 +271,7 @@ export async function cancelMasterDrive(
       companyName: drive.companyName,
       reason,
       notifyDepartmentAdmins: true,
+      actorId: superAdmin.id,
     });
 
     revalidateDriveViews();

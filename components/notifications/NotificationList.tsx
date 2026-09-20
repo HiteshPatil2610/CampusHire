@@ -6,7 +6,6 @@ import { markNotificationRead } from '@/features/notifications/actions/mark-noti
 import Pagination from '@/components/ui/pagination';
 import {
   getNotificationHref,
-  getNotificationPriority,
   getNotificationTypeLabel,
   PRIORITY_PRESENTATION,
 } from '@/features/notifications/utils/notification-priority';
@@ -23,45 +22,48 @@ interface NotificationListProps {
 }
 
 /**
- * Full notification list.
+ * The notification rows.
  *
- * Rows are grouped into sections rather than one flat feed, badged by derived
- * priority instead of the raw enum string, and deep-linked to the resource
- * they describe. Category filtering happens in the database now, so this
- * component renders exactly the rows it was handed.
+ * Grouped into sections rather than one flat feed, badged by the stored
+ * priority the event registry set, and opened through the action URL its
+ * producer built for this recipient's role. Each row can be marked read or
+ * unread again without opening it.
  */
-export function NotificationList({
-  initialNotifications,
-}: NotificationListProps) {
+export function NotificationList({ initialNotifications }: NotificationListProps) {
   const [notifications, setNotifications] = useState(initialNotifications.data);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const sections = useMemo(
-    () => groupNotifications(notifications),
-    [notifications]
-  );
+  const sections = useMemo(() => groupNotifications(notifications), [notifications]);
+
+  function setRead(id: string, isRead: boolean) {
+    setNotifications((current) =>
+      current.map((n) => (n.id === id ? { ...n, isRead } : n))
+    );
+  }
+
+  async function toggleRead(notification: Notification) {
+    const next = !notification.isRead;
+    setRead(notification.id, next);
+    const result = await markNotificationRead(notification.id, next);
+    if (!result.success) {
+      setRead(notification.id, notification.isRead);
+      return;
+    }
+    router.refresh();
+  }
 
   async function handleOpen(notification: Notification) {
     const href = getNotificationHref(notification);
 
     if (!notification.isRead) {
-      // Optimistic: marking read is low risk and the row should respond
-      // immediately, especially when we are about to navigate away.
-      setNotifications((current) =>
-        current.map((n) =>
-          n.id === notification.id ? { ...n, isRead: true } : n
-        )
-      );
-
-      const result = await markNotificationRead(notification.id);
+      // Optimistic: marking read is low risk and the row should respond at
+      // once, especially when we are about to navigate away.
+      setRead(notification.id, true);
+      const result = await markNotificationRead(notification.id, true);
       if (!result.success) {
-        setNotifications((current) =>
-          current.map((n) =>
-            n.id === notification.id ? { ...n, isRead: false } : n
-          )
-        );
+        setRead(notification.id, false);
         return;
       }
     }
@@ -70,14 +72,11 @@ export function NotificationList({
       router.push(href);
       return;
     }
-
-    // Nothing to open — refresh so the bell count catches up.
     router.refresh();
   }
 
   function formatTimestamp(date: Date) {
-    const now = new Date();
-    const diff = now.getTime() - new Date(date).getTime();
+    const diff = Date.now() - new Date(date).getTime();
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
@@ -91,11 +90,8 @@ export function NotificationList({
 
   function handlePageChange(newPage: number) {
     const params = new URLSearchParams(searchParams.toString());
-    if (newPage === 1) {
-      params.delete('page');
-    } else {
-      params.set('page', String(newPage));
-    }
+    if (newPage === 1) params.delete('page');
+    else params.set('page', String(newPage));
     router.push(`${pathname}?${params.toString()}`);
   }
 
@@ -119,24 +115,14 @@ export function NotificationList({
     <>
       {sections.map((section) => (
         <section key={section.key} style={{ marginBottom: 20 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              marginBottom: 8,
-            }}
-          >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <h2
               style={{
                 fontSize: 12,
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
-                color:
-                  section.key === 'attention'
-                    ? 'var(--red)'
-                    : 'var(--text-secondary)',
+                color: section.key === 'attention' ? 'var(--red)' : 'var(--text-secondary)',
                 margin: 0,
               }}
             >
@@ -149,41 +135,24 @@ export function NotificationList({
 
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             {section.items.map((n) => {
-              const priority = getNotificationPriority(n);
-              const presentation = PRIORITY_PRESENTATION[priority];
+              const presentation = PRIORITY_PRESENTATION[n.priority];
               const href = getNotificationHref(n);
               const isActionable = Boolean(href) || !n.isRead;
 
               return (
                 <div
                   key={n.id}
-                  role={isActionable ? 'button' : undefined}
-                  tabIndex={isActionable ? 0 : undefined}
-                  onClick={isActionable ? () => void handleOpen(n) : undefined}
-                  onKeyDown={
-                    isActionable
-                      ? (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            void handleOpen(n);
-                          }
-                        }
-                      : undefined
-                  }
                   style={{
                     padding: '14px 18px',
                     borderBottom: '0.5px solid var(--border)',
-                    background: n.isRead
-                      ? 'transparent'
-                      : 'var(--accent-light)',
-                    cursor: isActionable ? 'pointer' : 'default',
+                    background: n.isRead ? 'transparent' : 'var(--accent-light)',
                     display: 'flex',
                     gap: 12,
                     alignItems: 'flex-start',
-                    // A critical item keeps a coloured spine so it stays
+                    // An urgent item keeps a coloured spine so it stays
                     // findable once it drops into a time bucket.
                     borderLeft:
-                      priority === 'critical'
+                      n.priority === 'URGENT' || n.priority === 'ACTION_REQUIRED'
                         ? '3px solid var(--red)'
                         : '3px solid transparent',
                   }}
@@ -194,23 +163,29 @@ export function NotificationList({
                       width: 8,
                       height: 8,
                       borderRadius: '50%',
-                      background: n.isRead
-                        ? 'transparent'
-                        : 'var(--accent-dark)',
+                      background: n.isRead ? 'transparent' : 'var(--accent-dark)',
                       marginTop: 6,
                       flexShrink: 0,
                     }}
                   />
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        flexWrap: 'wrap',
-                      }}
-                    >
+                  <div
+                    role={isActionable ? 'button' : undefined}
+                    tabIndex={isActionable ? 0 : undefined}
+                    onClick={isActionable ? () => void handleOpen(n) : undefined}
+                    onKeyDown={
+                      isActionable
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              void handleOpen(n);
+                            }
+                          }
+                        : undefined
+                    }
+                    style={{ flex: 1, minWidth: 0, cursor: isActionable ? 'pointer' : 'default' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <span className={`badge ${presentation.badgeClass}`}>
                         {getNotificationTypeLabel(n)}
                       </span>
@@ -242,13 +217,19 @@ export function NotificationList({
                     >
                       {n.message}
                     </div>
-                    <div
-                      className="text-muted"
-                      style={{ fontSize: 11, marginTop: 4 }}
-                    >
+                    <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
                       {formatTimestamp(n.createdAt)}
                     </div>
                   </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontSize: 11, whiteSpace: 'nowrap' }}
+                    onClick={() => void toggleRead(n)}
+                  >
+                    {n.isRead ? 'Mark unread' : 'Mark read'}
+                  </button>
                 </div>
               );
             })}

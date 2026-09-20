@@ -8,6 +8,7 @@ import {
   AuthorizationError,
 } from "@/lib/auth";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
+import { notifyStudentParticipationChanged } from "@/features/notifications/producers/workflow-events";
 import {
   setMyOptInSchema,
   setStudentOptInSchema,
@@ -64,6 +65,14 @@ export async function setMyPlacementOptIn(
       entityType: AuditEntityType.STUDENT,
       entityId: student.id,
       metadata: { field: "optedIn", optedIn: validated.data.optedIn, by: "student" },
+    });
+
+    // The student changed it themselves, so their admins are told.
+    await notifyStudentParticipationChanged({
+      studentId: student.id,
+      studentName: student.name,
+      departmentId: student.departmentId,
+      optedIn: validated.data.optedIn,
     });
 
     revalidatePath("/student-dashboard/settings");

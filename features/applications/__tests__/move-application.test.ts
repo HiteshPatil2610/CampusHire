@@ -11,7 +11,7 @@ vi.mock("@/lib/prisma", () => ({
     driveApplication: { findUnique: vi.fn(), update: vi.fn() },
     recruitmentStage: { findUnique: vi.fn() },
     recruitmentPipelineVersion: { findFirst: vi.fn() },
-    applicationStageEvent: { create: vi.fn() },
+    applicationStageEvent: { create: vi.fn(async () => ({ id: "event-1" })) },
     studentPlacement: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -29,8 +29,7 @@ vi.mock("@/lib/audit", () => ({
 }));
 
 vi.mock("@/lib/notifications", () => ({
-  createNotification: vi.fn(),
-  NotificationType: { APPLICATION: "APPLICATION" },
+  deliverNotification: vi.fn(async () => ({ delivered: 1 })),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -38,7 +37,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { prisma } from "@/lib/prisma";
 import { AuthorizationError } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
-import { createNotification } from "@/lib/notifications";
+import { deliverNotification } from "@/lib/notifications";
 import { moveApplication } from "../domain/move-application";
 
 const CSE = "dept-cse";
@@ -48,7 +47,7 @@ const application = (extra: object = {}) => ({
   id: "app-1",
   stage: "APPLIED",
   status: "IN_PROGRESS",
-  currentStage: { id: "st-app", name: "Application", pipelineVersionId: "v1" },
+  currentStage: { id: "st-app", name: "Application", pipelineVersionId: "v1", stageType: "APPLICATION" },
   student: { id: "s1", departmentId: CSE, userId: "user-s1" },
   drive: {
     id: "drive-1",
@@ -95,7 +94,13 @@ describe("moveApplication", () => {
     expect(prisma.driveApplication.update).toHaveBeenCalledTimes(1);
     expect(prisma.applicationStageEvent.create).toHaveBeenCalledTimes(1);
     expect(createAuditLog).toHaveBeenCalledTimes(1);
-    expect(createNotification).toHaveBeenCalledTimes(1);
+    // Written in the same transaction as the move, keyed by the history row.
+    expect(deliverNotification).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(deliverNotification).mock.calls[0][1]).toMatchObject({
+      event: "APPLICATION_SHORTLISTED",
+      role: "STUDENT",
+      dedupeKey: "stage-event:event-1",
+    });
   });
 
   it("a dry run reaches the same verdict but writes and notifies nothing", async () => {
@@ -106,7 +111,7 @@ describe("moveApplication", () => {
     expect(prisma.driveApplication.update).not.toHaveBeenCalled();
     expect(prisma.applicationStageEvent.create).not.toHaveBeenCalled();
     expect(createAuditLog).not.toHaveBeenCalled();
-    expect(createNotification).not.toHaveBeenCalled();
+    expect(deliverNotification).not.toHaveBeenCalled();
   });
 
   it("a dry run refuses what a real move would refuse", async () => {

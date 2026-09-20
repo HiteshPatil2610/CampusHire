@@ -2,6 +2,11 @@
 
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyDriveUpdated } from "@/features/notifications/actions/notify-drive-lifecycle";
+import {
+  notifyDriveAssigned,
+  notifyMasterDriveUpdated,
+} from "@/features/notifications/producers/workflow-events";
 import { AuditAction } from "@/lib/audit";
 import {
   updateCentralDriveSchema,
@@ -33,7 +38,7 @@ export async function updateCentralDrive(
   input: UpdateCentralDriveInput
 ): Promise<UpdateCentralDriveResult> {
   try {
-    await requireSuperAdmin();
+    const superAdmin = await requireSuperAdmin();
 
     const existing = await prisma.drive.findUnique({ where: { id: driveId } });
 
@@ -144,6 +149,22 @@ export async function updateCentralDrive(
       roleName: data.roleName,
       eligibleDepartmentCodes: departments.map((d) => d.code),
     });
+
+    // Departments added by this edit have a drive to configure; every
+    // department running it hears that the master changed; and where it is
+    // already live, its students see an update.
+    await notifyDriveAssigned({ driveId, actorId: superAdmin.id });
+    await notifyMasterDriveUpdated({
+      driveId,
+      summary: `The placement office edited ${data.companyName} — ${data.roleName}.`,
+    });
+    if (publishedCount > 0) {
+      await notifyDriveUpdated({
+        driveId,
+        summary: `Details of ${data.companyName} — ${data.roleName} were updated. Check the drive page for the latest.`,
+        actorId: superAdmin.id,
+      });
+    }
 
     return { success: true };
   } catch (error) {

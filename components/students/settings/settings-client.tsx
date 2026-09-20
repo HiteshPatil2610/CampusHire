@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
 import { useToast } from '@/hooks/use-toast';
 import { setMyPlacementOptIn } from '@/features/students/actions/set-placement-opt-in';
+import { NotificationPreferences } from '@/components/notifications/notification-preferences';
+import type { NotificationEvent } from '@prisma/client';
 
 export interface SettingsClientProps {
   /** Whether the student is currently participating in campus placement. */
@@ -15,35 +17,20 @@ export interface SettingsClientProps {
    * participation but cannot change it — the server enforces this too.
    */
   optedInLocked: boolean;
+  /** Notification kinds this student has turned off. */
+  mutedEvents: NotificationEvent[];
 }
 
 export default function SettingsClient({
   optedIn,
   optedInLocked,
+  mutedEvents,
 }: SettingsClientProps) {
   const { openUserProfile } = useClerk();
   const { toast } = useToast();
   const router = useRouter();
   const [isSavingOptIn, startOptInTransition] = useTransition();
   const [participating, setParticipating] = useState(optedIn);
-
-  const [prefs, setPrefs] = useState({
-    emailDriveAlerts: true,
-    emailDeadlineReminders: true,
-    smsAlerts: false,
-  });
-
-  function toggle(key: keyof typeof prefs) {
-    // TODO: wire to server once notification preference model is added
-    setPrefs((current) => {
-      const updated = { ...current, [key]: !current[key] };
-      toast({
-        title: 'Preferences updated',
-        description: 'Notification preference saved locally for now.',
-      });
-      return updated;
-    });
-  }
 
   function handleOptInToggle() {
     if (optedInLocked) return;
@@ -127,60 +114,7 @@ export default function SettingsClient({
           </div>
         </div>
 
-        <div className="card">
-          <h3 className="section-title" style={{ fontSize: 16, marginBottom: 6 }}>
-            Notification Preferences
-          </h3>
-          <p className="text-secondary" style={{ fontSize: 12, marginBottom: 16 }}>
-            Control which placement alerts reach your inbox or phone.
-          </p>
-
-          <div className="pref-row">
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>
-                Email: New drive announcements
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`toggle-switch ${prefs.emailDriveAlerts ? 'on' : ''}`}
-              onClick={() => toggle('emailDriveAlerts')}
-              aria-label="Toggle email drive alerts"
-            >
-              <span className="knob" />
-            </button>
-          </div>
-
-          <div className="pref-row">
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>
-                Email: Deadline reminders
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`toggle-switch ${prefs.emailDeadlineReminders ? 'on' : ''}`}
-              onClick={() => toggle('emailDeadlineReminders')}
-              aria-label="Toggle email deadline reminders"
-            >
-              <span className="knob" />
-            </button>
-          </div>
-
-          <div className="pref-row" style={{ borderBottom: 'none' }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>SMS urgent alerts</div>
-            </div>
-            <button
-              type="button"
-              className={`toggle-switch ${prefs.smsAlerts ? 'on' : ''}`}
-              onClick={() => toggle('smsAlerts')}
-              aria-label="Toggle SMS alerts"
-            >
-              <span className="knob" />
-            </button>
-          </div>
-        </div>
+        <NotificationPreferences role="STUDENT" mutedEvents={mutedEvents} />
 
         <div className="card">
           <h3 className="section-title" style={{ fontSize: 16, marginBottom: 6 }}>

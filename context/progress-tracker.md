@@ -32,6 +32,8 @@ Update this file after every meaningful implementation change.
   - Master-detail "Central Drives" page with post modal and field-toggle panel
   - Student eligibility path unchanged and verified compatible
 - **Unit 10 — In-App Notifications & System Communication: COMPLETE**
+  (superseded by ARCH-FIX2 unit-7: events, priorities, dispatches,
+  preferences and a first-class Announcement entity)
   - ✅ Backend implementation complete
   - ✅ UI components and universal page complete
   - ✅ Migration complete and operational
@@ -51,11 +53,62 @@ Update this file after every meaningful implementation change.
 ## Current Goal
 
 - All V1 frontend integration units complete ✅
-- ARCH-FIX2 units 1–4 complete and applied to production (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Units 7–11 in `context/arch-fix/` are not started.
+- ARCH-FIX2 units 1–4 and 7 complete and applied to production (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Units 8–11 in `context/arch-fix/` are not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 736 tests pass, 27 pre-existing failures (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
+- Current baseline: 807 tests pass, 27 pre-existing failures (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
 
 ## Completed
+
+- **Notifications & announcements — ARCH-FIX2 unit-7 (COMPLETE — migration
+  `20260926000000_notifications_announcements` applied to production):**
+  - **Found:** one `Notification` table, a bell, a universal
+    `/notifications` page, and four producers (new drive, stage change,
+    cancellation, deadline). Priority was derived from the title by regex;
+    "announcements" were only notification rows with no record behind them;
+    student settings showed email/SMS toggles that saved nothing and claimed
+    email that CampusHire does not send; fan-out failures were swallowed.
+  - **Database (additive):** `NotificationEvent`, `NotificationCategory`,
+    `NotificationPriority`, `NotificationDispatchStatus`,
+    `AnnouncementStatus`, `AnnouncementAudience`; `Notification` gained
+    event, category, priority, actionUrl, readAt, expiresAt, dedupeKey,
+    dispatchId with a unique `(userId, dedupeKey)`;
+    `DepartmentAdmin.firstSeenAt`; new `Announcement`,
+    `NotificationDispatch` and `NotificationPreference` tables; 13 CHECKs
+    (in-app-only action URLs, read/readAt agreement, announcement dates,
+    attachment pairing, dispatch counts). Backfill classified all 8 existing
+    notifications and stamped existing admins as already seen.
+  - **Added:** the event registry (36 events, one definition each);
+    `deliverNotification` as the single writer, with role and preference
+    filtering and key-based idempotency; `runNotificationDispatch` +
+    registry + `retryNotificationDispatch` for fan-outs, their delivery
+    state and re-sending; `resolveDriveAudience` (shared evaluator);
+    producers for every student, admin and Super Admin event in the unit;
+    lazy materialisation of deadline reminders and scheduled announcements;
+    the `Announcement` entity with save/publish/schedule/archive and
+    attachments; role-specific notification centres
+    (`/student-dashboard`, `/admin-dashboard`, `/super-admin-dashboard`,
+    with `/notifications` redirecting), category tabs, mark read/unread,
+    real preference toggles, announcement pages for all three roles, and the
+    Super Admin's notification-deliveries page.
+  - **Removed:** `broadcastDepartmentNotification` and the old announcements
+    client (replaced by the entity); the title-regex priority helper; the fake
+    email/SMS preference toggles.
+  - **Tests:** `notification-delivery` (16), `drive-notifications` (11),
+    `dispatch` (7), `notification-center` (14), `announcement-notifications`
+    (8), `notification-presentation` (21), `announcement-targeting` (23),
+    `announcement-actions` (16).
+    Mutation check: 16 of 16 invariants caught (role guard, preferences,
+    dedupe, dispatch claim, publish-only audience, department scope, expiry,
+    ownership).
+    Full suite 807 passed / 27 failed (the known 27); `tsc`, lint and
+    `next build` clean.
+  - **Verified on production after deploy:** 3 new tables, 13 CHECKs, the
+    unique dedupe index, all 8 notifications classified (none left without an
+    event), both admins backfilled, and student/drive/application/placement/
+    audit counts unchanged.
+  - **Open:** no email or SMS channel exists, and nothing claims one;
+    time-based notifications depend on someone visiting (no cron);
+    not browser-verified (needs signed-in accounts).
 
 - **Department recruitment & placement workspace — ARCH-FIX2 unit-6 (COMPLETE — no database change):**
   - **Found:** the applications page, per-row stage control, pipeline panel,

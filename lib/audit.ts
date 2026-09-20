@@ -35,6 +35,12 @@ export const AuditAction = {
   TRANSITION: "TRANSITION",
   CANCEL: "CANCEL",
   EXTEND_DEADLINE: "EXTEND_DEADLINE",
+  PUBLISH: "PUBLISH",
+  ARCHIVE: "ARCHIVE",
+  NOTIFY: "NOTIFY",
+  NOTIFY_FAILED: "NOTIFY_FAILED",
+  RETRY: "RETRY",
+  REMIND: "REMIND",
 } as const;
 
 /**
@@ -52,6 +58,8 @@ export const AuditEntityType = {
   PIPELINE_CHANGE_REQUEST: "PipelineChangeRequest",
   STUDENT: "Student",
   BULK_IMPORT: "BulkImport",
+  ANNOUNCEMENT: "Announcement",
+  NOTIFICATION_DISPATCH: "NotificationDispatch",
 } as const;
 
 /**

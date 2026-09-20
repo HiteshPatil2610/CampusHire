@@ -575,6 +575,17 @@ Every motion trigger verifies `window.matchMedia('(prefers-reduced-motion: reduc
 - **Read-only history.** Stage history opens inline under its row as an ordered list (from → to · outcome · when · who · pipeline version · note). Activity is a dot-list newest first, with an empty state.
 - **Permission denied.** `PermissionDenied`: a centred card with a lock, one plain sentence and a way back. It never says whether the record exists.
 
+### 8.13 Notification & Announcement Patterns
+
+- **The centre lives under each role's dashboard** (`/student-dashboard/notifications`, `/admin-dashboard/notifications`, `/super-admin-dashboard/notifications`), so it carries that role's navigation; `/notifications` redirects. One component, three sets of copy.
+- **Tabs are filters in the URL**: All, Unread, Drive, Application, Recruitment, Announcement, System, each with its unread count, as `filter-pill`s with `role="tablist"`.
+- **Priority is a badge, not a colour guess**: URGENT `badge-red`, ACTION_REQUIRED `badge-accent`, WARNING `badge-amber`, INFO `badge-purple`, SUCCESS `badge-green`. An urgent or action-required row keeps a red left spine so it stays findable once it drops out of "Needs your attention".
+- **Rows**: unread rows carry the accent background and a dot; the body opens the resource (the producer's own link for that role), with a separate "Mark read"/"Mark unread" ghost button on the right so reading and opening are different acts.
+- **Preferences** sit at the foot of the centre (and on the student's settings page) as a list of checkboxes — only the events that role may mute, each with a plain sentence. The footnote states that CampusHire notifies in-app only and that urgent announcements always arrive.
+- **Announcements** are cards (priority badge, scope and batch line, title, excerpt, author and time, attachment marker) linking to a full page that renders the text as text, never as markup.
+- **Composing** is one card: title, body, then scope controls (department, audience, batches, priority) that only the Super Admin sees, publish/expiry times and an attachment. Two buttons: "Save draft" (outline) and "Publish now"/"Schedule" (primary). The managed list below shows status badges (`badge-gray` draft/archived, `badge-amber` scheduled, `badge-green` published) with Edit, Publish and Archive.
+- **Deliveries** (Super Admin) is a `table-wrap` of fan-outs with status, how many were notified, attempts, the error and a "Re-send" button; the copy says plainly that re-sending skips anyone already notified.
+
 ---
 
 ## 9. Screen Inventory Reference
@@ -584,5 +595,5 @@ Every motion trigger verifies `window.matchMedia('(prefers-reduced-motion: reduc
 | **Public** | `index.html` (Landing), `login.html`, `register.html`, `otp-verification.html`, `reset-password.html` |
 | **Student** | `student-dashboard.html`, `student-profile.html`, `readiness-dashboard.html`, `notifications.html`, `settings.html` |
 | **Admin** | `admin-home.html`, `admin-dashboard.html` (Student Directory), `add-student.html`, `excel-upload.html`, `post-drive.html`, `announcements.html`, `reports-analytics.html` |
-| **Super Admin** | `super-admin-dashboard.html`, `department-management.html`, `admin-accounts.html`, `system-settings.html`, `global-reports.html`, `audit-log.html`; built since the prototype: Central Drives (create wizard, permissions, stages, assignment console, cancel / extend deadline) Pipeline Requests and Placements (global, read-only); Department Admin: Drive workspace (Overview, Eligibility, Eligible / Registered Students, Applications, Recruitment Pipeline, Placement, Activity) |
+| **Super Admin** | `super-admin-dashboard.html`, `department-management.html`, `admin-accounts.html`, `system-settings.html`, `global-reports.html`, `audit-log.html`; built since the prototype: Central Drives (create wizard, permissions, stages, assignment console, cancel / extend deadline) Pipeline Requests, Placements (global, read-only), Announcements and Notification Deliveries; Department Admin: Drive workspace (Overview, Eligibility, Eligible / Registered Students, Applications, Recruitment Pipeline, Placement, Activity); every role: its own Notifications centre and Announcements |
 | **Shared Assets** | `styles.css` (Design tokens & layout rules), `motion.js` (Web Animations API engine), `drive-data.js` (Mock placement drive records) |

@@ -1,62 +1,59 @@
+import type { NotificationCategory, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { GetNotificationsInput } from "../schemas/notification";
 
 /**
- * Get paginated notifications for authenticated user
- * 
- * Authorization: User sees only their own notifications (enforced by caller)
- * 
- * @param userId - Authenticated user ID
- * @param input - Query parameters with pagination and filters
- * @returns Paginated notification results
+ * A user's notifications: theirs only, newest first, and never one that has
+ * expired (a closed drive's "new drive", an archived announcement).
+ *
+ * Both filters run in the database so the page count matches what is shown.
+ * Authorization is the caller's: every call passes the authenticated user's
+ * own id, and nothing here takes a user id from a request.
  */
 export async function getNotifications(
   userId: string,
-  // `category` is optional for callers — the schema supplies the default when
-  // input arrives through Zod, and existing callers that never filtered by
-  // category keep working unchanged.
   input: Omit<GetNotificationsInput, "category"> & {
     category?: GetNotificationsInput["category"];
   }
 ) {
   const { page, pageSize, isRead, category = "all" } = input;
-
   const skip = (page - 1) * pageSize;
+  const now = new Date();
 
-  // Build where clause
-  const where: any = {
-    userId, // Always scope to authenticated user
+  const where: Prisma.NotificationWhereInput = {
+    userId,
+    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    ...(isRead !== undefined ? { isRead } : {}),
+    ...(category !== "all" ? { category: category as NotificationCategory } : {}),
   };
 
-  // Optional: filter by read/unread
-  if (isRead !== undefined) {
-    where.isRead = isRead;
-  }
-
-  // Category filter runs in the database so pagination counts match what the
-  // student sees. Filtering after the page was sliced produced short pages.
-  if (category === "drives") {
-    where.type = { in: ["DRIVE", "APPLICATION"] };
-  } else if (category === "system") {
-    where.type = { in: ["SYSTEM", "PROFILE", "ADMIN"] };
-  }
-
-  // The count and the page are independent, so they go out together rather
-  // than paying two serial round trips for one screen.
-  const [totalCount, notifications] = await Promise.all([
+  const [totalCount, notifications, unreadCount] = await Promise.all([
     prisma.notification.count({ where }),
     prisma.notification.findMany({
       where,
       skip,
       take: pageSize,
-      orderBy: { createdAt: "desc" }, // Newest first
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.notification.count({
+      where: { userId, isRead: false, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
     }),
   ]);
 
-  return {
-    data: notifications,
-    page,
-    pageSize,
-    totalCount,
-  };
+  return { data: notifications, page, pageSize, totalCount, unreadCount };
+}
+
+/** How many unread notifications the user has in each category. */
+export async function getCategoryCounts(userId: string): Promise<Record<string, number>> {
+  const now = new Date();
+  const groups = await prisma.notification.groupBy({
+    by: ["category"],
+    where: {
+      userId,
+      isRead: false,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+    _count: { _all: true },
+  });
+  return Object.fromEntries(groups.map((group) => [group.category, group._count._all]));
 }

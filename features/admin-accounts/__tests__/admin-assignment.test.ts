@@ -107,6 +107,7 @@ describe("Admin Assignment Operations", () => {
           departmentId: "dept-1",
           createdAt: new Date(),
           updatedAt: new Date(),
+          firstSeenAt: null,
           user: {
             id: "user-1",
             email: "user@college.edu",
@@ -183,6 +184,7 @@ describe("Admin Assignment Operations", () => {
           departmentId: "dept-1",
           createdAt: new Date(),
           updatedAt: new Date(),
+          firstSeenAt: null,
           user: {
             id: "user-1",
             email: "student@college.edu",
@@ -233,6 +235,7 @@ describe("Admin Assignment Operations", () => {
         departmentId: "dept-1",
         createdAt: new Date(),
         updatedAt: new Date(),
+        firstSeenAt: null,
       });
 
       const result = await assignDepartmentAdmin({
@@ -432,6 +435,7 @@ describe("Admin Assignment Operations", () => {
           departmentId: "dept-1",
           createdAt: new Date(),
           updatedAt: new Date(),
+          firstSeenAt: null,
           user: {
             id: "user-1",
             email: "user@college.edu",
@@ -475,6 +479,7 @@ describe("Admin Assignment Operations", () => {
         departmentId: "dept-1",
         createdAt: new Date(),
         updatedAt: new Date(),
+        firstSeenAt: null,
         user: {
           id: "user-1",
           clerkId: "clerk-user-1",
@@ -521,6 +526,7 @@ describe("Admin Assignment Operations", () => {
         departmentId: "dept-1",
         createdAt: new Date(),
         updatedAt: new Date(),
+        firstSeenAt: null,
         user: {
           id: "user-1",
           clerkId: "clerk-user-1",
@@ -567,6 +573,7 @@ describe("Admin Assignment Operations", () => {
         departmentId: "dept-1",
         createdAt: new Date(),
         updatedAt: new Date(),
+        firstSeenAt: null,
         user: {
           id: "user-1",
           clerkId: "clerk-user-1",
@@ -628,6 +635,7 @@ describe("Admin Assignment Operations", () => {
           departmentId: "dept-1",
           createdAt: new Date(),
           updatedAt: new Date(),
+          firstSeenAt: null,
           user: {
             id: "user-1",
             email: "admin1@college.edu",
@@ -649,6 +657,7 @@ describe("Admin Assignment Operations", () => {
           departmentId: "dept-2",
           createdAt: new Date(),
           updatedAt: new Date(),
+          firstSeenAt: null,
           user: {
             id: "user-2",
             email: "admin2@college.edu",

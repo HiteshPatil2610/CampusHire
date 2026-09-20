@@ -5,7 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
-import { createNotification, NotificationType } from "@/lib/notifications";
+import { deliverNotificationSafely } from "@/lib/notifications";
 
 const reviewSchema = z.object({
   requestId: z.string().cuid("Invalid request ID"),
@@ -98,15 +98,18 @@ export async function reviewAccessRequest(
         metadata: { event: "access-request-rejected", email: request.email },
       });
 
-      await createNotification({
-        userId: request.user.id,
-        type: NotificationType.ADMIN,
-        title: "Student access declined",
-        message:
-          note ||
-          "Your department admin declined your request for student access.",
-        resourceType: "ANNOUNCEMENT",
-        resourceId: department.id,
+      // The applicant is a STUDENT-role user who has no student record yet.
+      await deliverNotificationSafely({
+        event: "ACCOUNT_UPDATE",
+        role: "STUDENT",
+        recipients: [{ userId: request.user.id }],
+        content: {
+          title: "Student access declined",
+          message: note || "Your department admin declined your request for student access.",
+        },
+        dedupeKey: `access-decided:${request.id}:${request.updatedAt.getTime()}`,
+        resourceType: "StudentAccessRequest",
+        resourceId: request.id,
       });
 
       revalidatePath("/admin-dashboard/students/import");
@@ -177,13 +180,18 @@ export async function reviewAccessRequest(
       metadata: { event: "access-request-approved", email: request.email },
     });
 
-    await createNotification({
-      userId: request.user.id,
-      type: NotificationType.ADMIN,
-      title: "Student access approved",
-      message: `You now have access to your ${department.name} student dashboard.`,
-      resourceType: "ANNOUNCEMENT",
-      resourceId: department.id,
+    await deliverNotificationSafely({
+      event: "ACCOUNT_UPDATE",
+      role: "STUDENT",
+      recipients: [{ userId: request.user.id }],
+      content: {
+        title: "Student access approved",
+        message: `You now have access to your ${department.name} student dashboard.`,
+        actionUrl: "/student-dashboard",
+      },
+      dedupeKey: `access-decided:${request.id}:${request.updatedAt.getTime()}`,
+      resourceType: "StudentAccessRequest",
+      resourceId: request.id,
     });
 
     revalidatePath("/admin-dashboard/students/import");

@@ -1,55 +1,59 @@
 import { requireDepartmentAdmin } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { AnnouncementsClient } from "./announcements-client";
+import {
+  getAnnouncementFeed,
+  getManagedAnnouncements,
+  getTargetableBatchYears,
+} from "@/features/announcements/queries/get-announcements";
+import { AnnouncementManager } from "@/features/announcements/components/announcement-manager";
+import { AnnouncementCard } from "@/features/announcements/components/announcement-card";
 
-// Every query here is scoped to the signed-in admin's department, so this
-// page can never be prerendered - it has no meaning without a session.
-export const dynamic = 'force-dynamic';
-
+// Everything here is scoped to the signed-in admin's department.
+export const dynamic = "force-dynamic";
 
 export default async function AnnouncementsPage() {
-  const { department } = await requireDepartmentAdmin();
+  const { user, department } = await requireDepartmentAdmin();
 
-  // Fetch recent announcements sent by this dept
-  const recentAnnouncements = await prisma.notification.findMany({
-    where: {
-      type: "ADMIN",
-      resourceType: "ANNOUNCEMENT",
-      resourceId: department.id,
-    },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-    select: {
-      id: true,
-      title: true,
-      message: true,
-      createdAt: true,
-    },
-  });
+  const [managed, batchYears, feed] = await Promise.all([
+    getManagedAnnouncements(user),
+    getTargetableBatchYears(department.id),
+    getAnnouncementFeed(user, { pageSize: 10 }),
+  ]);
 
-  // Count recipients for each (all non-pending students in dept)
-  const studentCount = await prisma.student.count({
-    where: {
-      departmentId: department.id,
-      isPending: false,
-      userId: { not: null },
-    },
-  });
+  // What the placement office sent them, as opposed to what they wrote.
+  const received = feed.rows.filter((row) => row.departmentCode === null);
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto" }}>
       <div style={{ marginBottom: 20 }}>
         <h1 className="page-title" style={{ margin: 0 }}>Announcements</h1>
         <p className="text-secondary" style={{ fontSize: 13, margin: "4px 0 0" }}>
-          Send notifications to all students in {department.name} department
+          Write to the students of {department.name}. Publishing notifies them; a draft does not.
         </p>
       </div>
 
-      <AnnouncementsClient
+      <AnnouncementManager
+        isSuperAdmin={false}
+        departments={[]}
+        batchYears={batchYears}
         departmentName={department.name}
-        studentCount={studentCount}
-        recentAnnouncements={recentAnnouncements}
+        managed={managed}
+        basePath="/admin-dashboard/announcements"
       />
+
+      {received.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <h2 className="section-title">From the placement office</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {received.map((announcement) => (
+              <AnnouncementCard
+                key={announcement.id}
+                announcement={announcement}
+                basePath="/admin-dashboard/announcements"
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

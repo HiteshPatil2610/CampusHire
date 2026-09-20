@@ -671,6 +671,80 @@ placement, batch). It never reconstructs those from today's data.
 columns (`origin: LEGACY_COLUMNS`), and is scoped: the student's own, a
 department admin's own applicant on a drive they run, or a Super Admin.
 
+## Notifications and announcements
+
+One `Notification` table serves all three roles; what differs is the event,
+the wording and where "open" goes. Nothing about a notification is chosen at
+the call site.
+
+- **One writer.** `deliverNotification` (`lib/notifications.ts`) is the only
+  code that writes a notification row. A producer names an **event** and hands
+  over recipients it resolved from the database; the **event registry**
+  (`features/notifications/domain/events.ts`) supplies the category, the
+  default priority, the legacy `type` and which roles may receive it.
+- **Recipient authorization.** Delivery re-reads its recipients by id *and*
+  role, so a student event can never land in an admin's centre, and an id that
+  is not a user of that role is dropped. An event delivered to a role it is not
+  defined for throws — that is a producer bug, not a runtime condition.
+- **Idempotency is in the database.** Every row carries a `dedupeKey`, unique
+  per `(userId, dedupeKey)`. A repeated publish, a retried action, a refreshed
+  page or a re-run fan-out writes nothing the second time. A daily digest
+  (`collapse`) refreshes its one row instead of adding another.
+- **Fan-outs are recorded.** An event that notifies many people runs through
+  `runNotificationDispatch`, which keys the fan-out in `NotificationDispatch`
+  (claim by compare-and-set on status and `updatedAt`), records PENDING →
+  SENT/FAILED with the error and the attempt count, audits it, and alerts the
+  Super Admins when it fails. That row is also the delivery record and the
+  retry handle: `retryNotificationDispatch` re-resolves everything from the
+  stored ids, and the per-recipient keys mean a retry only fills gaps.
+  In-app notification is the only channel — SENT means rows were written;
+  nothing is emailed, and no screen claims otherwise.
+- **Preferences.** `NotificationPreference.mutedEvents` silences only events
+  the registry marks optional for that role. Outcomes, cancellations, access
+  decisions, stage-change reviews and system alerts are never optional, and an
+  URGENT announcement is delivered regardless.
+- **Links.** `actionUrl` is built server-side for the recipient's role and must
+  be an in-app path — checked in code and by a CHECK constraint, so a
+  notification can never carry an off-site link.
+- **Expiry.** A notification can expire (a drive whose deadline passed, an
+  archived announcement). Expired rows are excluded from the list, the counts
+  and "mark all read".
+- **Time-based events.** CampusHire has no scheduler, so a closing deadline, a
+  scheduled announcement and a new admin's first sign-in are materialised on
+  the next visit (`materializeDueNotifications`, called by the bell and the
+  notification centre). Every write is keyed, so however many people load a
+  page, each notification happens once. A cron could call the same functions.
+
+### Drive notifications follow the workflow, not the drive
+
+Creating a master drive, or assigning it, notifies **no student** — only the
+departments' admins, who have work to do. A student hears about a drive when
+their department publishes it, and only if
+`resolveDriveAudience` — which runs the same evaluator as the drive list, the
+drive page and `applyToDrive`, against that department's resolved drive —
+finds them eligible. So the notification audience and the listing can never
+disagree: department scope, batch rules, placement exclusion, approval and
+opt-out are all decided by the one evaluator, and a caller can narrow the
+departments but never widen them.
+
+### An announcement is a record, not a notification
+
+`Announcement` is a first-class entity (title, content, author, department,
+audience, batches, priority, publishAt, expiresAt, status, attachment).
+Publishing it *generates* notifications that point at it; they never carry the
+announcement's truth, and editing it does not rewrite what was delivered.
+
+- **Targeting** lives in `announcement-audience.ts` as a pure predicate and the
+  equivalent Prisma filter, kept in step by tests — so a notification is never
+  sent to someone who cannot open the announcement.
+- **Scope is from the session.** A department admin writes for their own
+  department's students; the departmentId and audience in the request are
+  ignored. Institution-wide announcements, other departments, admin audiences
+  and the URGENT priority belong to the Super Admin alone.
+- **A draft notifies nobody.** Publishing is a separate act; a future
+  `publishAt` schedules it, and the release happens on the next visit.
+  Archiving keeps the record and expires the notifications pointing at it.
+
 ## Money is NUMERIC, and NUMERIC is not a number
 
 `Drive.packageOffered` is `NUMERIC(10,2)`, not `Float`. Binary floating point
@@ -750,7 +824,8 @@ is worth more than any query-level optimisation in this file.
 12. Self-asserted registration details are never written into `Student` before a department admin approves them. They live in `StudentAccessRequest` until then, so an unapproved sign-up can never appear in a department roster, in `totalStudents`, or in the placement-rate denominator. Approving is what creates the `Student` row, and it takes the department from the reviewing admin, not from the applicant.
 15. Being promoted to an admin role ends an account's student-ness in the same transaction as the promotion: its `Student` row is retired and any *pending* `StudentAccessRequest` is deleted, so a promoted account leaves the waiting list and gets its new role's access immediately (`retireStudentAccess`). The pending request is deleted rather than given a terminal status — `REJECTED` would permanently block re-registration if the account is later demoted back to `STUDENT`, and `APPROVED` would claim a `Student` row was created when none was. Approval is independently refused for any applicant who is no longer a `STUDENT`, so a stale queue open in another tab cannot put an admin back in the roster. A student record carrying `DriveApplication` history is never silently deleted: it refuses, and the refusal aborts the promotion.
 13. `Student.rollNumber` is nullable but not optional: a lateral-entry student may register before one is issued, and `applyToDrive` refuses any application without one. It is registrar-owned once set — the student's profile can fill a blank, never overwrite an existing value.
-14. Anything that can be computed is computed, not stored. `getDriveStatus()` derives open/closed from a deadline, `placement-status.ts` derives placement from active placement records, and `notification-priority.ts` derives urgency from a notification's type and title. A stored equivalent has to be set correctly at every write site, and the first caller that forgets produces a silently wrong value — which is exactly how `placementStatus` came to read zero everywhere.
+14. Anything that can be computed is computed, not stored. `getDriveStatus()` derives open/closed from a deadline and `placement-status.ts` derives placement from active placement records. A stored equivalent has to be set correctly at every write site, and the first caller that forgets produces a silently wrong value — which is exactly how `placementStatus` came to read zero everywhere. A notification's category and priority *are* stored, but no caller chooses them: one writer sets them from the event registry, which is the same "one place decides" guarantee by another route.
+18. A notification is written by exactly one function, for a recipient whose role the event is defined for, under a dedupe key that makes the same event a no-op the second time. Students are told about a drive only where it is published and only if the shared evaluator finds them eligible; a department admin's announcement reaches their own department's students and nobody else, with the scope taken from their session. An announcement is the record and its notifications only point at it.
 17. Eligibility is decided in one place (the evaluator). Screens that list students for a drive show what `getDriveStudents` returns and never re-derive it. An application moves only through `moveApplication`, and a placement is confirmed by a person before it is created; a bulk move never selects.
 16. A department admin may override a master content field only if the Super Admin opened it (`Drive.departmentEditableFields`), checked in `saveDriveDepartmentConfig` against the stored list — never against what the form shows. A department drive is published only when `departmentDriveReadiness` says it is ready, computed on the server from the stored configuration. A drive is never deleted to stop it: it is CANCELLED, with who, when and why recorded, and its applications and snapshots are kept.
 9. A successfully-imported Excel/CSV file does not persist in Blob storage after its rows are committed — cleanup happens in the same transaction/flow as the successful import, not as a separate best-effort job. 

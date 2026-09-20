@@ -27,8 +27,10 @@ vi.mock("@/lib/prisma", () => ({
     driveEligibilityRule: { findMany: vi.fn() },
     driveApplication: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
     studentPlacement: { create: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
-    departmentAdmin: { findUnique: vi.fn() },
-    notification: { createMany: vi.fn(), findMany: vi.fn() },
+    departmentAdmin: { findUnique: vi.fn(), findMany: vi.fn() },
+    notification: { createMany: vi.fn(), findMany: vi.fn(), upsert: vi.fn(), count: vi.fn() },
+    notificationDispatch: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    user: { findMany: vi.fn() },
     // Recruitment pipeline models (see pipeline-fixtures.ts).
     recruitmentPipelineVersion: {
       findFirst: vi.fn(),
@@ -39,7 +41,7 @@ vi.mock("@/lib/prisma", () => ({
       count: vi.fn(),
     },
     recruitmentStage: { findUnique: vi.fn() },
-    applicationStageEvent: { create: vi.fn(), createMany: vi.fn() },
+    applicationStageEvent: { create: vi.fn(async () => ({ id: "event-1" })), createMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -62,10 +64,10 @@ vi.mock("@/lib/audit", () => ({
   },
 }));
 
-vi.mock("@/lib/notifications", () => ({
-  createApplicationSubmittedNotification: vi.fn(),
-  createNotification: vi.fn(),
-  NotificationType: { APPLICATION: "APPLICATION" },
+vi.mock("@/features/notifications/producers/application-events", () => ({
+  notifyApplicationSubmitted: vi.fn(),
+  notifyPlacementRecorded: vi.fn(),
+  notifyPlacementRevoked: vi.fn(),
 }));
 
 vi.mock("@/features/applications/queries/check-application-exists", () => ({
@@ -95,6 +97,7 @@ import { applyToDrive } from "@/features/applications/actions/apply-to-drive";
 import { updateApplicationStage } from "@/features/applications/actions/update-application-stage";
 import { validateStageTransition } from "@/features/applications/utils/application-progress";
 import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
+import { primeDeliveryMocks } from "@/features/notifications/__tests__/delivery-test-helpers";
 import { recordManualPlacement, revokePlacement } from "../actions/manage-placement";
 import { decideStudentRetirement } from "@/features/admin-accounts/utils/retire-student-record";
 import {
@@ -436,8 +439,7 @@ describe("list, apply and notifications agree", () => {
   it("notifications narrow out placed students in SQL and exclude them exactly too", async () => {
     vi.mocked(prisma.driveDepartmentConfig.findMany).mockResolvedValue([cseInstance] as never);
     vi.mocked(prisma.driveEligibilityRule.findMany).mockResolvedValue(master.eligibilityRules as never);
-    vi.mocked(prisma.notification.findMany).mockResolvedValue([] as never);
-    vi.mocked(prisma.notification.createMany).mockResolvedValue({ count: 0 } as never);
+    primeDeliveryMocks(prisma as never);
     // Even if the narrowing let one through, the evaluator decides.
     vi.mocked(prisma.student.findMany).mockResolvedValue([
       student({ id: "s-ok", userId: "u-ok" }),

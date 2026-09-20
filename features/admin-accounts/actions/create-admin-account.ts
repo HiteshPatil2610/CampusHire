@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin } from "@/lib/auth";
 import { z } from "zod";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
+import { notifyAdminInvited } from "@/features/notifications/producers/workflow-events";
 
 const createAdminAccountSchema = z.object({
   email:        z.string().email("Invalid email address").toLowerCase().trim(),
@@ -121,6 +122,15 @@ export async function createAdminAccount(
         departmentName: department.name,
         createdBy:      superAdmin.id,
       },
+    });
+
+    // Waiting for them when they first sign in; the other Super Admins are
+    // told an admin was added.
+    await notifyAdminInvited({
+      adminUserId: result.user.id,
+      adminName: name,
+      departmentName: department.name,
+      actorId: superAdmin.id,
     });
 
     return { success: true, adminId: result.admin.id, email };

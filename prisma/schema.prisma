@@ -183,6 +183,10 @@ model User {
   pipelineReviews         PipelineChangeRequest[]      @relation("PipelineReviewedBy")
   cancelledDrives         Drive[]                      @relation("DriveCancelledBy")
   cancelledDeptDrives     DriveDepartmentConfig[]      @relation("DepartmentDriveCancelledBy")
+  notificationPreference  NotificationPreference?
+  notificationDispatches  NotificationDispatch[]       @relation("DispatchTriggeredBy")
+  announcements           Announcement[]               @relation("AnnouncementAuthor")
+  archivedAnnouncements   Announcement[]               @relation("AnnouncementArchivedBy")
 }
 
 // Department model - represents academic departments
@@ -201,15 +205,20 @@ model Department {
   driveConfigs          DriveDepartmentConfig[]
   accessRequests        StudentAccessRequest[]
   eligibleForDriveLinks DriveEligibleDepartment[]
+  announcements         Announcement[]
 }
 
 // Department Admin model - links DEPT_ADMIN users to departments
 model DepartmentAdmin {
-  id           String   @id @default(cuid())
-  userId       String   @unique
+  id           String    @id @default(cuid())
+  userId       String    @unique
   departmentId String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  // When the admin first opened CampusHire after being made an admin - the
+  // moment an invitation counts as accepted. Existing admins were backfilled
+  // with createdAt, so only admins invited from now on produce the event.
+  firstSeenAt  DateTime?
 
   // Relations
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -829,23 +838,217 @@ model AuditLog {
 // 10 — IN-APP NOTIFICATIONS
 // ============================================================================
 
-// Notification model - in-app notifications for users
+// How urgent a notification or announcement is. Stored, and set from the
+// event registry (features/notifications/domain/events.ts) unless an
+// announcement sets its own - callers never pass free text.
+enum NotificationPriority {
+  INFO
+  SUCCESS
+  ACTION_REQUIRED
+  WARNING
+  URGENT
+}
+
+// The notification centre's tabs.
+enum NotificationCategory {
+  DRIVE
+  APPLICATION
+  RECRUITMENT
+  ANNOUNCEMENT
+  SYSTEM
+}
+
+// What happened. Each value has one definition in the event registry: its
+// category, default priority, which roles may receive it, and whether the
+// recipient may mute it.
+enum NotificationEvent {
+  // Student
+  DRIVE_PUBLISHED
+  DRIVE_UPDATED
+  DRIVE_DEADLINE
+  DRIVE_CANCELLED
+  APPLICATION_SUBMITTED
+  APPLICATION_SHORTLISTED
+  APPLICATION_TEST
+  APPLICATION_INTERVIEW
+  APPLICATION_STAGE_CHANGED
+  APPLICATION_SELECTED
+  APPLICATION_REJECTED
+  PLACEMENT_RECORDED
+  PLACEMENT_REVOKED
+  PROFILE_INCOMPLETE
+  ACCOUNT_UPDATE
+  // Department admin
+  DRIVE_ASSIGNED
+  DRIVE_CONFIG_REMINDER
+  DRIVE_READY_TO_PUBLISH
+  PIPELINE_CHANGE_REVIEWED
+  NEW_APPLICATIONS
+  ACCESS_REQUEST
+  STUDENT_UPDATE
+  ADMIN_DRIVE_DEADLINE
+  MASTER_DRIVE_UPDATED
+  ADMIN_SYSTEM
+  // Super Admin
+  ADMIN_INVITED
+  ADMIN_ACCEPTED_INVITATION
+  DRIVE_ASSIGNMENT
+  DEPARTMENT_CONFIGURED
+  DEPARTMENT_DRIVE_PUBLISHED
+  PIPELINE_CHANGE_REQUESTED
+  APPLICATION_MILESTONE
+  ACCESS_REQUEST_ESCALATED
+  SYSTEM_ALERT
+  // Any role
+  ANNOUNCEMENT
+}
+
+// One in-app notification for one user. Written only by
+// `deliverNotification` (lib/notifications.ts), which resolves the event's
+// category and priority, checks the recipient's role and preferences, and
+// makes a repeated event a no-op through (userId, dedupeKey).
 model Notification {
-  id           String   @id @default(cuid())
+  id           String               @id @default(cuid())
   userId       String // Recipient (resolved server-side, never from client)
-  type         String // Notification category (APPLICATION, DRIVE, PROFILE, ADMIN, SYSTEM)
+  // Legacy coarse type (APPLICATION, DRIVE, PROFILE, ADMIN, SYSTEM), still
+  // written for older readers. `category` and `event` are what the app uses.
+  type         String
+  event        NotificationEvent?
+  category     NotificationCategory @default(SYSTEM)
+  priority     NotificationPriority @default(INFO)
   title        String // Short notification title
-  message      String   @db.Text // Full notification message
+  message      String               @db.Text // Full notification message
   resourceType String? // Optional: type of related resource (Drive, Application, etc.)
   resourceId   String? // Optional: ID of related resource
-  isRead       Boolean  @default(false) // Read/unread state
-  createdAt    DateTime @default(now())
+  // Where "open" goes. Always an in-app path (CHECK), built server-side for
+  // the recipient's role.
+  actionUrl    String?
+  isRead       Boolean              @default(false) // Read/unread state
+  readAt       DateTime?
+  // Hidden from the recipient after this moment (a closed drive's "new
+  // drive", an expired announcement).
+  expiresAt    DateTime?
+  // The event's identity for this recipient. The same event delivered twice
+  // - a retried publish, a double-clicked action - is written once.
+  dedupeKey    String?
+  // The fan-out that produced it, when it came from one.
+  dispatchId   String?
+  createdAt    DateTime             @default(now())
 
   // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dispatch NotificationDispatch? @relation(fields: [dispatchId], references: [id], onDelete: SetNull)
 
+  @@unique([userId, dedupeKey])
   @@index([userId, isRead])
+  @@index([userId, category, createdAt])
   @@index([createdAt])
+  @@index([dispatchId])
+}
+
+enum NotificationDispatchStatus {
+  PENDING
+  SENT
+  FAILED
+  RETRYING
+}
+
+// One fan-out: an event that notifies many people (a drive published in a
+// department, an announcement, a cancellation). Its key makes the fan-out run
+// once; its status, attempts and last error are the delivery record, and a
+// failed one can be retried by the Super Admin - the per-recipient dedupe
+// keys make a retry fill only the gaps.
+//
+// In-app notifications are the only channel CampusHire has. SENT means the
+// notification rows were written, nothing more; no email is sent.
+model NotificationDispatch {
+  id             String                     @id @default(cuid())
+  key            String                     @unique
+  event          NotificationEvent
+  status         NotificationDispatchStatus @default(PENDING)
+  // What a retry needs to run the fan-out again (JSON, TEXT like every JSON
+  // column here). Ids only - recipients are always resolved again.
+  payload        String                     @db.Text
+  departmentId   String?
+  triggeredById  String?
+  attempts       Int                        @default(1)
+  recipientCount Int                        @default(0)
+  lastError      String?                    @db.Text
+  completedAt    DateTime?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  triggeredBy   User?          @relation("DispatchTriggeredBy", fields: [triggeredById], references: [id], onDelete: SetNull)
+  notifications Notification[]
+
+  @@index([status, updatedAt])
+  @@index([event])
+}
+
+// What a user has chosen not to be told. Only events the registry marks as
+// optional for the user's role can be muted, and an URGENT notification is
+// delivered regardless.
+model NotificationPreference {
+  userId      String              @id
+  mutedEvents NotificationEvent[] @default([])
+  updatedAt   DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================================
+// 10b - ANNOUNCEMENTS
+// ============================================================================
+
+enum AnnouncementStatus {
+  DRAFT
+  // Published with a future publishAt; visible from then.
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AnnouncementAudience {
+  STUDENTS
+  ADMINS
+  EVERYONE
+}
+
+// An announcement is its own record - the notifications it generates point at
+// it and are never the source of its content. Who sees it is decided by
+// features/announcements/domain/announcement-audience.ts, and the same rule
+// picks who is notified.
+//
+// departmentId NULL is institution-wide, which only the Super Admin can
+// write; a department admin's announcements are always their own
+// department's, and always to its students.
+model Announcement {
+  id             String               @id @default(cuid())
+  title          String
+  content        String               @db.Text
+  authorId       String
+  departmentId   String?
+  audience       AnnouncementAudience @default(STUDENTS)
+  // Narrows the students reached; empty means every batch.
+  batchYears     Int[]                @default([])
+  priority       NotificationPriority @default(INFO)
+  status         AnnouncementStatus   @default(DRAFT)
+  publishAt      DateTime?
+  expiresAt      DateTime?
+  publishedAt    DateTime?
+  archivedAt     DateTime?
+  archivedById   String?
+  attachmentUrl  String?
+  attachmentName String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  author     User        @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  archivedBy User?       @relation("AnnouncementArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@index([status, publishAt])
+  @@index([departmentId, status])
 }
 
 // How a placement was recorded.

@@ -35,7 +35,7 @@ import {
   AuditAction,
   AuditEntityType,
 } from "@/lib/audit";
-import { createApplicationSubmittedNotification } from "@/lib/notifications";
+import { notifyApplicationSubmitted } from "@/features/notifications/producers/application-events";
 
 /**
  * Result type for apply to drive action
@@ -443,13 +443,16 @@ export async function applyToDrive(
       return created;
     });
 
-    // 10. Create notification (best-effort, doesn't fail operation)
-    await createApplicationSubmittedNotification(
-      auth.user.id,
-      drive.companyName,
-      drive.roleName,
-      drive.id
-    );
+    // 10. Notify (best-effort, never fails the application): the student's
+    // confirmation, their admins' daily summary, the Super Admin's milestones.
+    await notifyApplicationSubmitted({
+      applicationId: application.id,
+      studentUserId: auth.user.id,
+      departmentId: studentWithAcademic.departmentId,
+      driveId: drive.id,
+      companyName: drive.companyName,
+      roleName: drive.roleName,
+    });
 
     return {
       success: true,

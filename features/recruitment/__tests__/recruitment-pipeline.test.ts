@@ -25,7 +25,7 @@ vi.mock("@/lib/prisma", () => ({
       count: vi.fn(),
     },
     recruitmentStage: { findUnique: vi.fn() },
-    applicationStageEvent: { create: vi.fn() },
+    applicationStageEvent: { create: vi.fn(async () => ({ id: "event-1" })) },
     pipelineChangeRequest: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
@@ -61,8 +61,14 @@ vi.mock("@/lib/audit", () => ({
 }));
 
 vi.mock("@/lib/notifications", () => ({
-  createNotification: vi.fn(),
-  NotificationType: { APPLICATION: "APPLICATION" },
+  deliverNotification: vi.fn(async () => ({ delivered: 1 })),
+  deliverNotificationSafely: vi.fn(async () => ({ delivered: 1 })),
+  departmentAdminRecipients: vi.fn(async () => []),
+  superAdminRecipients: vi.fn(async () => []),
+}));
+vi.mock("@/features/notifications/producers/workflow-events", () => ({
+  notifyPipelineChangeRequested: vi.fn(),
+  notifyPipelineChangeReviewed: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -464,7 +470,13 @@ describe("Super Admin review", () => {
     baseVersionId: "v1",
     requestedById: "admin-cse",
     proposedStages: JSON.stringify(stages(["Application", "APPLICATION"], ["Coding", "CODING"], ["Offer", "OFFER"])),
-    departmentDrive: { id: "config-cse", driveId: DRIVE_ID, department: { code: "CSE" } },
+    departmentDrive: {
+      id: "config-cse",
+      driveId: DRIVE_ID,
+      departmentId: CSE,
+      department: { code: "CSE" },
+      drive: { companyName: "Acme" },
+    },
   };
 
   beforeEach(() => {

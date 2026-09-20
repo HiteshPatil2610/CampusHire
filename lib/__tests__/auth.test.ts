@@ -339,6 +339,7 @@ describe('Department Scope Authorization', () => {
         departmentId: 'dept_123',
         createdAt: new Date(),
         updatedAt: new Date(),
+        firstSeenAt: null,
       };
 
       vi.mocked(auth).mockResolvedValue({ userId: 'clerk_user_123' } as any);
@@ -366,6 +367,7 @@ describe('Department Scope Authorization', () => {
         departmentId: 'dept_123',
         createdAt: new Date(),
         updatedAt: new Date(),
+        firstSeenAt: null,
       };
 
       vi.mocked(auth).mockResolvedValue({ userId: 'clerk_user_123' } as any);
@@ -507,6 +509,7 @@ describe('Department Scope Authorization', () => {
         departmentId: 'dept_123',
         createdAt: new Date(),
         updatedAt: new Date(),
+        firstSeenAt: null,
       };
 
       vi.mocked(auth).mockResolvedValue({ userId: 'clerk_user_123' } as any);

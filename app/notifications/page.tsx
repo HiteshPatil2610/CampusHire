@@ -1,94 +1,37 @@
-import { NotificationList } from '@/components/notifications/NotificationList';
-import { NotificationsFilterBar } from '@/components/notifications/notifications-filter-bar';
-import { MarkAllReadButton } from '@/components/notifications/mark-all-read-button';
-import { getNotifications } from '@/features/notifications/queries/get-notifications';
-import { requireAuth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { requireAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-interface NotificationsPageProps {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}
-
-export default async function NotificationsPage({
+/**
+ * The notification centre now lives under each role's own dashboard, so it
+ * carries that role's navigation. This is the old address; it forwards.
+ */
+export default async function NotificationsRedirectPage({
   searchParams,
-}: NotificationsPageProps) {
-  // Authorization: Any authenticated user
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   let user;
   try {
     user = await requireAuth();
-  } catch (error) {
-    // Redirect to sign-in if not authenticated
+  } catch {
     redirect('/sign-in');
   }
 
-  // Await searchParams (Next.js 15 async pattern)
   const params = await searchParams;
-  const filterParam = params.filter as string | undefined;
-  const pageParam = params.page as string | undefined;
+  const query = new URLSearchParams(
+    Object.entries(params).flatMap(([key, value]) =>
+      typeof value === 'string' ? [[key, value] as [string, string]] : []
+    )
+  ).toString();
 
-  // Parse filter and page
-  const currentFilter = filterParam ?? 'all';
-  const filter = currentFilter === 'unread' ? 'unread' : 'all';
-  const typeFilter = 
-    currentFilter === 'drives' ? 'drives' :
-    currentFilter === 'system' ? 'system' : 
-    'all';
-  const page = pageParam ? parseInt(pageParam, 10) : 1;
+  const base =
+    user.role === 'SUPER_ADMIN'
+      ? '/super-admin-dashboard/notifications'
+      : user.role === 'DEPT_ADMIN'
+        ? '/admin-dashboard/notifications'
+        : '/student-dashboard/notifications';
 
-  // Both filters run in the database. The category filter used to be applied
-  // in the client after the page had already been sliced, which produced
-  // short pages and a total count that disagreed with the rows shown.
-  const notifications = await getNotifications(user.id, {
-    page,
-    pageSize: 25,
-    isRead: filter === 'unread' ? false : undefined,
-    category: typeFilter,
-  });
-
-  // Check if there are unread notifications
-  const hasUnread = notifications.data.some((n) => !n.isRead);
-
-  return (
-    <div style={{ padding: '32px 40px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* Page Header */}
-      <div style={{ marginBottom: 32 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 8,
-          }}
-        >
-          <h1
-            style={{
-              fontSize: 24,
-              fontWeight: 600,
-              color: 'var(--text-primary)',
-              margin: 0,
-            }}
-          >
-            Notifications
-          </h1>
-          <MarkAllReadButton hasUnread={hasUnread} />
-        </div>
-        <p
-          className="text-muted"
-          style={{ fontSize: 13, margin: 0 }}
-        >
-          Stay updated with important activities and system updates
-        </p>
-      </div>
-
-      {/* Filter Bar */}
-      <NotificationsFilterBar currentFilter={currentFilter} />
-
-      {/* Notification List */}
-      <div style={{ marginTop: 24 }}>
-        <NotificationList initialNotifications={notifications} />
-      </div>
-    </div>
-  );
+  redirect(query ? `${base}?${query}` : base);
 }

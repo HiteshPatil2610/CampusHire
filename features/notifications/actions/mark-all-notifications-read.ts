@@ -39,13 +39,18 @@ export async function markAllNotificationsRead(): Promise<MarkAllNotificationsRe
     }
 
     // 2. Mark all unread notifications as read
+    const now = new Date();
     const result = await prisma.notification.updateMany({
       where: {
         userId: user.id,
         isRead: false,
+        // An expired notification is not shown, so "all" means all the ones
+        // the user can actually see.
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       },
       data: {
         isRead: true,
+        readAt: now,
       },
     });
 

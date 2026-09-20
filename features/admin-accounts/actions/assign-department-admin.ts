@@ -10,6 +10,7 @@ import {
 } from "../schemas/admin";
 import { Prisma } from "@prisma/client";
 import { createAuditLogInTransaction, AuditAction, AuditEntityType } from "@/lib/audit";
+import { notifyAdminInvited } from "@/features/notifications/producers/workflow-events";
 import { retireStudentAccess } from "../utils/retire-student-record";
 
 /**
@@ -191,6 +192,13 @@ export async function assignDepartmentAdmin(input: AssignDepartmentAdminInput) {
       console.error("Failed to sync role to Clerk:", clerkError);
       // Don't fail the operation - database is source of truth
     }
+
+    await notifyAdminInvited({
+      adminUserId: result.updatedUser.id,
+      adminName: result.updatedUser.name ?? result.updatedUser.email,
+      departmentName: result.admin.department.name,
+      actorId: currentUser.id,
+    });
 
     // Revalidate admin pages
     revalidatePath("/super-admin-dashboard/admin-accounts");

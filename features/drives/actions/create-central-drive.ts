@@ -3,6 +3,7 @@
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AuditAction } from "@/lib/audit";
+import { notifyDriveAssigned } from "@/features/notifications/producers/workflow-events";
 import {
   createCentralDriveSchema,
   type CreateCentralDriveInput,
@@ -114,7 +115,9 @@ export async function createCentralDrive(
     // No student notification here, deliberately. A new central drive is a
     // DRAFT whose department instances are all ASSIGNED — invisible to
     // students. Each department's `publishDepartmentDrive` is what announces
-    // it, to that department only, once its admin has configured it.
+    // it, to that department only, once its admin has configured it. Only the
+    // departments' admins (and the other Super Admins) are told now.
+    await notifyDriveAssigned({ driveId: drive.id, actorId: superAdmin.id });
 
     return { success: true, driveId: drive.id };
   } catch (error) {

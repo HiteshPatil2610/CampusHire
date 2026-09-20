@@ -6,6 +6,7 @@ import { requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
 import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
+import { notifyDepartmentDrivePublished } from "@/features/notifications/producers/workflow-events";
 import { eligibleDepartmentLinksInclude } from "../utils/eligible-departments";
 import { canTransitionDepartmentDrive } from "../domain/drive-lifecycle";
 import {
@@ -182,6 +183,16 @@ export async function publishDepartmentDrive(
     // other departments running the same master drive are not announced here.
     const { notified } = await notifyEligibleStudentsOfDrive(drive, {
       departmentIds: [department.id],
+      triggeredById: user.id,
+    });
+
+    await notifyDepartmentDrivePublished({
+      driveId,
+      departmentDriveId: instance.id,
+      departmentCode: department.code,
+      companyName: drive.companyName,
+      roleName: resolved.roleName,
+      studentsNotified: notified,
     });
 
     revalidatePath("/admin-dashboard/drives");

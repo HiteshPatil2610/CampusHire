@@ -368,7 +368,7 @@ describe("publishDepartmentDrive", () => {
 
     expect(notifyEligibleStudentsOfDrive).toHaveBeenCalledWith(
       expect.anything(),
-      { departmentIds: [DEPT_A] }
+      expect.objectContaining({ departmentIds: [DEPT_A] })
     );
   });
 

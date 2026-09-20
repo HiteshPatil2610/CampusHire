@@ -91,8 +91,13 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
     {
       items: [
         {
+          label: 'Announcements',
+          href: '/student-dashboard/announcements',
+          icon: Megaphone,
+        },
+        {
           label: 'Notifications',
-          href: '/notifications',
+          href: '/student-dashboard/notifications',
           icon: Bell,
           badge: true,
         },
@@ -116,6 +121,12 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
           icon: Megaphone,
         },
         { label: 'Reports', href: '/admin-dashboard/reports', icon: BarChart2 },
+        {
+          label: 'Notifications',
+          href: '/admin-dashboard/notifications',
+          icon: Bell,
+          badge: true,
+        },
       ],
     },
   ],
@@ -127,6 +138,9 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
         { label: 'Campus Drives', href: '/super-admin-dashboard/drives', icon: '🚀' },
         { label: 'Placements', href: '/super-admin-dashboard/placements', icon: '🎓' },
         { label: 'Pipeline Requests', href: '/super-admin-dashboard/pipeline-requests', icon: '🧭' },
+        { label: 'Announcements', href: '/super-admin-dashboard/announcements', icon: '📣' },
+        { label: 'Notifications', href: '/super-admin-dashboard/notifications', icon: '🔔', badge: true },
+        { label: 'Notification Deliveries', href: '/super-admin-dashboard/notification-deliveries', icon: '📡' },
         { label: 'Departments', href: '/super-admin-dashboard/departments', icon: '🏛' },
         { label: 'Admin Accounts', href: '/super-admin-dashboard/admins', icon: '👤' },
         { label: 'Global Reports', href: '/super-admin-dashboard/reports', icon: '📊' },

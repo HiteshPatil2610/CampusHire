@@ -1,5 +1,5 @@
 import type { Notification } from "@prisma/client";
-import { getNotificationPriority, sortByPriority } from "./notification-priority";
+import { needsAttention, sortByPriority } from "./notification-priority";
 
 /**
  * Sectioning for the full notifications page.
@@ -62,12 +62,9 @@ export function groupNotifications(
   };
 
   for (const notification of notifications) {
-    const priority = getNotificationPriority(notification);
-    const needsAttention =
-      !notification.isRead &&
-      (priority === "critical" || priority === "attention");
-
-    if (needsAttention) {
+    // Unread and urgent, whatever its age: the attention section is what a
+    // reader should see before scrolling.
+    if (needsAttention(notification)) {
       buckets.attention.push(notification);
       continue;
     }

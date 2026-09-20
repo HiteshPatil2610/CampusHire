@@ -28,7 +28,7 @@ export interface CreateDriveResult {
  */
 export async function createDrive(input: DriveInput): Promise<CreateDriveResult> {
   try {
-    const { department } = await requireDepartmentAdmin();
+    const { department, user } = await requireDepartmentAdmin();
 
     const validated = driveSchema.parse(input);
 
@@ -77,7 +77,8 @@ export async function createDrive(input: DriveInput): Promise<CreateDriveResult>
     // Tell the students who can actually apply. Best-effort: a failed
     // fan-out must not fail a drive that was created successfully.
     await notifyEligibleStudentsOfDrive(
-      withEligibleDepartmentLinks(drive, scope.eligibleDepartments)
+      withEligibleDepartmentLinks(drive, scope.eligibleDepartments),
+      { triggeredById: user.id }
     );
 
     return {

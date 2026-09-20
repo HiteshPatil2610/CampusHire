@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getOrCreateUser } from '@/lib/auth';
 import { getStudentProfileByUserId } from '@/features/students/queries/get-profile';
 import SettingsClient from '@/components/students/settings/settings-client';
+import { getMyMutedEvents } from '@/features/notifications/actions/set-notification-preference';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,10 +13,13 @@ export default async function StudentSettingsPage() {
   const profile = await getStudentProfileByUserId(user.id);
   if (!profile) redirect('/student-dashboard');
 
+  const mutedEvents = await getMyMutedEvents();
+
   return (
     <SettingsClient
       optedIn={profile.student.optedIn}
       optedInLocked={profile.student.optedInLocked}
+      mutedEvents={mutedEvents}
     />
   );
 }

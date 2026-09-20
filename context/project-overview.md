@@ -96,7 +96,7 @@ A department can have more than one department admin (e.g. a primary and a backu
 - Self-assessment tools and the numeric readiness score
 - Multi-college / multi-tenant support — the system assumes a single college
 - Resume PDF storage and management
-- Transactional email beyond sign-up verification (drive-alert emails, bulk-upload credential emails) — these surface as in-app notifications only in V1
+- Transactional email beyond sign-up verification (drive-alert emails, bulk-upload credential emails) — these surface as in-app notifications only in V1, and no screen claims an email was sent. Notification preferences therefore control in-app delivery only, and time-based notifications (a closing deadline, a scheduled announcement) are materialised on the next visit rather than by a scheduler.
 - Payments or billing of any kind
 - Native mobile apps
 

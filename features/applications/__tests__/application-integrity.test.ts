@@ -49,7 +49,15 @@ vi.mock("@/lib/audit", () => ({
 }));
 
 vi.mock("@/lib/notifications", () => ({
-  createApplicationSubmittedNotification: vi.fn(),
+  deliverNotification: vi.fn(async () => ({ delivered: 1 })),
+  deliverNotificationSafely: vi.fn(async () => ({ delivered: 1 })),
+  departmentAdminRecipients: vi.fn(async () => []),
+  superAdminRecipients: vi.fn(async () => []),
+}));
+vi.mock("@/features/notifications/producers/application-events", () => ({
+  notifyApplicationSubmitted: vi.fn(),
+  notifyPlacementRecorded: vi.fn(),
+  notifyPlacementRevoked: vi.fn(),
 }));
 
 vi.mock("../queries/check-application-exists", () => ({
@@ -63,7 +71,7 @@ import { ACTIVE_PIPELINE, withActivePipeline } from "@/features/recruitment/__te
 beforeEach(() => withActivePipeline(prisma));
 import { requireStudent, requireAuth } from "@/lib/auth";
 import { createAuditLogInTransaction } from "@/lib/audit";
-import { createApplicationSubmittedNotification } from "@/lib/notifications";
+import { notifyApplicationSubmitted } from "@/features/notifications/producers/application-events";
 import { checkApplicationExists } from "../queries/check-application-exists";
 import { applyToDrive } from "../actions/apply-to-drive";
 import { getApplicationRecord } from "../queries/get-application-record";
@@ -257,7 +265,7 @@ describe("a valid application", () => {
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.driveApplication.create).toHaveBeenCalledTimes(1);
     expect(prisma.driveApplication.create).not.toHaveBeenCalled();
-    expect(createApplicationSubmittedNotification).toHaveBeenCalledTimes(1);
+    expect(notifyApplicationSubmitted).toHaveBeenCalledTimes(1);
   });
 
   it("creates the snapshot with the application, in one write", async () => {
@@ -370,7 +378,7 @@ describe("the server refuses", () => {
     const result = await applyToDrive(DRIVE_ID, validOptions);
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toMatch(/already applied/i);
-    expect(createApplicationSubmittedNotification).not.toHaveBeenCalled();
+    expect(notifyApplicationSubmitted).not.toHaveBeenCalled();
   });
 
   it.each([["ASSIGNED"], ["CONFIGURED"]])("a drive this department has not published (%s)", async (status) => {
@@ -539,7 +547,7 @@ describe("transaction", () => {
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toMatch(/unexpected error/i);
     // Nothing is announced for an application that does not exist.
-    expect(createApplicationSubmittedNotification).not.toHaveBeenCalled();
+    expect(notifyApplicationSubmitted).not.toHaveBeenCalled();
     // And nothing was written outside the transaction.
     expect(prisma.driveApplication.create).not.toHaveBeenCalled();
   });

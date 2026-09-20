@@ -9,7 +9,6 @@ import {
   AuditAction,
   AuditEntityType,
 } from "@/lib/audit";
-import { ACTIVE_PLACEMENTS_SELECT } from "@/features/students/utils/placement-status";
 import {
   DEPARTMENT_EDITABLE_FIELDS,
   normalizeEditableFields,
@@ -17,7 +16,6 @@ import {
 import { isCentralDrive } from "../domain/drive-kind";
 import { eligibleDepartmentLinksInclude } from "../utils/eligible-departments";
 import { resolveDepartmentDriveWithRules } from "../domain/resolve-department-drive";
-import { evaluateStudentForDrive } from "../queries/drive-eligibility";
 import {
   diffPipelines,
   pipelineKey,
@@ -30,6 +28,10 @@ import {
 } from "@/features/recruitment/domain/master-pipeline";
 import { createPipelineVersion } from "@/features/recruitment/domain/persist-pipeline";
 import { notifyDeadlineExtended } from "@/features/notifications/actions/notify-drive-lifecycle";
+import {
+  notifyMasterDriveUpdated,
+  remindDepartmentsToConfigure,
+} from "@/features/notifications/producers/workflow-events";
 
 /**
  * The Super Admin's controls over a master drive after it is created: which
@@ -137,6 +139,13 @@ export async function setDepartmentEditPermissions(
       return clearedFor;
     });
 
+    await notifyMasterDriveUpdated({
+      driveId: drive.id,
+      summary: next.length > 0
+        ? `Departments may now change: ${next.join(", ")}. Everything else follows the master drive.`
+        : "Departments can no longer change any of the master drive's content.",
+    });
+
     revalidateDriveViews();
     return {
       success: true,
@@ -236,6 +245,14 @@ export async function saveMasterPipeline(input: {
       );
 
       return updated;
+    });
+
+    await notifyMasterDriveUpdated({
+      driveId: drive.id,
+      summary:
+        followed.length > 0
+          ? `The master recruitment stages changed; unpublished department drives that followed them were updated (${followed.join(", ")}).`
+          : "The master recruitment stages changed. Published department drives keep their own.",
     });
 
     revalidateDriveViews();
@@ -351,28 +368,16 @@ export async function extendDepartmentDriveDeadline(
       );
     });
 
-    // Who can now apply: the department's students the same evaluator finds
-    // eligible under the extended drive.
-    const extended = { ...current, applicationDeadline: newDeadline };
-    const students = await prisma.student.findMany({
-      where: { departmentId, userId: { not: null } },
-      include: {
-        academic: true,
-        skills: { select: { skillName: true } },
-        placements: ACTIVE_PLACEMENTS_SELECT,
-      },
-    });
-    const eligibleUserIds = students
-      .filter((student) => student.academic !== null && evaluateStudentForDrive(student, extended).eligible)
-      .map((student) => student.userId!);
-
+    // Applicants, the students the drive is now open to (the same evaluator
+    // as every other path, resolved inside the fan-out against the saved
+    // deadline) and the department's admins.
     const { notified } = await notifyDeadlineExtended({
       driveId: drive.id,
       companyName: drive.companyName,
       roleName: current.roleName,
       newDeadline,
-      eligibleUserIds,
       departmentId,
+      actorId: superAdmin.id,
     });
 
     revalidateDriveViews();
@@ -383,5 +388,54 @@ export async function extendDepartmentDriveDeadline(
     }
     console.error("Extend department drive deadline error:", error);
     return { success: false, error: "Failed to extend the deadline. Please try again." };
+  }
+}
+
+/**
+ * Remind every department that has not published this drive yet (assigned
+ * or configured) to finish it. Their admins get one reminder per day at
+ * most, however often this is pressed.
+ */
+export async function remindDepartmentsAboutDrive(input: {
+  driveId: string;
+}): Promise<MasterDriveActionResult> {
+  try {
+    const superAdmin = await requireSuperAdmin();
+
+    const drive = await loadCentralDrive(String(input.driveId));
+    if (!drive) return { success: false, error: "Central drive not found" };
+    if (drive.lifecycleStatus === "CANCELLED" || drive.lifecycleStatus === "ARCHIVED") {
+      return { success: false, error: `This drive is ${drive.lifecycleStatus.toLowerCase()}.` };
+    }
+
+    const { departments, notified } = await remindDepartmentsToConfigure({
+      driveId: drive.id,
+      actorId: superAdmin.id,
+    });
+    if (departments === 0) {
+      return { success: true, message: "Every department has already published this drive." };
+    }
+
+    await createAuditLogInTransaction(
+      prisma,
+      {
+        action: AuditAction.REMIND,
+        entityType: AuditEntityType.DRIVE,
+        entityId: drive.id,
+        metadata: { companyName: drive.companyName, departments, adminsNotified: notified },
+      },
+      superAdmin.id
+    );
+
+    return {
+      success: true,
+      message:
+        notified > 0
+          ? `Reminded ${departments} department${departments === 1 ? "" : "s"} (${notified} admin${notified === 1 ? "" : "s"}).`
+          : "Those departments were already reminded today.",
+    };
+  } catch (error) {
+    console.error("Remind departments error:", error);
+    return { success: false, error: "Failed to send the reminder. Please try again." };
   }
 }

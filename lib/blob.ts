@@ -324,3 +324,93 @@ export async function uploadCompanyLogo(
     return { success: false, error: "Failed to upload logo. Please try again." };
   }
 }
+
+/** Maximum size for an announcement attachment (5MB). */
+const MAX_ANNOUNCEMENT_ATTACHMENT_SIZE = 5 * 1024 * 1024;
+
+/**
+ * An attachment is opened by everyone the announcement reaches, so the
+ * allowed types are the ones a browser renders safely. SVG and HTML are
+ * excluded: they can carry script.
+ */
+const ALLOWED_ANNOUNCEMENT_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+/** Where announcement attachments live; nothing else may be linked. */
+export const ANNOUNCEMENT_ATTACHMENT_PREFIX = "announcements/";
+
+export function validateAnnouncementAttachment(
+  file: File
+): { valid: boolean; error?: string } {
+  if (file.size > MAX_ANNOUNCEMENT_ATTACHMENT_SIZE) {
+    return {
+      valid: false,
+      error: `Attachment must be smaller than ${MAX_ANNOUNCEMENT_ATTACHMENT_SIZE / (1024 * 1024)}MB`,
+    };
+  }
+
+  if (
+    !ALLOWED_ANNOUNCEMENT_TYPES.includes(
+      file.type as (typeof ALLOWED_ANNOUNCEMENT_TYPES)[number]
+    )
+  ) {
+    return { valid: false, error: "Attach a PDF, JPEG, PNG or WebP file" };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Upload an announcement attachment. The path is derived server-side from
+ * the author's id, so an author cannot choose where the file lands, and the
+ * save action accepts only URLs under this prefix.
+ */
+export async function uploadAnnouncementAttachment(
+  file: File,
+  authorUserId: string
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    if (!env.BLOB_READ_WRITE_TOKEN) {
+      return {
+        success: false,
+        error: "File upload is not configured. Please contact administrator.",
+      };
+    }
+
+    const validation = validateAnnouncementAttachment(file);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
+    const extension = file.name.split(".").pop()?.toLowerCase() || "pdf";
+    const filename = `${ANNOUNCEMENT_ATTACHMENT_PREFIX}${authorUserId}/${Date.now()}.${extension}`;
+
+    const blob = await put(filename, file, {
+      access: "public",
+      token: env.BLOB_READ_WRITE_TOKEN,
+    });
+
+    return { success: true, url: blob.url };
+  } catch (error) {
+    console.error("Announcement attachment upload error:", error);
+    return { success: false, error: "Failed to upload the attachment. Please try again." };
+  }
+}
+
+/** Whether a stored attachment URL is one this app uploaded. */
+export function isAnnouncementAttachmentUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "https:" &&
+      parsed.hostname.endsWith(".public.blob.vercel-storage.com") &&
+      parsed.pathname.startsWith(`/${ANNOUNCEMENT_ATTACHMENT_PREFIX}`)
+    );
+  } catch {
+    return false;
+  }
+}

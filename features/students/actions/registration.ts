@@ -8,6 +8,7 @@ import {
   mergeOntoImportedRecord,
 } from "../utils/registration-match";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
+import { notifyAccessRequested } from "@/features/notifications/producers/workflow-events";
 
 export type RegistrationResult =
   /** Matched an imported record — the student has access immediately. */
@@ -110,7 +111,7 @@ export async function createStudent(
     // Nothing matched — queue for review.
     const rollNumber = validated.rollNumber?.trim() || null;
 
-    await prisma.studentAccessRequest.upsert({
+    const request = await prisma.studentAccessRequest.upsert({
       where: { userId: user.id },
       create: {
         userId: user.id,
@@ -133,6 +134,15 @@ export async function createStudent(
         reviewedAt: null,
         reviewNote: null,
       },
+    });
+
+    // The department the student named reviews it — its admins are told (or
+    // the Super Admins, when it has none).
+    await notifyAccessRequested({
+      requestId: request.id,
+      departmentId: request.departmentId,
+      studentName: request.name,
+      submittedAt: request.updatedAt,
     });
 
     return { success: true, status: "pending-review" };

@@ -38,7 +38,9 @@ vi.mock("@/lib/prisma", () => ({
     driveApplication: { create: vi.fn() },
     studentAcademic: { findUnique: vi.fn() },
     student: { findUnique: vi.fn(), findMany: vi.fn() },
-    notification: { createMany: vi.fn(), findMany: vi.fn() },
+    notification: { createMany: vi.fn(), findMany: vi.fn(), upsert: vi.fn(), count: vi.fn() },
+    notificationDispatch: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    user: { findMany: vi.fn() },
     driveApplicationField: { deleteMany: vi.fn(), createMany: vi.fn() },
     driveEligibilityRule: {
       findMany: vi.fn(),
@@ -77,8 +79,10 @@ vi.mock("@/lib/audit", () => ({
   },
 }));
 
-vi.mock("@/lib/notifications", () => ({
-  createApplicationSubmittedNotification: vi.fn(),
+vi.mock("@/features/notifications/producers/application-events", () => ({
+  notifyApplicationSubmitted: vi.fn(),
+  notifyPlacementRecorded: vi.fn(),
+  notifyPlacementRevoked: vi.fn(),
 }));
 
 vi.mock("@/features/applications/queries/check-application-exists", () => ({
@@ -106,6 +110,7 @@ import { saveDriveDepartmentConfig } from "../actions/save-drive-department-conf
 import { getEligibleDrives } from "../queries/get-eligible-drives";
 import { applyToDrive } from "@/features/applications/actions/apply-to-drive";
 import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
+import { primeDeliveryMocks } from "@/features/notifications/__tests__/delivery-test-helpers";
 
 const CSE = "dept-cse";
 const IT = "dept-it";
@@ -830,8 +835,7 @@ describe("applyToDrive — judged against the department's version", () => {
 
 describe("notifyEligibleStudentsOfDrive — per-department bar and role", () => {
   beforeEach(() => {
-    vi.mocked(prisma.notification.findMany).mockResolvedValue([] as never);
-    vi.mocked(prisma.notification.createMany).mockResolvedValue({ count: 0 } as never);
+    primeDeliveryMocks(prisma as never);
     vi.mocked(prisma.driveEligibilityRule.findMany).mockResolvedValue([] as never);
   });
 

@@ -31,7 +31,9 @@ vi.mock("@/lib/prisma", () => ({
     driveEligibilityRule: { findMany: vi.fn(), deleteMany: vi.fn(), createMany: vi.fn() },
     driveApplication: { create: vi.fn() },
     student: { findUnique: vi.fn(), findMany: vi.fn() },
-    notification: { createMany: vi.fn(), findMany: vi.fn() },
+    notification: { createMany: vi.fn(), findMany: vi.fn(), upsert: vi.fn(), count: vi.fn() },
+    notificationDispatch: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    user: { findMany: vi.fn() },
     // Recruitment pipeline models (see pipeline-fixtures.ts).
     recruitmentPipelineVersion: {
       findFirst: vi.fn(),
@@ -64,7 +66,11 @@ vi.mock("@/lib/audit", () => ({
   },
 }));
 
-vi.mock("@/lib/notifications", () => ({ createApplicationSubmittedNotification: vi.fn() }));
+vi.mock("@/features/notifications/producers/application-events", () => ({
+  notifyApplicationSubmitted: vi.fn(),
+  notifyPlacementRecorded: vi.fn(),
+  notifyPlacementRevoked: vi.fn(),
+}));
 vi.mock("@/features/applications/queries/check-application-exists", () => ({
   checkApplicationExists: vi.fn(async () => false),
 }));
@@ -103,6 +109,7 @@ import { defaultApplicationForm } from "../domain/application-form";
 import { getEligibleDrives } from "../queries/get-eligible-drives";
 import { applyToDrive } from "@/features/applications/actions/apply-to-drive";
 import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
+import { primeDeliveryMocks } from "@/features/notifications/__tests__/delivery-test-helpers";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -690,8 +697,7 @@ describe("the list, apply and notifications decide through the same evaluator", 
     (prisma.$transaction as unknown as ReturnType<typeof vi.fn>).mockImplementation(
     (fn: (tx: unknown) => unknown) => fn(prisma)
   );
-    vi.mocked(prisma.notification.findMany).mockResolvedValue([] as never);
-    vi.mocked(prisma.notification.createMany).mockResolvedValue({ count: 0 } as never);
+    primeDeliveryMocks(prisma as never);
   });
 
   function asStudent(s: ReturnType<typeof student>) {

@@ -29,6 +29,10 @@ import {
   getActiveVersion,
 } from "../domain/persist-pipeline";
 import { initialDepartmentPipeline } from "../domain/master-pipeline";
+import {
+  notifyPipelineChangeRequested,
+  notifyPipelineChangeReviewed,
+} from "@/features/notifications/producers/workflow-events";
 
 export type PipelineActionResult =
   | { success: true; id: string }
@@ -52,7 +56,7 @@ async function ownInstance(driveId: string) {
       status: true,
       driveId: true,
       selectionRounds: true,
-      drive: { select: { isCentralDrive: true, masterPipeline: true, selectionRounds: true } },
+      drive: { select: { isCentralDrive: true, masterPipeline: true, selectionRounds: true, companyName: true } },
     },
   });
   if (!instance) {
@@ -255,6 +259,14 @@ export async function proposePipelineChange(input: {
       };
     }
 
+    // The Super Admins decide it, so they are told it is waiting.
+    await notifyPipelineChangeRequested({
+      requestId: request.id,
+      driveId: instance.driveId,
+      departmentCode: department.code,
+      companyName: instance.drive.companyName,
+    });
+
     revalidateRecruitmentViews(instance.driveId);
     return { success: true, id: request.id };
   } catch (error) {
@@ -290,7 +302,13 @@ export async function reviewPipelineChange(input: {
       where: { id: String(input.requestId) },
       include: {
         departmentDrive: {
-          select: { id: true, driveId: true, department: { select: { code: true } } },
+          select: {
+            id: true,
+            driveId: true,
+            departmentId: true,
+            department: { select: { code: true } },
+            drive: { select: { companyName: true } },
+          },
         },
       },
     });
@@ -327,6 +345,15 @@ export async function reviewPipelineChange(input: {
           },
           reviewer.id
         );
+      });
+
+      await notifyPipelineChangeReviewed({
+        requestId: request.id,
+        driveId: request.departmentDrive.driveId,
+        departmentId: request.departmentDrive.departmentId,
+        companyName: request.departmentDrive.drive.companyName,
+        approved: false,
+        note,
       });
 
       revalidateRecruitmentViews(request.departmentDrive.driveId);
@@ -382,6 +409,15 @@ export async function reviewPipelineChange(input: {
       );
 
       return created;
+    });
+
+    await notifyPipelineChangeReviewed({
+      requestId: request.id,
+      driveId: request.departmentDrive.driveId,
+      departmentId: request.departmentDrive.departmentId,
+      companyName: request.departmentDrive.drive.companyName,
+      approved: true,
+      note: note || null,
     });
 
     revalidateRecruitmentViews(request.departmentDrive.driveId);

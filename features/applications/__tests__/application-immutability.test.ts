@@ -40,7 +40,7 @@ vi.mock("@/lib/prisma", () => ({
       count: vi.fn(),
     },
     recruitmentStage: { findUnique: vi.fn() },
-    applicationStageEvent: { create: vi.fn(), createMany: vi.fn() },
+    applicationStageEvent: { create: vi.fn(async () => ({ id: "event-1" })), createMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -62,9 +62,15 @@ vi.mock("@/lib/audit", () => ({
 }));
 
 vi.mock("@/lib/notifications", () => ({
-  createApplicationSubmittedNotification: vi.fn(),
-  createNotification: vi.fn(),
-  NotificationType: { APPLICATION: "APPLICATION" },
+  deliverNotification: vi.fn(async () => ({ delivered: 1 })),
+  deliverNotificationSafely: vi.fn(async () => ({ delivered: 1 })),
+  departmentAdminRecipients: vi.fn(async () => []),
+  superAdminRecipients: vi.fn(async () => []),
+}));
+vi.mock("@/features/notifications/producers/application-events", () => ({
+  notifyApplicationSubmitted: vi.fn(),
+  notifyPlacementRecorded: vi.fn(),
+  notifyPlacementRevoked: vi.fn(),
 }));
 
 vi.mock("../queries/check-application-exists", () => ({

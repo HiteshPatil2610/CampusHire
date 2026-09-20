@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
+import { notifyDriveAssigned } from "@/features/notifications/producers/workflow-events";
 import { isCentralDrive } from "../domain/drive-kind";
 import { ensureDepartmentsAssigned } from "../domain/department-assignment";
 
@@ -50,7 +51,7 @@ export async function assignDriveToDepartments(
   input: AssignDriveDepartmentsInput
 ): Promise<AssignDriveDepartmentsResult> {
   try {
-    await requireSuperAdmin();
+    const superAdmin = await requireSuperAdmin();
 
     const validated = assignSchema.safeParse(input);
     if (!validated.success) {
@@ -117,6 +118,16 @@ export async function assignDriveToDepartments(
         skippedDepartmentIds: skipped,
       },
     });
+
+    // The newly assigned departments' admins have work to do. No student is
+    // told anything until a department publishes.
+    if (outcome.assigned.length > 0) {
+      await notifyDriveAssigned({
+        driveId,
+        actorId: superAdmin.id,
+        departmentIds: outcome.assigned,
+      });
+    }
 
     revalidatePath("/super-admin-dashboard/drives");
     revalidatePath("/admin-dashboard/drives");

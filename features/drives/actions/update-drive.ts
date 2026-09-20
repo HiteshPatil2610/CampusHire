@@ -2,6 +2,7 @@
 
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyDriveUpdated } from "@/features/notifications/actions/notify-drive-lifecycle";
 import { driveSchema, type DriveInput } from "../schemas/drive";
 import { resolveDeptAdminEligibleDepartments } from "../utils/department-scope";
 import { isCentralDrive } from "../domain/drive-kind";
@@ -29,7 +30,7 @@ export async function updateDrive(
   input: DriveInput
 ): Promise<UpdateDriveResult> {
   try {
-    const { department } = await requireDepartmentAdmin();
+    const { department, user } = await requireDepartmentAdmin();
 
     const existingDrive = await prisma.drive.findUnique({
       where: { id: driveId },
@@ -132,6 +133,15 @@ export async function updateDrive(
           "This drive has applications from a department that would be removed. No changes were saved.",
       };
     }
+
+    // The drive is live in this department: its applicants and the students
+    // it is open to see the change. Once a day at most for the same edit.
+    await notifyDriveUpdated({
+      driveId,
+      departmentIds: [department.id],
+      summary: `Details of ${validated.companyName} — ${validated.roleName} were updated. Check the drive page for the latest.`,
+      actorId: user.id,
+    });
 
     return {
       success: true,

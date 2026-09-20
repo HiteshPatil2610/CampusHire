@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
+import { notifyIfDepartmentDriveReady } from "@/features/notifications/producers/department-readiness";
 import {
   driveDepartmentConfigSchema,
   type DriveDepartmentConfigInput,
@@ -287,6 +288,14 @@ export async function saveDriveDepartmentConfig(
           ? { eligibilityRules: eligibilityRules.map((rule) => describeRule(rule)) }
           : {}),
       },
+    });
+
+    // A configuration that became complete is worth telling: the admins can
+    // publish, and the Super Admins see the department is done.
+    await notifyIfDepartmentDriveReady({
+      driveId,
+      departmentId: department.id,
+      departmentCode: department.code,
     });
 
     revalidatePath("/admin-dashboard/drives");
