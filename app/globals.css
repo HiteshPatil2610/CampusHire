@@ -130,76 +130,10 @@
      Layout shells — ui-context.md §1.4
      ============================================================ */
 
-  /* Authenticated App Shell (Admin, Student, Super Admin) */
-  .app-shell {
-    display: grid;
-    grid-template-columns: var(--sidebar-width) 1fr;
-    min-height: 100vh;
-  }
-
-  .app-sidebar {
-    background: var(--surface-2);
-    border-right: 0.5px solid var(--border);
-    padding: 20px 14px;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .app-sidebar-nav {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .nav-group {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .nav-group + .nav-group {
-    margin-top: 14px;
-  }
-
-  .nav-group-title {
-    padding: 0 10px 6px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-
-  .app-sidebar-footer {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding-top: 12px;
-    border-top: 0.5px solid var(--border);
-  }
-
-  .app-main {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-
-  .app-topbar {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background: var(--surface-2);
-    border-bottom: 0.5px solid var(--border);
-    padding: 14px 28px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
+  /* Authenticated App Shell — a black chassis (sidebar + bezels) around a
+     rounded white canvas; layout lives in components/shared/app-shell.tsx. */
   .app-content {
     padding: 28px 32px;
-    flex: 1;
   }
 
   /* Page transitions */

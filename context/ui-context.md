@@ -70,11 +70,14 @@ All typography uses **Inter** (`font-family: 'Inter', system-ui, -apple-system, 
 ### 1.4 Global Spacing & Layout Shells
 
 #### Core Layout Shells
-1. **Authenticated App Shell (Admin, Student, Super Admin)**
-   - **Structure:** 2-column layout (`grid-template-columns: 220px 1fr; min-height: 100vh; background: var(--surface-0)`).
-   - **Sidebar:** Fixed `220px` width, `--surface-2` (white) background, `0.5px solid var(--border)` right border, `padding: 20px 14px`. Bottom navigation (Settings, Logout) pinned via `margin-top: auto`.
-   - **Topbar:** Sticky top header, `--surface-2` background, `0.5px solid var(--border)` bottom border, `padding: 14px 28px`, right-aligned action icons & profile avatar.
-   - **Content Canvas:** Main scrollable workspace, `padding: 28px 32px`.
+1. **Authenticated App Shell (Admin, Student, Super Admin) — "Chassis & Floating Screen"**
+   - **Chassis:** `components/shared/app-shell.tsx`. Full-viewport `flex bg-black`; the sidebar and the bezels share one black background so they read as a single frame.
+   - **Canvas:** the page sits in a rounded (`20px`) white canvas inset `py-2.5 pr-2.5 pl-0` — bezels on top, right and bottom, none on the left where it meets the sidebar. The canvas scrolls internally; the shell itself never scrolls.
+   - **No header bar.** There is no topbar; notifications, settings, search and sign-out live in the sidebar.
+   - **Sidebar (`components/shared/sidebar.tsx`)** has two states, remembered in `localStorage` (`campushire.sidebar.collapsed`):
+     - *Dock* (`w-14`): brand button (opens the sidebar), then every nav section as an icon only — same icons and order as the expanded view, groups split by a hairline, active page highlighted, right-anchored tooltips (fixed-position so the scrolling dock can't clip them), unread dot on Notifications — and the user's initials pinned to the bottom, opening an account menu (Settings, Log out).
+     - *Expanded* (`w-[260px]`): brand + search toggle + collapse; grouped nav (`text-neutral-200`, `rounded-xl`, 16px icons, active row `bg-neutral-900`); a bottom account card with avatar, name, role label and a Settings link. There is no "New …" primary-action button.
+   - Page content keeps `--surface-*` tokens and hairline cards inside the white canvas.
 
 2. **Public & Authentication Shell**
    - **Navbar:** Sticky topbar, `padding: 16px 40px`, `--surface-2` background, brand mark + nav links + CTA.

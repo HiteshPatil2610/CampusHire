@@ -3872,3 +3872,20 @@ and `clerk impersonate` (which doesn't need a password) are actions this
 assistant declines/is blocked from taking respectively. Worth a manual
 click-through on `/student-dashboard/drives` and `/student-dashboard` to
 confirm the console error is gone.
+
+
+---
+
+## App shell → dark chassis with dual-state dock sidebar
+
+Replaced the light 220px sidebar + sticky topbar with the "Chassis & Floating
+Screen" layout (see `ui-context.md` §1.4): black chassis, rounded white canvas
+bezelled on top/right/bottom, collapsible dock sidebar (`w-14` ↔ `w-[260px]`).
+`topbar.tsx` is deleted; the old `.app-shell/.app-sidebar/.app-topbar/.app-main`
+CSS is removed. Super Admin nav icons moved from emoji to lucide. Admin's
+Settings link now points at `/admin-dashboard/settings` (it previously pointed
+at the dashboard root). The Recents list and the "New …" primary-action button were added and then removed at the user's request; the collapsed dock now shows the nav sections' icons (no names) instead of +/search/notification.
+
+Verified: `tsc --noEmit` clean. Not clicked through in-browser (needs an
+authenticated session) — check the collapse/expand, tooltips, account menu and
+that wide tables/sticky elements still behave inside the scrolling canvas.

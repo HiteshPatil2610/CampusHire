@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link, { useLinkStatus } from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useClerk, useUser } from '@clerk/nextjs';
 import {
   LayoutDashboard,
@@ -19,6 +19,15 @@ import {
   Sparkles,
   PencilLine,
   Gauge,
+  Globe,
+  GraduationCap,
+  Compass,
+  Radio,
+  Building2,
+  UserCog,
+  ScrollText,
+  Search,
+  PanelLeftClose,
   type LucideIcon,
 } from 'lucide-react';
 import { getUnreadCountAction } from '@/features/notifications/actions/get-unread-count-action';
@@ -26,7 +35,7 @@ import { getUnreadCountAction } from '@/features/notifications/actions/get-unrea
 interface NavItem {
   label: string;
   href: string;
-  icon: LucideIcon | string;
+  icon: LucideIcon;
   badge?: boolean;
 }
 
@@ -40,72 +49,30 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
   student: [
     {
       items: [
-        {
-          label: 'Dashboard',
-          href: '/student-dashboard',
-          icon: LayoutDashboard,
-        },
+        { label: 'Dashboard', href: '/student-dashboard', icon: LayoutDashboard },
       ],
     },
     {
       title: 'Drives',
       items: [
-        {
-          label: 'Drives',
-          href: '/student-dashboard/drives',
-          icon: Briefcase,
-        },
-        {
-          label: 'Applications',
-          href: '/student-dashboard/applications',
-          icon: FileCheck,
-        },
+        { label: 'Drives', href: '/student-dashboard/drives', icon: Briefcase },
+        { label: 'Applications', href: '/student-dashboard/applications', icon: FileCheck },
       ],
     },
     {
       title: 'Student',
       items: [
         { label: 'Profile', href: '/student-dashboard/profile', icon: Target },
-        {
-          label: 'Resume Builder',
-          href: '/student-dashboard/resume-builder',
-          icon: FileText,
-        },
-        {
-          label: 'AI Analyzer',
-          href: '/student-dashboard/ai-analyzer',
-          icon: Sparkles,
-        },
-        {
-          label: 'Self Assessment',
-          href: '/student-dashboard/self-assessment',
-          icon: PencilLine,
-        },
-        {
-          label: 'Readiness',
-          href: '/student-dashboard/readiness',
-          icon: Gauge,
-        },
+        { label: 'Resume Builder', href: '/student-dashboard/resume-builder', icon: FileText },
+        { label: 'AI Analyzer', href: '/student-dashboard/ai-analyzer', icon: Sparkles },
+        { label: 'Self Assessment', href: '/student-dashboard/self-assessment', icon: PencilLine },
+        { label: 'Readiness', href: '/student-dashboard/readiness', icon: Gauge },
       ],
     },
     {
       items: [
-        {
-          label: 'Announcements',
-          href: '/student-dashboard/announcements',
-          icon: Megaphone,
-        },
-        {
-          label: 'Notifications',
-          href: '/student-dashboard/notifications',
-          icon: Bell,
-          badge: true,
-        },
-        {
-          label: 'Settings',
-          href: '/student-dashboard/settings',
-          icon: Settings,
-        },
+        { label: 'Announcements', href: '/student-dashboard/announcements', icon: Megaphone },
+        { label: 'Notifications', href: '/student-dashboard/notifications', icon: Bell, badge: true },
       ],
     },
   ],
@@ -115,38 +82,27 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
         { label: 'Dashboard', href: '/admin-dashboard', icon: LayoutDashboard },
         { label: 'Students', href: '/admin-dashboard/students', icon: Users },
         { label: 'Drives', href: '/admin-dashboard/drives', icon: Briefcase },
-        {
-          label: 'Announcements',
-          href: '/admin-dashboard/announcements',
-          icon: Megaphone,
-        },
+        { label: 'Announcements', href: '/admin-dashboard/announcements', icon: Megaphone },
         { label: 'Reports', href: '/admin-dashboard/reports', icon: BarChart2 },
-        {
-          label: 'Notifications',
-          href: '/admin-dashboard/notifications',
-          icon: Bell,
-          badge: true,
-        },
-        { label: 'Settings', href: '/admin-dashboard/settings', icon: Settings },
+        { label: 'Notifications', href: '/admin-dashboard/notifications', icon: Bell, badge: true },
       ],
     },
   ],
   superadmin: [
     {
       items: [
-        { label: 'Institutional Overview', href: '/super-admin-dashboard', icon: '🌐' },
-        { label: 'All Students', href: '/super-admin-dashboard/students', icon: '◉' },
-        { label: 'Campus Drives', href: '/super-admin-dashboard/drives', icon: '🚀' },
-        { label: 'Placements', href: '/super-admin-dashboard/placements', icon: '🎓' },
-        { label: 'Pipeline Requests', href: '/super-admin-dashboard/pipeline-requests', icon: '🧭' },
-        { label: 'Announcements', href: '/super-admin-dashboard/announcements', icon: '📣' },
-        { label: 'Notifications', href: '/super-admin-dashboard/notifications', icon: '🔔', badge: true },
-        { label: 'Notification Deliveries', href: '/super-admin-dashboard/notification-deliveries', icon: '📡' },
-        { label: 'Departments', href: '/super-admin-dashboard/departments', icon: '🏛' },
-        { label: 'Admin Accounts', href: '/super-admin-dashboard/admins', icon: '👤' },
-        { label: 'Global Reports', href: '/super-admin-dashboard/reports', icon: '📊' },
-        { label: 'Audit Log', href: '/audit-logs', icon: '🔍' },
-        { label: 'System Settings', href: '/super-admin-dashboard/settings', icon: '⚙' },
+        { label: 'Institutional Overview', href: '/super-admin-dashboard', icon: Globe },
+        { label: 'All Students', href: '/super-admin-dashboard/students', icon: Users },
+        { label: 'Campus Drives', href: '/super-admin-dashboard/drives', icon: Briefcase },
+        { label: 'Placements', href: '/super-admin-dashboard/placements', icon: GraduationCap },
+        { label: 'Pipeline Requests', href: '/super-admin-dashboard/pipeline-requests', icon: Compass },
+        { label: 'Announcements', href: '/super-admin-dashboard/announcements', icon: Megaphone },
+        { label: 'Notifications', href: '/super-admin-dashboard/notifications', icon: Bell, badge: true },
+        { label: 'Notification Deliveries', href: '/super-admin-dashboard/notification-deliveries', icon: Radio },
+        { label: 'Departments', href: '/super-admin-dashboard/departments', icon: Building2 },
+        { label: 'Admin Accounts', href: '/super-admin-dashboard/admins', icon: UserCog },
+        { label: 'Global Reports', href: '/super-admin-dashboard/reports', icon: BarChart2 },
+        { label: 'Audit Log', href: '/audit-logs', icon: ScrollText },
       ],
     },
   ],
@@ -154,7 +110,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
 
 const SETTINGS_HREF: Record<string, string> = {
   student: '/student-dashboard/settings',
-  admin: '/admin-dashboard',
+  admin: '/admin-dashboard/settings',
   superadmin: '/super-admin-dashboard/settings',
 };
 
@@ -182,26 +138,94 @@ function NavPendingSpinner() {
   return <span className="nav-spinner" role="status" aria-label="Loading" />;
 }
 
-export interface SidebarProps {
-  role: 'student' | 'admin' | 'superadmin';
+/**
+ * A dock icon with a right-anchored hover label. The label is `fixed` so the
+ * dock's scroll container (needed when a role has many sections) can't clip it.
+ */
+function DockLink({
+  item,
+  active,
+  unread,
+}: {
+  item: NavItem;
+  active: boolean;
+  unread: boolean;
+}) {
+  const [tip, setTip] = useState<{ top: number; left: number } | null>(null);
+  const Icon = item.icon;
+
+  function show(e: React.SyntheticEvent<HTMLElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTip({ top: rect.top + rect.height / 2, left: rect.right + 10 });
+  }
+
+  return (
+    <Link
+      href={item.href}
+      aria-label={item.label}
+      aria-current={active ? 'page' : undefined}
+      onMouseEnter={show}
+      onMouseLeave={() => setTip(null)}
+      onFocus={show}
+      onBlur={() => setTip(null)}
+      className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500 ${
+        active
+          ? 'bg-neutral-900 text-white'
+          : 'text-neutral-300 hover:bg-neutral-900 hover:text-white'
+      }`}
+    >
+      <Icon size={20} />
+      {unread && (
+        <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--accent)]" />
+      )}
+      {tip && (
+        <span
+          role="tooltip"
+          style={{ top: tip.top, left: tip.left }}
+          className="pointer-events-none fixed z-50 -translate-y-1/2 whitespace-nowrap rounded-md bg-neutral-800 px-2 py-1 text-xs font-medium text-white shadow-lg"
+        >
+          {item.label}
+        </span>
+      )}
+    </Link>
+  );
 }
 
-export default function Sidebar({ role }: SidebarProps) {
+export interface SidebarProps {
+  role: 'student' | 'admin' | 'superadmin';
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { signOut } = useClerk();
   const { user } = useUser();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const groups = NAV_GROUPS[role] || NAV_GROUPS.student;
-  const firstName = user?.firstName || user?.fullName?.split(' ')[0] || '';
+  const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+  const settingsHref = SETTINGS_HREF[role];
+
+  const displayName = user?.fullName || user?.firstName || 'User';
+  const initials =
+    displayName
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || 'U';
 
   useEffect(() => {
-    // Fetch unread notification count
     getUnreadCountAction()
       .then((result) => {
-        if (result.success) {
-          setUnreadCount(result.count);
-        }
+        if (result.success) setUnreadCount(result.count);
       })
       .catch(() => {
         // Silently ignore if unauthenticated
@@ -209,130 +233,273 @@ export default function Sidebar({ role }: SidebarProps) {
   }, []);
 
   function isActive(href: string): boolean {
-    // Exact match for the href
-    if (pathname === href) {
-      return true;
-    }
-    
-    // For dashboard links, only match exact path (not subpaths)
-    if (href.endsWith('dashboard')) {
-      return pathname === href;
-    }
-    
-    // For other links, check if current path starts with the href
+    if (pathname === href) return true;
+    // Dashboard roots match exactly, never their subpages.
+    if (href.endsWith('dashboard')) return false;
     return pathname?.startsWith(href + '/') || false;
+  }
+
+  useEffect(() => {
+    if (searching) searchRef.current?.focus();
+  }, [searching]);
+
+  // Close the account menu on outside click / Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  function closeSearch() {
+    setSearching(false);
+    setQuery('');
   }
 
   function handleSignOut() {
     signOut({ redirectUrl: '/sign-in' });
   }
 
-  return (
-    <aside className="app-sidebar">
-      <div style={{ marginBottom: 20 }}>
-        <Link href="/" className="brand-mark" style={{ cursor: 'pointer' }}>
-          <span className="brand-dot" />
-          <span>CampusHire</span>
-        </Link>
-        <div style={{ marginTop: 6, display: 'inline-block' }}>
-          <span
-            style={{
-              fontSize: 10,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              fontWeight: 600,
-              padding: '2px 8px',
-              borderRadius: 12,
-              background: 'var(--accent-light)',
-              color: 'var(--accent-dark)',
-            }}
-          >
-            {ROLE_LABELS[role] || role}
-          </span>
-        </div>
+  const trimmed = query.trim().toLowerCase();
+  const visibleGroups = trimmed
+    ? [
+        {
+          items: allItems.filter((item) => item.label.toLowerCase().includes(trimmed)),
+        } as NavGroup,
+      ]
+    : groups;
+  const accountMenu = menuOpen && (
+    <div
+      role="menu"
+      className={`absolute z-50 w-52 rounded-xl border border-neutral-800 bg-neutral-950 p-1 shadow-xl ${
+        collapsed ? 'bottom-0 left-full ml-2.5' : 'bottom-full left-2 right-2 mb-2 w-auto'
+      }`}
+    >
+      <div className="px-3 py-2">
+        <p className="truncate text-sm font-medium text-white">{displayName}</p>
+        <p className="truncate text-xs text-neutral-400">{ROLE_LABELS[role]}</p>
       </div>
+      <Link
+        role="menuitem"
+        href={settingsHref}
+        onClick={() => setMenuOpen(false)}
+        className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-900 hover:text-white"
+      >
+        <Settings size={16} />
+        Settings
+      </Link>
+      <button
+        role="menuitem"
+        type="button"
+        onClick={handleSignOut}
+        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-900 hover:text-white"
+      >
+        <LogOut size={16} />
+        Log out
+      </button>
+    </div>
+  );
 
-      <nav className="app-sidebar-nav">
-        {groups.map((group, groupIndex) => (
-          <div key={group.title ?? `group-${groupIndex}`} className="nav-group">
-            {group.title && (
-              <div className="nav-group-title">{group.title}</div>
+  const avatar = user?.imageUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={user.imageUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+  ) : (
+    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#6c858b] text-xs font-semibold text-white">
+      {initials}
+    </span>
+  );
+
+  return (
+    <aside
+      className={`relative flex h-full shrink-0 flex-col bg-black text-white transition-all duration-300 ${
+        collapsed ? 'w-14' : 'w-[260px]'
+      }`}
+    >
+      {collapsed ? (
+        <div className="flex h-full w-full flex-col items-center justify-between py-3.5">
+          <div className="flex min-h-0 w-full flex-1 flex-col items-center">
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-label="Open sidebar"
+              title="Open sidebar"
+              className="mb-4 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl hover:bg-neutral-900"
+            >
+              <span className="h-[18px] w-[18px] rounded-[5px] bg-[var(--accent)]" />
+            </button>
+
+            <nav
+              aria-label="Primary"
+              className="flex min-h-0 w-full flex-1 flex-col items-center space-y-0.5 overflow-y-auto"
+            >
+              {groups.map((group, groupIndex) => (
+                <div
+                  key={group.title ?? `group-${groupIndex}`}
+                  className={`flex w-full flex-col items-center space-y-0.5 ${
+                    groupIndex > 0 ? 'border-t border-neutral-900 pt-1.5 mt-1.5' : ''
+                  }`}
+                >
+                  {group.items.map((item) => (
+                    <DockLink
+                      key={item.href}
+                      item={item}
+                      active={isActive(item.href)}
+                      unread={Boolean(item.badge) && unreadCount > 0}
+                    />
+                  ))}
+                </div>
+              ))}
+            </nav>
+
+          </div>
+
+          <div ref={menuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label="Account options"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500"
+            >
+              {avatar}
+            </button>
+            {accountMenu}
+          </div>
+        </div>
+      ) : (
+        <div className="flex h-full w-full flex-col justify-between overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
+              <Link href="/" className="flex items-center gap-2 text-base font-bold">
+                <span className="h-[18px] w-[18px] rounded-[5px] bg-[var(--accent)]" />
+                CampusHire
+              </Link>
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => (searching ? closeSearch() : setSearching(true))}
+                  aria-label="Search navigation"
+                  aria-pressed={searching}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-900 hover:text-white"
+                >
+                  <Search size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={onToggle}
+                  aria-label="Collapse sidebar"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-900 hover:text-white"
+                >
+                  <PanelLeftClose size={16} />
+                </button>
+              </div>
+            </div>
+
+            {searching && (
+              <div className="px-3 pb-2">
+                <input
+                  ref={searchRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') closeSearch();
+                    if (e.key === 'Enter' && visibleGroups[0]?.items[0]) {
+                      router.push(visibleGroups[0].items[0].href);
+                      closeSearch();
+                    }
+                  }}
+                  placeholder="Search pages…"
+                  aria-label="Search pages"
+                  className="w-full select-text rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-neutral-600 focus:outline-none"
+                />
+              </div>
             )}
 
-            {group.items.map((item) => {
-              const active = isActive(item.href);
-              const isEmojiIcon = typeof item.icon === 'string';
-              const Icon = isEmojiIcon ? null : (item.icon as LucideIcon);
+            <nav
+              aria-label="Primary"
+              className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2"
+            >
+              {visibleGroups.map((group, groupIndex) => (
+                <div key={group.title ?? `group-${groupIndex}`} className="space-y-0.5">
+                  {group.title && !trimmed && (
+                    <div className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                      {group.title}
+                    </div>
+                  )}
+                  {group.items.map((item) => {
+                    const active = isActive(item.href);
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        aria-current={active ? 'page' : undefined}
+                        className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors ${
+                          active
+                            ? 'bg-neutral-900 font-medium text-white'
+                            : 'text-neutral-200 hover:bg-neutral-900 hover:text-white'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <Icon size={16} />
+                          <span>{item.label}</span>
+                        </span>
+                        <span className="flex items-center gap-2">
+                          {item.badge && unreadCount > 0 && (
+                            <span className="badge badge-accent">{unreadCount}</span>
+                          )}
+                          <NavPendingSpinner />
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+              {trimmed && visibleGroups[0].items.length === 0 && (
+                <p className="px-3 py-2 text-xs text-neutral-500">No matching pages.</p>
+              )}
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`sidebar-link ${active ? 'active' : ''}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <span
-                    style={{ display: 'flex', alignItems: 'center', gap: 10 }}
-                  >
-                    {isEmojiIcon ? (
-                      <span aria-hidden style={{ fontSize: 15, lineHeight: 1 }}>
-                        {item.icon as string}
-                      </span>
-                    ) : (
-                      Icon && <Icon size={16} />
-                    )}
-                    <span>{item.label}</span>
-                  </span>
-                  <span
-                    style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                  >
-                    {item.badge && unreadCount > 0 && (
-                      <span className="badge badge-accent">{unreadCount}</span>
-                    )}
-                    <NavPendingSpinner />
-                  </span>
-                </Link>
-              );
-            })}
+            </nav>
           </div>
-        ))}
-      </nav>
 
-      <div className="app-sidebar-footer">
-        <Link
-          href={SETTINGS_HREF[role]}
-          className={`sidebar-link ${
-            isActive(SETTINGS_HREF[role]) ? 'active' : ''
-          }`}
-          style={{ display: 'flex', alignItems: 'center', gap: 10 }}
-        >
-          <Settings size={16} />
-          <span>Settings</span>
-          <NavPendingSpinner />
-        </Link>
-        <button
-          className="sidebar-link"
-          style={{
-            border: 'none',
-            background: 'none',
-            textAlign: 'left',
-            cursor: 'pointer',
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}
-          onClick={handleSignOut}
-        >
-          <LogOut size={16} />
-          <span>{firstName ? `Log out (${firstName})` : 'Log out'}</span>
-        </button>
-      </div>
+          <div ref={menuRef} className="relative border-t border-neutral-900 p-3">
+            {accountMenu}
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((open) => !open)}
+                aria-label="Account options"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left hover:bg-neutral-900"
+              >
+                {avatar}
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-white">{displayName}</span>
+                  <span className="block truncate text-xs text-neutral-400">{ROLE_LABELS[role]}</span>
+                </span>
+              </button>
+              <Link
+                href={settingsHref}
+                aria-label="Settings"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-900 hover:text-white"
+              >
+                <Settings size={16} />
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
