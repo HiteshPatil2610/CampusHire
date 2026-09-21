@@ -4,7 +4,7 @@ import { getDepartments } from "@/features/departments/queries/get-departments";
 import { CentralDrivesView } from "@/features/drives/components/central-drives-view";
 import { getInstitutionSettings } from "@/features/settings/queries/get-settings";
 import { institutionDefaultStages } from "@/features/settings/domain/default-pipeline";
-import { toStageDrafts } from "@/features/recruitment/components/pipeline-editor";
+import { toStageDrafts } from "@/features/recruitment/domain/stage-drafts";
 
 export default async function CampusDrivesPage() {
   await requireSuperAdmin();

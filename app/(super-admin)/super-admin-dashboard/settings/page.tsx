@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getInstitutionSettings } from "@/features/settings/queries/get-settings";
 import { getMyMutedEvents } from "@/features/notifications/actions/set-notification-preference";
 import { InstitutionSettingsClient } from "@/features/settings/components/institution-settings-client";
-import { toStageDrafts } from "@/features/recruitment/components/pipeline-editor";
+import { toStageDrafts } from "@/features/recruitment/domain/stage-drafts";
 import { institutionDefaultStages } from "@/features/settings/domain/default-pipeline";
 
 export const dynamic = "force-dynamic";
