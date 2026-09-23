@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { DepartmentStudentsResult } from '@/features/students/queries/get-department-students';
 import { StudentDetailsDialog } from './student-details-dialog';
+import { StudentDropDialog } from './student-drop-dialog';
 import Pagination from '@/components/ui/pagination';
 import { exportToCsv } from '@/lib/csv-export';
 import { formatBatch } from '@/features/students/utils/batch';
@@ -16,6 +17,14 @@ type RosterStatusFilter =
   | 'unplaced'
   | 'pending'
   | 'opted-out';
+
+type RosterYear = 'all' | 'third' | 'fourth';
+
+const YEAR_FILTERS: { value: RosterYear; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'third', label: '3rd Year' },
+  { value: 'fourth', label: '4th Year' },
+];
 
 interface StudentRosterClientProps {
   initialData: DepartmentStudentsResult;
@@ -37,10 +46,14 @@ export function StudentRosterClient({
   const searchParams = useSearchParams();
 
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [droppingStudent, setDroppingStudent] = useState<
+    { id: string; name: string; rollNumber: string | null } | null
+  >(null);
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
 
   const currentStatus =
     (searchParams.get('status') as RosterStatusFilter) || 'all';
+  const currentYear = (searchParams.get('year') as RosterYear) || 'all';
 
   // Handle search with debounce
   function handleSearchChange(value: string) {
@@ -67,6 +80,17 @@ export function StudentRosterClient({
       params.delete('status');
     } else {
       params.set('status', status);
+    }
+    params.delete('page'); // Reset to page 1
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  function handleYearFilter(year: RosterYear) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (year === 'all') {
+      params.delete('year');
+    } else {
+      params.set('year', year);
     }
     params.delete('page'); // Reset to page 1
     router.push(`${pathname}?${params.toString()}`);
@@ -135,7 +159,21 @@ export function StudentRosterClient({
         />
 
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Status:</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Year:</span>
+          {YEAR_FILTERS.map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              className={`btn btn-sm ${currentYear === filter.value ? 'btn-primary' : 'btn-outline'}`}
+              style={{ fontSize: 11, padding: '4px 8px' }}
+              aria-pressed={currentYear === filter.value}
+              onClick={() => handleYearFilter(filter.value)}
+            >
+              {filter.label}
+            </button>
+          ))}
+
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 8 }}>Status:</span>
           {[
             { value: 'all', label: 'All' },
             { value: 'placed', label: 'Placed' },
@@ -274,7 +312,18 @@ export function StudentRosterClient({
                         {statusBadge.text}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'right' }}>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        style={{ fontSize: 11, padding: '3px 8px', marginRight: 6, color: 'var(--red)' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDroppingStudent({ id: student.id, name: student.name, rollNumber: student.rollNumber });
+                        }}
+                      >
+                        Drop
+                      </button>
                       <button
                         type="button"
                         className="btn btn-outline btn-sm"
@@ -322,6 +371,9 @@ export function StudentRosterClient({
         studentId={selectedStudentId}
         onClose={() => setSelectedStudentId(null)}
       />
+
+      {/* Mark as Drop / Undo, straight from the row */}
+      <StudentDropDialog student={droppingStudent} onClose={() => setDroppingStudent(null)} />
     </>
   );
 }

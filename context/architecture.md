@@ -549,6 +549,10 @@ AcademicCycleCutover { academicYear (PK), finalYearPassout, effectiveFrom,
   later by compare-and-set, a `StudentDrop` row records the state before and
   after, and an audit row records the act. The level moves back a step because
   it is derived from the year. A reason is required.
+- **Once per academic year** (`droppedThisCycle`): a student can be dropped
+  at most once in a cycle (July 1 – June 30). `dropStudent` refuses a second
+  standing drop in the same cycle; an undone drop does not count, and the
+  batch compare-and-set stops two admins dropping at the same moment.
 - **Undo is a window, not a history editor** (`undoStudentDrop`,
   `decideUndo`): within 48 hours, once, and only while that drop's year is
   still in force — so the latest drop must be undone first. A trigger makes
@@ -557,8 +561,10 @@ AcademicCycleCutover { academicYear (PK), finalYearPassout, effectiveFrom,
   exactly one year. Outside the window a drop is permanent.
 - **Drop count is derived** — the student's drops not undone
   (`utils/drop-count.ts`: `ACTIVE_DROPS_WHERE`, `countActiveDrops`).
-- **Who.** A department admin for their own students, or the Super Admin; not
-  found and not yours read the same. A student with drop history cannot be
+- **Who.** A department admin, for their own students only — the Super Admin
+  cannot drop or undo. Not found and not yours read the same. The admin
+  roster has a Drop button per row and a Year filter (All / 3rd / 4th, via
+  `passoutYearForLevel`). A student with drop history cannot be
   deleted (`Restrict`), and retiring a promoted account refuses such a record.
 - **Later readers** — the batch filter, drive eligibility, semester filtering,
   the Super Admin directory — consume `expectedPassoutYear`, `yearLevelFor` and

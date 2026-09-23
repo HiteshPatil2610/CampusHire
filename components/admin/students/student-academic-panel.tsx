@@ -10,6 +10,8 @@ import { dropStudent, undoStudentDrop } from '@/features/students/actions/manage
 import {
   MIN_DROP_REASON_LENGTH,
   YEAR_LEVEL_LABELS,
+  alreadyDroppedMessage,
+  droppedThisCycle,
   planDrop,
 } from '@/features/students/domain/academic-year';
 import { batchLabel, formatBatch } from '@/features/students/utils/batch';
@@ -80,6 +82,15 @@ export function StudentAcademicPanel({
   if (record === null) return null;
 
   const preview = planDrop(record.expectedPassoutYear);
+  // Once a year: the same rule the server applies before every drop.
+  const droppedThisYear = droppedThisCycle(record.drops);
+  // The drop in force — the one that set the student's current batch — is the
+  // only one the server will undo, so it is the one offered up front.
+  const undoableDrop = record.drops.find(
+    (entry) => entry.undoable && entry.newPassoutYear === record.expectedPassoutYear
+  );
+  const deadlineText = (value: Date | string) =>
+    new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
   const input: React.CSSProperties = { padding: '6px 8px', fontSize: 12, flex: 1, minWidth: 200 };
   const reasonOk = reason.trim().length >= MIN_DROP_REASON_LENGTH;
 
@@ -89,7 +100,7 @@ export function StudentAcademicPanel({
         <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
           Academic standing · {record.academicYear}
         </div>
-        {!dropOpen && preview.ok && (
+        {!dropOpen && preview.ok && !droppedThisYear && (
           <button
             type="button"
             className="btn btn-outline btn-sm"
@@ -113,8 +124,41 @@ export function StudentAcademicPanel({
       </div>
 
       {!preview.ok && <div className="text-muted" style={{ fontSize: 11 }}>{preview.error}</div>}
+      {preview.ok && droppedThisYear && (
+        <div className="text-muted" style={{ fontSize: 11 }}>{alreadyDroppedMessage()}</div>
+      )}
 
-      {dropOpen && preview.ok && (
+      {undoableDrop && undoing !== undoableDrop.id && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+            flexWrap: 'wrap',
+            padding: '8px 10px',
+            borderRadius: 8,
+            background: 'var(--amber-light)',
+            border: '0.5px solid var(--amber)',
+            fontSize: 12,
+          }}
+        >
+          <span>
+            Marked as Drop on {deadlineText(undoableDrop.droppedAt)}. You can undo it until{' '}
+            <strong>{deadlineText(undoableDrop.undoDeadline)}</strong>.
+          </span>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            style={{ fontSize: 11 }}
+            onClick={() => { setUndoing(undoableDrop.id); setDropOpen(false); setReason(''); }}
+          >
+            ↩ Undo drop
+          </button>
+        </div>
+      )}
+
+      {dropOpen && preview.ok && !droppedThisYear && (
         <div style={{ display: 'grid', gap: 6, borderTop: '0.5px solid var(--border)', paddingTop: 8 }}>
           <div style={{ fontSize: 12 }}>
             {YEAR_LEVEL_LABELS[preview.plan.previousLevel]} → <strong>{YEAR_LEVEL_LABELS[preview.plan.newLevel]}</strong>
@@ -162,15 +206,10 @@ export function StudentAcademicPanel({
               {entry.undoneByName ? ` by ${entry.undoneByName}` : ''}: {entry.undoReason}
             </div>
           )}
-          {entry.undoable && undoing !== entry.id && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: 11, padding: '2px 0' }}
-              onClick={() => { setUndoing(entry.id); setDropOpen(false); setReason(''); }}
-            >
-              Undo — until {new Date(entry.undoDeadline).toLocaleString('en-IN')}
-            </button>
+          {entry.undoable && entry.id !== undoableDrop?.id && (
+            <div className="text-muted" style={{ fontSize: 11 }}>
+              Undo the most recent drop first — this one can be undone until {deadlineText(entry.undoDeadline)}.
+            </div>
           )}
           {undoing === entry.id && (
             <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>

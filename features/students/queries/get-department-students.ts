@@ -11,6 +11,10 @@ import {
   resolvePlacementState,
   type PlacementState,
 } from "../utils/placement-status";
+import { passoutYearForLevel } from "../domain/academic-year";
+
+/** The year filter on the roster: everyone, or one year's batch. */
+export type RosterYearFilter = "all" | "third" | "fourth";
 
 export type StudentRosterItem = Student & {
   academic: StudentAcademic | null;
@@ -34,6 +38,11 @@ export interface GetDepartmentStudentsParams {
   // placed   = holds at least one SELECTED application
   // unplaced = registered, opted in, no SELECTED application
   status?: "all" | "placed" | "unplaced" | "pending" | "opted-out";
+  /**
+   * "third" / "fourth" = the batch in that year this academic cycle. The year
+   * level is derived, so this filters on the one passout year it means.
+   */
+  year?: RosterYearFilter;
 }
 
 export interface DepartmentStudentsResult {
@@ -74,8 +83,17 @@ export async function getDepartmentStudents(
             ? { isPending: false, optedIn: false }
             : {};
 
+  const year = params.year ?? "all";
+  const yearFilter: Prisma.StudentWhereInput =
+    year === "third"
+      ? { expectedPassoutYear: passoutYearForLevel("THIRD_YEAR") }
+      : year === "fourth"
+        ? { expectedPassoutYear: passoutYearForLevel("FOURTH_YEAR") }
+        : {};
+
   const where: Prisma.StudentWhereInput = {
     ...statusFilter,
+    ...yearFilter,
     ...(search
       ? {
           OR: [

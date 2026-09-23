@@ -90,6 +90,19 @@ export function yearLevelFor(
   return LEVEL_BY_YEARS_TO_PASSOUT[Math.min(yearsToPassout, LEVEL_BY_YEARS_TO_PASSOUT.length - 1)];
 }
 
+/**
+ * The passout year whose students are at `level` in the cycle `now` falls in —
+ * the inverse of `yearLevelFor`, for filtering by year ("4th Year" in 2026-27
+ * is the 2027 batch). A year level is still never stored; this only turns a
+ * filter into the one batch it means.
+ */
+export function passoutYearForLevel(
+  level: "FIRST_YEAR" | "SECOND_YEAR" | "THIRD_YEAR" | "FOURTH_YEAR",
+  now: Date = new Date()
+): number {
+  return academicCycle(now).finalYearPassout + LEVEL_BY_YEARS_TO_PASSOUT.indexOf(level);
+}
+
 /** A student's academic standing, for display: "4th Year · 2023-27". */
 export function describeStanding(
   expectedPassoutYear: number | null,
@@ -151,6 +164,25 @@ export function planDrop(expectedPassoutYear: number | null, now: Date = new Dat
       undoDeadline: new Date(now.getTime() + DROP_UNDO_WINDOW_MS),
     },
   };
+}
+
+/**
+ * One drop per student per academic year. The year is the cycle that turns
+ * on July 1 (`academicCycle`), and a drop counts only while it stands — one
+ * that was undone does not use up the year. The server checks this before
+ * every drop (with the compare-and-set on the batch closing the race between
+ * two admins); the panel reads the same rule to hide Mark as Drop.
+ */
+export function droppedThisCycle(
+  drops: readonly { academicYear: string; undoneAt: Date | string | null }[],
+  now: Date = new Date()
+): boolean {
+  const cycle = academicCycle(now).label;
+  return drops.some((drop) => drop.academicYear === cycle && drop.undoneAt === null);
+}
+
+export function alreadyDroppedMessage(now: Date = new Date()): string {
+  return `This student has already been marked as Drop in the ${academicCycle(now).label} academic year. A student can be dropped only once a year — the next drop is possible from July 1.`;
 }
 
 /** The drop record fields the undo rule reads. */

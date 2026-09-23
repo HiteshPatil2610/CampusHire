@@ -5,7 +5,9 @@ import {
   academicCycle,
   decideUndo,
   describeStanding,
+  droppedThisCycle,
   isUndoable,
+  passoutYearForLevel,
   planDrop,
   yearLevelFor,
 } from "../domain/academic-year";
@@ -14,7 +16,7 @@ import { dropStudent, undoStudentDrop } from "../actions/manage-drop";
 import { decideStudentRetirement } from "@/features/admin-accounts/utils/retire-student-record";
 import { countActiveDrops } from "../utils/drop-count";
 import { prisma } from "@/lib/prisma";
-import { requireAnyRole, getActiveDepartmentAdmin } from "@/lib/auth";
+import { AuthorizationError, requireAnyRole, getActiveDepartmentAdmin } from "@/lib/auth";
 import { createAuditLogInTransaction } from "@/lib/audit";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -86,6 +88,15 @@ describe("annual promotion", () => {
     expect(describeStanding(null, SEPTEMBER)).toBe("Batch not on record");
     expect(describeStanding(2027, SEPTEMBER)).toBe("4th Year · 2023-27");
   });
+
+  it("turns a year filter into the one batch it means", () => {
+    // 2026-27: 4th year passes out in 2027, 3rd year in 2028.
+    expect(passoutYearForLevel("FOURTH_YEAR", SEPTEMBER)).toBe(2027);
+    expect(passoutYearForLevel("THIRD_YEAR", SEPTEMBER)).toBe(2028);
+    expect(yearLevelFor(passoutYearForLevel("THIRD_YEAR", SEPTEMBER), SEPTEMBER)).toBe("THIRD_YEAR");
+    // Before July 1 it is still last cycle's batches.
+    expect(passoutYearForLevel("FOURTH_YEAR", JUNE_30_LAST_MINUTE)).toBe(2026);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -133,6 +144,19 @@ describe("planDrop", () => {
 
   it("refuses to move a batch past the plausible range", () => {
     expect(planDrop(2100, SEPTEMBER).ok).toBe(false);
+  });
+
+  it("allows one drop per academic year — the year turns on July 1", () => {
+    const standing = { academicYear: "2026-27", undoneAt: null };
+    expect(droppedThisCycle([standing], SEPTEMBER)).toBe(true);
+    // An undone drop does not use up the year.
+    expect(droppedThisCycle([{ ...standing, undoneAt: SEPTEMBER }], SEPTEMBER)).toBe(false);
+    // Last year's drop does not count this year.
+    expect(droppedThisCycle([{ academicYear: "2025-26", undoneAt: null }], SEPTEMBER)).toBe(false);
+    // At the cutover: a drop on June 30 belongs to 2025-26, so July 1 is free again.
+    expect(droppedThisCycle([{ academicYear: "2025-26", undoneAt: null }], JUNE_30_LAST_MINUTE)).toBe(true);
+    expect(droppedThisCycle([{ academicYear: "2025-26", undoneAt: null }], JULY_1_MIDNIGHT)).toBe(false);
+    expect(droppedThisCycle([], SEPTEMBER)).toBe(false);
   });
 });
 
@@ -395,6 +419,52 @@ describe("dropStudent / undoStudentDrop", () => {
     const result = await undoStudentDrop({ dropId: DROP_ID, reason: "Marked in error" });
     expect(result.success).toBe(false);
     expect(createAuditLogInTransaction).not.toHaveBeenCalled();
+  });
+
+  it("the Super Admin cannot drop or undo — dropping is the department's call", async () => {
+    // Only the roles the action asks for get through, as the real check does.
+    vi.mocked(requireAnyRole).mockImplementation((async (roles: string[]) => {
+      if (!roles.includes("SUPER_ADMIN")) throw new AuthorizationError("This action requires DEPT_ADMIN role.");
+      return { id: "super-user", role: "SUPER_ADMIN" };
+    }) as never);
+
+    expect((await dropStudent({ studentId: STUDENT_ID, reason: "Year back after backlogs" })).success).toBe(false);
+    expect((await undoStudentDrop({ dropId: DROP_ID, reason: "Recorded by mistake" })).success).toBe(false);
+    expect(requireAnyRole).toHaveBeenCalledWith(["DEPT_ADMIN"]);
+    expect(prisma.student.findUnique).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("refuses a second drop in the same academic year, writing nothing", async () => {
+    vi.mocked(prisma.student.findUnique).mockResolvedValue({
+      id: STUDENT_ID,
+      departmentId: "dept-comp",
+      expectedPassoutYear: 2027,
+      drops: [{ academicYear: "2026-27", undoneAt: null }],
+    } as never);
+
+    const result = await dropStudent({ studentId: STUDENT_ID, reason: "Second year back" });
+
+    expect(result).toEqual({ success: false, error: expect.stringContaining("only once a year") });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    // It asks only for this academic year's standing drops.
+    expect(vi.mocked(prisma.student.findUnique).mock.calls[0][0]).toMatchObject({
+      select: { drops: { where: { academicYear: "2026-27", undoneAt: null } } },
+    });
+  });
+
+  it("allows a drop again once the earlier one this year was undone", async () => {
+    // The query returns standing drops only; an undone one is not among them.
+    vi.mocked(prisma.student.findUnique).mockResolvedValue({
+      id: STUDENT_ID,
+      departmentId: "dept-comp",
+      expectedPassoutYear: 2026,
+      drops: [],
+    } as never);
+
+    const result = await dropStudent({ studentId: STUDENT_ID, reason: "Year back after backlogs" });
+
+    expect(result.success).toBe(true);
   });
 });
 

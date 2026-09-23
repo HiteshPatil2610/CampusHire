@@ -11,7 +11,10 @@ import {
 import { createAuditLogInTransaction, AuditAction, AuditEntityType } from "@/lib/audit";
 import {
   MIN_DROP_REASON_LENGTH,
+  academicCycle,
+  alreadyDroppedMessage,
   decideUndo,
+  droppedThisCycle,
   planDrop,
 } from "../domain/academic-year";
 
@@ -25,8 +28,9 @@ import {
  * reverse, and is refused outside the window, twice, or when a later drop
  * is in force (`decideUndo`).
  *
- * Authorization: a department admin for a student of their own department,
- * or the Super Admin. Not found and not yours read the same.
+ * Authorization: a department admin, for a student of their own department
+ * only. Dropping is the department's call — the Super Admin cannot drop or
+ * undo. Not found and not yours read the same.
  */
 
 const reasonField = (label: string) =>
@@ -55,12 +59,8 @@ class ConcurrentChangeError extends Error {}
 
 const NOT_FOUND = { success: false as const, error: "Student not found." };
 
-/** Whether the caller may act on a student of this department. */
-async function mayManage(
-  user: { id: string; role: string },
-  departmentId: string
-): Promise<boolean> {
-  if (user.role === "SUPER_ADMIN") return true;
+/** Whether the caller, a department admin, runs this student's department. */
+async function mayManage(user: { id: string }, departmentId: string): Promise<boolean> {
   const admin = await getActiveDepartmentAdmin(user.id);
   return admin?.departmentId === departmentId;
 }
@@ -74,7 +74,7 @@ function revalidateStudentViews() {
 
 export async function dropStudent(input: z.input<typeof dropSchema>): Promise<DropActionResult> {
   try {
-    const user = await requireAnyRole(["DEPT_ADMIN", "SUPER_ADMIN"]);
+    const user = await requireAnyRole(["DEPT_ADMIN"]);
 
     const validated = dropSchema.safeParse(input);
     if (!validated.success) {
@@ -82,13 +82,28 @@ export async function dropStudent(input: z.input<typeof dropSchema>): Promise<Dr
     }
     const { studentId, reason } = validated.data;
 
+    const now = new Date();
     const student = await prisma.student.findUnique({
       where: { id: studentId },
-      select: { id: true, departmentId: true, expectedPassoutYear: true },
+      select: {
+        id: true,
+        departmentId: true,
+        expectedPassoutYear: true,
+        // This academic year's standing drops: at most one is allowed.
+        drops: {
+          where: { academicYear: academicCycle(now).label, undoneAt: null },
+          select: { academicYear: true, undoneAt: true },
+        },
+      },
     });
     if (!student || !(await mayManage(user, student.departmentId))) return NOT_FOUND;
 
-    const now = new Date();
+    // One drop per student per academic year (the year turns on July 1). Two
+    // admins dropping at once are stopped by the compare-and-set below.
+    if (droppedThisCycle(student.drops ?? [], now)) {
+      return { success: false, error: alreadyDroppedMessage(now) };
+    }
+
     const decision = planDrop(student.expectedPassoutYear, now);
     if (!decision.ok) return { success: false, error: decision.error };
     const { plan } = decision;
@@ -156,7 +171,7 @@ export async function dropStudent(input: z.input<typeof dropSchema>): Promise<Dr
 
 export async function undoStudentDrop(input: z.input<typeof undoSchema>): Promise<DropActionResult> {
   try {
-    const user = await requireAnyRole(["DEPT_ADMIN", "SUPER_ADMIN"]);
+    const user = await requireAnyRole(["DEPT_ADMIN"]);
 
     const validated = undoSchema.safeParse(input);
     if (!validated.success) {

@@ -55,10 +55,26 @@ Update this file after every meaningful implementation change.
 - All V1 frontend integration units complete ✅
 - ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 1205 tests pass, 0 failures (after PRN became required in the import).
+- Current baseline: 1214 tests pass, 0 failures (after the once-a-year drop rule).
 
 ## Completed
 
+- **Drop is the department admin's only; roster Drop button and year filter
+  (owner request):** `dropStudent`, `undoStudentDrop` and
+  `getStudentAcademicRecord` now accept DEPT_ADMIN only (own department) — the
+  Super Admin can no longer drop or undo. The department roster
+  (`/admin-dashboard/students`) has a **Drop** button on every row (opens
+  `StudentDropDialog`: standing, Mark as Drop, history, Undo within 48 hours —
+  the same `StudentAcademicPanel` as the details dialog) and a **Year: All /
+  3rd Year / 4th Year** filter (`?year=third|fourth`), which filters on the one
+  passout year that level means this cycle (`passoutYearForLevel`), combined
+  with the status filter and always inside the admin's department.
+  **Follow-ups:** the drop panel shows a prominent "Undo drop" strip for the
+  drop in force (the old borderless link was being missed). **One drop per
+  student per academic year** (cycle turns July 1): `droppedThisCycle` in
+  `academic-year.ts`, checked by `dropStudent` before writing (the batch
+  compare-and-set closes the two-admin race) and used by the panel to hide
+  Mark as Drop; an undone drop does not use up the year. No migration.
 - **Bulk import — DEPT read loosely; clearer phone message (owner testing
   feedback):** the DEPT column is matched by
   `features/departments/utils/department-match.ts` (`matchDepartment`): case,

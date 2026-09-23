@@ -10,6 +10,7 @@ interface AdminStudentsPageProps {
   searchParams: Promise<{
     search?: string;
     status?: string;
+    year?: string;
     page?: string;
   }>;
 }
@@ -32,12 +33,15 @@ export default async function AdminStudentsPage({
   const status =
     (params.status as 'all' | 'placed' | 'unplaced' | 'pending' | 'opted-out') ||
     'all';
+  // Anything but the two year filters means everyone.
+  const year = params.year === 'third' || params.year === 'fourth' ? params.year : 'all';
   const page = params.page ? parseInt(params.page, 10) : 1;
 
   // Fetch students
   const studentsResult = await getDepartmentStudents({
     search,
     status,
+    year,
     page,
     pageSize: 25,
   });

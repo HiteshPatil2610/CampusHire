@@ -36,11 +36,11 @@ export interface StudentAcademicRecord {
 
 /**
  * A student's academic standing and drop history, for the admin's student
- * dialog. Department admin for their own students, or the Super Admin; not
- * found and not yours read the same.
+ * dialog, where drops are recorded. Department admin, for their own students
+ * only; not found and not yours read the same.
  */
 export async function getStudentAcademicRecord(studentId: string): Promise<StudentAcademicRecord | null> {
-  const user = await requireAnyRole(["DEPT_ADMIN", "SUPER_ADMIN"]);
+  const user = await requireAnyRole(["DEPT_ADMIN"]);
 
   const student = await prisma.student.findUnique({
     where: { id: studentId },
@@ -59,10 +59,8 @@ export async function getStudentAcademicRecord(studentId: string): Promise<Stude
   });
   if (!student) return null;
 
-  if (user.role === "DEPT_ADMIN") {
-    const admin = await getActiveDepartmentAdmin(user.id);
-    if (admin?.departmentId !== student.departmentId) return null;
-  }
+  const admin = await getActiveDepartmentAdmin(user.id);
+  if (admin?.departmentId !== student.departmentId) return null;
 
   const now = new Date();
   return {
