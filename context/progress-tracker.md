@@ -60,7 +60,7 @@ Update this file after every meaningful implementation change.
 ## Completed
 
 - **PHASE 3 — Drive dates, eligible batches and drive origin (Items 9, 11, 12,
-  16) (CODE COMPLETE — migration rehearsed, NOT YET APPLIED):**
+  16) (COMPLETE — migration applied to production 2026-09-23):**
   - **Schema** (`20260930000000_drive_application_window`): `Drive.driveDate`
     and `DriveDepartmentConfig.driveDate` **renamed** to `nextStageDate` (values
     kept — the tracker says it always meant the next stage); new
@@ -105,7 +105,12 @@ Update this file after every meaningful implementation change.
     rollback: next stage dates equal the old drive dates, starts equal
     `createdAt`, old key refused / new accepted, start=end refused, next ≤ end
     refused, central-with-department and department-made-central refused;
-    nothing persisted.
+    nothing persisted. Backup branch `pre-drive-window-backup-20260930`
+    taken first; applied by the user with `prisma migrate deploy` on
+    2026-09-23. Verified read-only afterwards: 18 migrations, "schema is up
+    to date", `driveDate` gone, `nextStageDate` / `applicationStartDate`
+    present (start NOT NULL), all 3 new CHECKs present, counts unchanged
+    (2 drives, 2 configs, 3 students), values match the rehearsal.
   - **Known concerns:** no student has a batch yet (0 distinct passout years),
     so no department can post a drive until students are imported with
     batches. Students' drive cards and some admin tables still format dates in
