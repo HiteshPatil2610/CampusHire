@@ -31,11 +31,11 @@ const announcement = (overrides: object = {}) => ({
   ...overrides,
 });
 
-const cseStudent: AnnouncementViewer = { role: "STUDENT", departmentId: CSE, batchYear: 2026 };
-const itStudent: AnnouncementViewer = { role: "STUDENT", departmentId: IT, batchYear: 2026 };
-const cseAdmin: AnnouncementViewer = { role: "DEPT_ADMIN", departmentId: CSE, batchYear: null };
-const itAdmin: AnnouncementViewer = { role: "DEPT_ADMIN", departmentId: IT, batchYear: null };
-const superAdmin: AnnouncementViewer = { role: "SUPER_ADMIN", departmentId: null, batchYear: null };
+const cseStudent: AnnouncementViewer = { role: "STUDENT", departmentId: CSE, expectedPassoutYear: 2026 };
+const itStudent: AnnouncementViewer = { role: "STUDENT", departmentId: IT, expectedPassoutYear: 2026 };
+const cseAdmin: AnnouncementViewer = { role: "DEPT_ADMIN", departmentId: CSE, expectedPassoutYear: null };
+const itAdmin: AnnouncementViewer = { role: "DEPT_ADMIN", departmentId: IT, expectedPassoutYear: null };
+const superAdmin: AnnouncementViewer = { role: "SUPER_ADMIN", departmentId: null, expectedPassoutYear: null };
 
 describe("when an announcement is live", () => {
   it("is not live as a draft", () => {
@@ -97,12 +97,12 @@ describe("targeting", () => {
   it("reaches only the batches it names", () => {
     const batched = announcement({ batchYears: [2027] });
     expect(announcementTargets(batched, cseStudent)).toBe(false);
-    expect(announcementTargets(batched, { ...cseStudent, batchYear: 2027 })).toBe(true);
+    expect(announcementTargets(batched, { ...cseStudent, expectedPassoutYear: 2027 })).toBe(true);
   });
 
   it("does not reach a student with no batch year when batches are named", () => {
     expect(
-      announcementTargets(announcement({ batchYears: [2026] }), { ...cseStudent, batchYear: null })
+      announcementTargets(announcement({ batchYears: [2026] }), { ...cseStudent, expectedPassoutYear: null })
     ).toBe(false);
   });
 

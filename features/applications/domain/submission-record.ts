@@ -40,7 +40,17 @@ export interface SubmissionView {
   capturedAt: Date | null;
   answers: SubmissionAnswer[];
   criteria: SubmissionCriterion[];
-  academic: { cgpa: number | null; backlogs: number | null; batchYear: number | null };
+  academic: {
+    cgpa: number | null;
+    backlogs: number | null;
+    /** Recorded by schema-2 snapshots. */
+    expectedPassoutYear: number | null;
+    /**
+     * Recorded by schema-1 snapshots, when the column's meaning was
+     * undefined. Shown as recorded, never read as a passout year.
+     */
+    legacyBatchYear: number | null;
+  };
   consentAcceptedAt: Date | null;
   declarationVersion: string | null;
   /** Identifies the exact form and rule set in force, for a dispute. */
@@ -130,7 +140,8 @@ export function readSubmissionView(record: ApplicationRecord): SubmissionView {
       // exists — they are the only thing a LEGACY_COLUMNS record has.
       cgpa: num(academic?.currentCGPA) ?? record.legacy.cgpa,
       backlogs: num(academic?.activeBacklogs) ?? record.legacy.backlogs,
-      batchYear: num(student?.batchYear),
+      expectedPassoutYear: num(student?.expectedPassoutYear),
+      legacyBatchYear: num(student?.batchYear),
     },
     consentAcceptedAt: date(consent?.acceptedAt) ?? record.legacy.consentAcceptedAt,
     declarationVersion: str(consent?.declarationVersion),

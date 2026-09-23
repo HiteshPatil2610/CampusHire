@@ -80,7 +80,7 @@ describe("department scope survives every filter", () => {
     await getDriveApplications({
       driveId: "d1",
       search: "asha",
-      batchYear: 2026,
+      expectedPassoutYear: 2026,
       status: "SELECTED",
       placement: "placed",
       appliedFrom: "2026-09-01",

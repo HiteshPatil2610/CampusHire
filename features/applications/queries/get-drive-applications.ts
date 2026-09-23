@@ -30,7 +30,7 @@ export interface GetDriveApplicationsParams {
   /** Matches name, roll number or email. */
   search?: string;
   /** A batch year, e.g. 2027. */
-  batchYear?: number;
+  expectedPassoutYear?: number;
   /** A stage of this department's pipeline for the drive. */
   stageId?: string;
   status?: ApplicationStatus;
@@ -100,9 +100,9 @@ export async function getDriveApplications(
 
   // Filters come from a URL, so each is checked before it reaches the query.
   const search = params.search?.trim().slice(0, 100) || undefined;
-  const batchYear =
-    Number.isInteger(params.batchYear) && params.batchYear! > 1900 && params.batchYear! < 3000
-      ? params.batchYear
+  const expectedPassoutYear =
+    Number.isInteger(params.expectedPassoutYear) && params.expectedPassoutYear! > 1900 && params.expectedPassoutYear! < 3000
+      ? params.expectedPassoutYear
       : undefined;
   const status =
     params.status && APPLICATION_STATUSES.includes(params.status) ? params.status : undefined;
@@ -129,7 +129,7 @@ export async function getDriveApplications(
           ? { placements: { none: ACTIVE_PLACEMENT_WHERE } }
           : {}),
       ...(ownsDrive ? {} : { departmentId: department.id }),
-      ...(batchYear ? { batchYear } : {}),
+      ...(expectedPassoutYear ? { expectedPassoutYear } : {}),
       ...(search
         ? {
             OR: [

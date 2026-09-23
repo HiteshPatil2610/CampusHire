@@ -305,9 +305,16 @@ model Student {
   id              String    @id @default(cuid())
   userId          String?   @unique // Optional: null for bulk-imported pending students
   departmentId    String
-  // Null only until the student supplies it. A lateral-entry student may not
-  // have been issued one at registration; they are blocked from applying to
-  // any drive until it is filled in. Postgres permits many NULLs under a
+  // The college's MIS number — the student's institutional identifier, and
+  // the key self-registration matches on. Required at every write boundary
+  // (import, manual add, registration, approval); nullable here only because
+  // students created before it existed have none. `id` stays the primary
+  // key: every foreign key in the schema points at it.
+  misNumber       String?   @unique
+  // University PRN. Optional, but never shared by two students.
+  prnNumber       String?   @unique
+  // Required at every write boundary since MIS identity landed; nullable only
+  // for students created before that. Postgres permits many NULLs under a
   // unique index, so the constraint still holds for everyone who has one.
   rollNumber      String?   @unique
   name            String
@@ -322,7 +329,12 @@ model Student {
   dateOfBirth     DateTime?
   address         String?   @db.Text
   personalEmail   String?
-  batchYear       Int?
+  // The year the student is expected to pass out, e.g. 2027. This is the
+  // student's batch: the label "2023-27" is derived from it by
+  // `batchLabel` (features/students/utils/batch.ts) and never stored.
+  // Replaces the former `batchYear`, whose meaning (admission or passout)
+  // was never defined.
+  expectedPassoutYear Int?
   // How the student entered the degree. Captured at registration, before any
   // StudentAcademic row exists, which is why it lives here rather than on the
   // academic record: it is an admission fact, not a marks fact.
@@ -351,7 +363,9 @@ model Student {
   semesterMarks  SemesterMark[]
   placements     StudentPlacement[]
 
-  @@index([departmentId])
+  // A department's roster by batch. Also serves the plain departmentId
+  // lookup (leftmost column), so no separate index is kept for it.
+  @@index([departmentId, expectedPassoutYear])
   @@index([isPending])
   @@index([optedIn])
 }
@@ -856,9 +870,13 @@ model StudentAccessRequest {
   userId       String              @unique
   name         String
   email        String
-  // Optional for the same reason it is on Student: a lateral-entry student
-  // may not have been issued one yet.
-  rollNumber   String?
+  // Identity as the applicant typed it. Nullable only for requests made
+  // before MIS-based verification; every new request carries MIS, roll
+  // number and batch.
+  misNumber           String?
+  prnNumber           String?
+  rollNumber          String?
+  expectedPassoutYear Int?
   departmentId String
   phoneNumber  String
   entryType    EntryType           @default(REGULAR)
@@ -1324,8 +1342,9 @@ model DepartmentSettings {
   coordinatorPhone     String?
   coordinatorEmail     String?
   defaultInstructions  String?  @db.Text
-  // Student management: prefilled when a student is added by hand or imported.
-  defaultBatchYear     Int?
+  // Student management: the expected passout year prefilled when a student
+  // is added by hand.
+  defaultPassoutYear   Int?
   updatedById          String?
   updatedAt            DateTime @updatedAt
 

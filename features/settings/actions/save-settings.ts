@@ -47,7 +47,7 @@ const departmentSchema = z.object({
     .nullable()
     .optional(),
   defaultInstructions: z.string().trim().max(2000).nullable().optional(),
-  defaultBatchYear: z.number().int().min(1900).max(3000).nullable().optional(),
+  defaultPassoutYear: z.number().int().min(2000, "Enter a passout year such as 2027").max(2100).nullable().optional(),
 });
 
 export type SettingsResult =
@@ -185,7 +185,7 @@ export async function saveDepartmentSettings(
       coordinatorPhone: clean(data.coordinatorPhone),
       coordinatorEmail: clean(data.coordinatorEmail),
       defaultInstructions: clean(data.defaultInstructions),
-      defaultBatchYear: data.defaultBatchYear ?? null,
+      defaultPassoutYear: data.defaultPassoutYear ?? null,
       updatedById: user.id,
     };
 

@@ -77,7 +77,7 @@ export async function fanOutAnnouncement(
         isPending: false,
         userId: { not: null },
         ...(announcement.departmentId ? { departmentId: announcement.departmentId } : {}),
-        ...(announcement.batchYears.length > 0 ? { batchYear: { in: announcement.batchYears } } : {}),
+        ...(announcement.batchYears.length > 0 ? { expectedPassoutYear: { in: announcement.batchYears } } : {}),
       },
       select: { userId: true },
     });

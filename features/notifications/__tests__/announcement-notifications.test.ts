@@ -107,7 +107,7 @@ describe("who an announcement notifies", () => {
     const query = vi.mocked(prisma.student.findMany).mock.calls[0][0] as {
       where: Record<string, unknown>;
     };
-    expect(query.where).toMatchObject({ batchYear: { in: [2026] } });
+    expect(query.where).toMatchObject({ expectedPassoutYear: { in: [2026] } });
   });
 
   it("reaches every department when it is institution-wide", async () => {

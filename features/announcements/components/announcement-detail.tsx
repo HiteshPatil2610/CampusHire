@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { NotificationPriority } from "@prisma/client";
 import { PRIORITY_PRESENTATION } from "@/features/notifications/utils/notification-priority";
 import type { AnnouncementRow } from "../queries/get-announcements";
+import { batchLabel } from "@/features/students/utils/batch";
 
 /**
  * One announcement, read in full. The content is plain text and rendered as
@@ -29,7 +30,7 @@ export function AnnouncementDetail({
           <span className={`badge ${presentation.badgeClass}`}>{presentation.label}</span>
           <span className="text-muted" style={{ fontSize: 11 }}>
             {announcement.departmentCode ?? "Institution-wide"}
-            {announcement.batchYears.length > 0 && ` · Batch ${announcement.batchYears.join(", ")}`}
+            {announcement.batchYears.length > 0 && ` · Batch ${announcement.batchYears.map(batchLabel).join(", ")}`}
           </span>
           {announcement.status !== "PUBLISHED" && (
             <span className="badge badge-gray">{announcement.status.toLowerCase()}</span>

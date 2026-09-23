@@ -1,64 +1,61 @@
 "use server";
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { requireDepartmentAdmin } from '@/lib/auth';
+import { requireDepartmentAdmin, AuthorizationError } from '@/lib/auth';
 import { z } from 'zod';
-import { parseImportFile } from '../parser/parse-import-file';
-import { validateImportRows, checkDatabaseDuplicates } from '../validator/validate-rows';
-import { deleteImportFile } from '@/lib/blob';
-import { createAuditLog, AuditAction, AuditEntityType } from '@/lib/audit';
-import { studentRowSchema } from '../schemas/import';
-import { partitionRows, type RejectedRow } from '../validator/partition-rows';
+import { deleteImportFile, isOwnImportFileUrl } from '@/lib/blob';
+import { createAuditLogInTransaction, AuditAction, AuditEntityType } from '@/lib/audit';
+import { judgeImportFile } from '../domain/judge-import-file';
+import type { RejectedRow } from '../schemas/import';
 
 const commitInputSchema = z.object({
-  blobUrl: z.string().url("Invalid blob URL"),
-  fileName: z.string().min(1),
-  // departmentId intentionally NOT accepted from client —
-  // the server derives it from the authenticated admin
+  blobUrl: z.string().url('Invalid blob URL'),
+  fileName: z.string().min(1).max(255),
+  // departmentId is intentionally NOT accepted from the client — the server
+  // derives it from the authenticated admin.
 });
 
 export type CommitImportResult =
   | {
       success: true;
       count: number;
-      /** Rows left behind because they had errors. */
-      skipped: RejectedRow[];
+      /** Rows held back, with every reason, for the error review and export. */
+      rejected: RejectedRow[];
       departmentCode: string;
     }
-  | { success: false; error: string; validationErrors?: unknown };
+  | { success: false; error: string; rejected?: RejectedRow[] };
 
 /**
- * Commit a bulk student import.
+ * Import the clean rows of an uploaded sheet; hold back the rest.
  *
- * This action INDEPENDENTLY re-validates everything server-side.
- * It does NOT trust any preview result from the client.
+ * Trusts nothing from the preview: the file is fetched again from Blob (only
+ * if it is this admin's own upload), parsed and judged again against the
+ * database, by the same pipeline the preview used. Every clean row is written
+ * in one statement inside one transaction, so a clean row is either written
+ * whole or not at all; a held row is never written. One bad row does not stop
+ * the others.
  *
- * Invariants:
- * - Authentication + dept scope re-checked
- * - File re-parsed from Blob
- * - All rows re-validated
- * - DB duplicates re-checked
- * - Import is atomic (Prisma transaction)
- * - Blob file deleted on success
- * - Rows with errors are skipped and reported, never partially written —
- *   per-row, as `architecture.md` invariant 4 describes. A single bad row no
- *   longer blocks the rest of the file.
+ * Imported students are pending: no account yet, `isPending = true`, in the
+ * admin's own department. Each claims their row by signing up with their MIS
+ * number (features/students/actions/registration.ts).
  */
 export async function commitImport(
   input: z.infer<typeof commitInputSchema>
 ): Promise<CommitImportResult> {
   try {
-    // 1. Auth: dept admin only — department resolved server-side
     const { user, department } = await requireDepartmentAdmin();
 
-    // 2. Validate input
     const validated = commitInputSchema.safeParse(input);
     if (!validated.success) {
       return { success: false, error: 'Invalid request.' };
     }
     const { blobUrl, fileName } = validated.data;
 
-    // 3. Re-fetch file from Blob
+    if (!isOwnImportFileUrl(blobUrl, user.id)) {
+      return { success: false, error: 'That upload could not be found. Please upload the file again.' };
+    }
+
     let buffer: Buffer;
     try {
       const response = await fetch(blobUrl);
@@ -70,126 +67,78 @@ export async function commitImport(
       return { success: false, error: 'Could not retrieve the uploaded file.' };
     }
 
-    // 4. Re-parse
-    const parseResult = await parseImportFile(buffer, fileName);
-    if (!parseResult.success) {
-      return { success: false, error: parseResult.error };
+    const judged = await judgeImportFile(buffer, fileName, department);
+    if (!judged.success) {
+      return { success: false, error: judged.error };
     }
-
-    // 5. Re-validate all rows
-    const validationResult = validateImportRows(parseResult.rows, fileName);
-
-    // 6. Re-check DB duplicates
-    const dbDuplicates = await checkDatabaseDuplicates(parseResult.rows, department.id);
-    if (dbDuplicates.length > 0) {
-      validationResult.canImport = false;
-      validationResult.duplicates.push(...dbDuplicates);
-    }
-
-    // 7. Split into importable rows and rejected ones. Computed by the same
-    // pure function the preview used, so what the admin approved is what gets
-    // written.
-    const { ready, rejected } = partitionRows(
-      parseResult.rows,
-      validationResult.errors,
-      validationResult.duplicates
-    );
+    const { ready, rejected } = judged.evaluation;
 
     if (ready.length === 0) {
       return {
         success: false,
-        error: `No importable rows — all ${rejected.length} row(s) have errors.`,
-        validationErrors: {
-          errors:     validationResult.errors,
-          duplicates: validationResult.duplicates,
-        },
+        error: `No rows can be imported — all ${rejected.length} row(s) have errors.`,
+        rejected,
       };
     }
 
-    // 8. Parse the importable rows into Student create data
-    const studentData = ready.map(({ data }) => {
-      const row = studentRowSchema.parse(data); // safe — already validated
-      return {
-        userId:      null,
-        isPending:   true,
-        departmentId: department.id,  // ALWAYS admin's own dept — never from file
-        rollNumber:  row.rollNumber,
-        name:        row.name,
-        email:       row.email,
-        phoneNumber: row.phoneNumber ?? null,
-        // Entry type lives on Student — it decides which pre-college branch
-        // the academic record below is allowed to fill.
-        entryType:   row.entryType ?? ("REGULAR" as const),
-      };
-    });
+    const count = await prisma.$transaction(async (tx) => {
+      const created = await tx.student.createMany({
+        data: ready.map(({ student }) => ({
+          userId: null,
+          isPending: true,
+          // Always the admin's own department — the DEPT column is only
+          // checked against it, never used.
+          departmentId: department.id,
+          misNumber: student.misNumber,
+          prnNumber: student.prnNumber,
+          name: student.name,
+          email: student.email,
+          phoneNumber: student.phoneNumber,
+          rollNumber: student.rollNumber,
+          expectedPassoutYear: student.expectedPassoutYear,
+          entryType: student.entryType,
+        })),
+      });
 
-    // 9. ATOMIC TRANSACTION — all or nothing
-    const createdStudents = await prisma.$transaction(async (tx) => {
-      // Create all Student records
-      const students = await Promise.all(
-        studentData.map(data => tx.student.create({ data }))
+      await createAuditLogInTransaction(
+        tx,
+        {
+          action: AuditAction.IMPORT,
+          entityType: AuditEntityType.BULK_IMPORT,
+          metadata: {
+            fileName,
+            departmentId: department.id,
+            importedCount: created.count,
+            heldCount: rejected.length,
+            // Row numbers and tags only — the held rows' personal details stay
+            // with the admin's error sheet, not the audit log.
+            held: rejected.map((row) => ({ row: row.rowNumber, tags: row.tags })),
+          },
+        },
+        user.id
       );
 
-      // Create StudentAcademic records for rows that have academic data
-      for (let i = 0; i < ready.length; i++) {
-        const row = studentRowSchema.parse(ready[i].data);
-        const student = students[i];
-        const hasAcademic =
-          row.tenthPercentage !== undefined ||
-          row.twelfthPercentage !== undefined ||
-          row.diplomaPercentage !== undefined ||
-          row.currentCGPA !== undefined ||
-          row.currentSemester !== undefined ||
-          row.activeBacklogs !== undefined;
-
-        if (hasAcademic) {
-          // A diploma row carries no 12th record, and vice versa. The unused
-          // branch stays null — never 0, which would read as a real 0% score
-          // and fail every eligibility comparison.
-          const entryType = row.entryType ?? "REGULAR";
-          const isDiploma = entryType === "DIPLOMA";
-
-          await tx.studentAcademic.create({
-            data: {
-              studentId:          student.id,
-              tenthPercentage:    row.tenthPercentage ?? 0,
-              twelfthPercentage:  isDiploma ? null : row.twelfthPercentage ?? null,
-              diplomaPercentage:  isDiploma ? row.diplomaPercentage ?? null : null,
-              currentCGPA:        row.currentCGPA ?? 0,
-              currentSemester:    row.currentSemester ?? (isDiploma ? 3 : 1),
-              activeBacklogs:     row.activeBacklogs ?? 0,
-            },
-          });
-        }
-      }
-
-      return students;
+      return created.count;
     });
 
-    // 10. Delete Blob file — in the same flow as commit, after success
-    // (not a background job — per architecture invariant §9)
+    // The rows are committed; the stored file is no longer needed. Held rows
+    // travel back to the admin, who reviews and exports them from here.
     await deleteImportFile(blobUrl);
 
-    // 11. Audit log
-    await createAuditLog({
-      action:     AuditAction.IMPORT,
-      entityType: AuditEntityType.STUDENT,
-      metadata: {
-        importedCount: createdStudents.length,
-        skippedCount:  rejected.length,
-        departmentId:  department.id,
-        fileName,
-        importedBy:    user.id,
-      },
-    });
-
-    return {
-      success: true,
-      count: createdStudents.length,
-      skipped: rejected,
-      departmentCode: department.code,
-    };
+    return { success: true, count, rejected, departmentCode: department.code };
   } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { success: false, error: error.message };
+    }
+    // Another import or a sign-up claimed one of these values between the
+    // check and the write. Nothing was written; re-judging shows which.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return {
+        success: false,
+        error:
+          'Some of these students were registered while you were reviewing. Nothing was imported — upload the file again to re-check.',
+      };
+    }
     console.error('Commit import error:', error);
     return {
       success: false,

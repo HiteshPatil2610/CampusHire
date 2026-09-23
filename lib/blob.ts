@@ -152,6 +152,25 @@ export async function uploadImportFile(
 }
 
 /**
+ * Whether a URL is an import file this admin uploaded. The commit step is
+ * handed the URL back by the browser, and it fetches whatever it is given —
+ * so it must be this app's blob store and this admin's own upload, never an
+ * arbitrary address or another admin's file.
+ */
+export function isOwnImportFileUrl(url: string, adminId: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'https:' &&
+      parsed.hostname.endsWith('.public.blob.vercel-storage.com') &&
+      parsed.pathname.startsWith(`/imports/${adminId}-`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Delete an import file from Vercel Blob after successful import.
  * Called in the SAME transaction/flow as the successful commit — not
  * as a separate background job.

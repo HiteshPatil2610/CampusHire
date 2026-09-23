@@ -15,7 +15,7 @@ export interface DriveStudentRow {
   id: string;
   name: string;
   rollNumber: string | null;
-  batchYear: number | null;
+  expectedPassoutYear: number | null;
   /** Signed up (has an account), as opposed to imported and waiting. */
   registered: boolean;
   eligibility: DriveStudentEligibility;
@@ -102,7 +102,7 @@ export async function getDriveStudents(driveId: string): Promise<DriveStudents> 
       id: student.id,
       name: student.name,
       rollNumber: student.rollNumber,
-      batchYear: student.batchYear,
+      expectedPassoutYear: student.expectedPassoutYear,
       registered: student.userId !== null,
       eligibility: eligible
         ? "ELIGIBLE"
@@ -122,7 +122,7 @@ export async function getDriveStudents(driveId: string): Promise<DriveStudents> 
   });
 
   const batchYears = [
-    ...new Set(rows.map((row) => row.batchYear).filter((year): year is number => year !== null)),
+    ...new Set(rows.map((row) => row.expectedPassoutYear).filter((year): year is number => year !== null)),
   ].sort((a, b) => b - a);
 
   return { students: rows, batchYears, truncated };

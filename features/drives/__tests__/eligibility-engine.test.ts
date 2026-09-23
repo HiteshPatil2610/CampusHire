@@ -134,7 +134,7 @@ function regular(overrides: Partial<NonNullable<EligibilitySubject["academic"]>>
     placed: false,
     optedIn: true,
     entryType: "REGULAR",
-    batchYear: 2026,
+    expectedPassoutYear: 2026,
     academic: {
       currentCGPA: 8.0,
       activeBacklogs: 0,
@@ -301,9 +301,9 @@ describe("evaluateEligibility", () => {
       const rules = [rule("BATCH_YEAR", "IN", ["2026", "2027"])];
 
       expect(evaluateEligibility(regular(), rules).eligible).toBe(true);
-      expect(evaluateEligibility({ ...regular(), batchYear: 2025 }, rules).eligible).toBe(false);
+      expect(evaluateEligibility({ ...regular(), expectedPassoutYear: 2025 }, rules).eligible).toBe(false);
 
-      const unknown = evaluateEligibility({ ...regular(), batchYear: null }, rules);
+      const unknown = evaluateEligibility({ ...regular(), expectedPassoutYear: null }, rules);
       expect(unknown.eligible).toBe(false);
       expect(unknown.reasons[0]).toMatch(/not on record/);
     });
@@ -333,7 +333,7 @@ describe("evaluateEligibility", () => {
       optedIn: true,
       placements: [{ revokedAt: new Date() }],
       entryType: "REGULAR",
-      batchYear: 2026,
+      expectedPassoutYear: 2026,
       academic: regular().academic,
       skills: [{ skillName: "Java" }],
     });
@@ -344,8 +344,8 @@ describe("evaluateEligibility", () => {
     expect(Object.keys(subject).sort()).toEqual([
       "academic",
       "approved",
-      "batchYear",
       "entryType",
+      "expectedPassoutYear",
       "optedIn",
       "placed",
       "skills",
@@ -365,7 +365,7 @@ describe("describeRule", () => {
     [rule("TENTH_PERCENTAGE", "GTE", 60), "10th percentage ≥ 60%"],
     [rule("PRE_COLLEGE_PERCENTAGE", "GTE", 65), "12th / Diploma percentage ≥ 65%"],
     [rule("CURRENT_SEMESTER", "GTE", 5), "Semester 5 or later"],
-    [rule("BATCH_YEAR", "IN", ["2026"]), "Batch of 2026"],
+    [rule("BATCH_YEAR", "IN", ["2026"]), "Batch 2022-26"],
     [rule("ENTRY_TYPE", "IN", ["DIPLOMA"]), "Lateral (diploma) entry only"],
     [rule("SKILL", "INCLUDES_ANY", ["Go", "Rust"]), "Skills: any of Go, Rust"],
   ])("%o reads as %s", (input, text) => {
@@ -623,7 +623,7 @@ function student(departmentId: string, skills: string[], cgpa = 8) {
     optedIn: true,
     placements: [] as { revokedAt: Date | null }[],
     entryType: "REGULAR" as const,
-    batchYear: 2026,
+    expectedPassoutYear: 2026,
     academic: {
       currentCGPA: cgpa,
       activeBacklogs: 0,

@@ -55,9 +55,85 @@ Update this file after every meaningful implementation change.
 - All V1 frontend integration units complete ✅
 - ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 1049 tests pass, 0 failures (the excel-import database-duplicates test also times out intermittently) (admin-assignment, admin-security, department-crud, excel-import, notification-authorization, auth).
+- Current baseline: 1113 tests pass, 0 failures (after Phase 1).
 
 ## Completed
+
+- **PHASE 1 — Student data foundation + bulk import & verification
+  (CODE COMPLETE — migration rehearsed, NOT YET APPLIED):**
+  - **Schema** (`20260928000000_student_identity_passout_year`):
+    `Student.misNumber` (unique), `prnNumber` (unique), `expectedPassoutYear`;
+    the same three on `StudentAccessRequest`; `Student.batchYear` **dropped,
+    not copied** (its meaning was never defined — decided with the owner; one
+    row held 2026: roll 55, COMP); `DepartmentSettings.defaultBatchYear`
+    renamed to `defaultPassoutYear` (data kept); CHECKs on MIS/PRN shape and
+    passout-year range; `(departmentId, expectedPassoutYear)` index replaces
+    the plain `departmentId` one. `id` stays the primary key — making MIS the
+    PK would rewrite every foreign key. MIS stays nullable in the database
+    because the 3 existing students have none; every write path requires it.
+  - **One batch helper** — `features/students/utils/batch.ts`: `batchLabel`
+    (2027 → "2023-27"), `formatBatch`, `parseBatch` ("2027", "2023-27",
+    "2023-2027"; a span other than 4 years is refused), `selectablePassoutYears`.
+    Every screen, CSV, rule description and filter shows batches through it.
+  - **One identity normaliser** — `utils/student-identity.ts` (MIS/PRN/roll
+    upper-cased without spaces, email lower-cased, Indian mobile to 10 digits,
+    `namesMatch` ignoring case/full stops/spacing only).
+  - **Import rebuilt**: MIS NO. | PRN NO. | NAME | EMAIL | PH. NO. | ROLL NO. |
+    DEPT | BATCH (+ optional DIPLOMA). Parse → validate every row fully →
+    duplicates in the file (every sharing row held) → duplicates in the
+    database (one query) → clean / held. Tags: Missing Field, Invalid Email,
+    Invalid Phone, Invalid MIS/PRN/Roll/Name/Batch/Diploma, Wrong Department,
+    Duplicate MIS/PRN/Roll/Email with scope FILE or DATABASE. `judgeImportFile`
+    is shared by the preview route and `commitImport`; the commit writes all
+    clean rows with one `createMany` in a transaction with its audit row
+    (`BulkImport`, held row numbers + tags, no PII). Academic columns are no
+    longer imported (that path zero-filled 10th % and CGPA, breaking
+    invariant 11). `partition-rows.ts` is deleted.
+  - **Error review + Export Error Sheet** on the import screen (Row #, Name,
+    Roll No., Email, tag chips, filter by tag). The sheet keeps the template's
+    headers plus Row #, Error Tags, Error Details, through `lib/csv-format`;
+    corrected, it can be uploaded again as is.
+  - **Verification**: MIS, name, phone, roll, department, batch required, PRN
+    optional, email from Clerk. `decideRegistrationOutcome` matches by MIS,
+    cross-checks name/roll/department/batch, requires the roster email to be
+    the verified email, and refuses a partial match with one message that
+    names no field. A full match with a different roster email becomes a
+    request whose approval links to that roster record. Pre-MIS roster rows
+    can still be claimed by verified email + name/roll/department (they gain
+    MIS and batch). Pre-MIS pending requests show the form again instead of
+    the waiting screen; approving one is refused with that explanation.
+    Linking is compare-and-set in both places.
+  - **Fixed along the way:** (1) the import commit fetched whatever URL the
+    browser sent — now only the admin's own Blob upload
+    (`isOwnImportFileUrl`); (2) sheet row numbers drifted after any blank row
+    (`sheet_to_json` skips them) — now `__rowNum__`; (3) `defaultBatchYear`
+    was stored but never read — the manual-add form now prefills from it.
+  - **Rename everywhere** of `Student.batchYear` → `expectedPassoutYear`
+    (evaluator, filters, exports — which gained "MIS number" —, announcement
+    targeting, snapshot). Snapshot schema **v2** writes
+    `student.expectedPassoutYear`; readers show a v1 `batchYear` "as recorded".
+    Drive/announcement `batchYears` lists keep their names: the concept is
+    still "batch", now always a passout year.
+  - **Tests:** 1113 pass, 0 fail (import 31, registration match 18,
+    verification schema 16, batch 22, identity 22 new or rewritten). 9 of 9
+    mutations caught. `tsc`, lint (0 errors, 1 pre-existing warning) and
+    `next build` clean.
+  - **Migration:** live database drift-checked against the previous schema
+    (empty diff); rehearsed on production **inside a transaction forced to
+    roll back** (all statements applied, 3 students kept, 5 CHECKs
+    validated, bad MIS / bad year / duplicate MIS refused; afterwards
+    `batchYear` still present, no `misNumber`). A Neon rehearsal branch could
+    not be created: the project is at its 10-branch limit.
+  - **Open before deploy:** a free branch slot for the
+    `pre-student-identity-backup-20260928` backup, then `migrate deploy`.
+    Until it is applied, this code does not run against the database.
+  - **Open after deploy:** the 3 existing students (COMP, rolls 4233, 55, 41)
+    have no MIS or batch; nothing in-app can set them yet (there is no
+    admin edit-student action). The 7 pre-MIS access requests must be
+    re-submitted by their students. Existing BATCH_YEAR rules
+    (2 drives: 2023–2027 and 2026, 2027) are now read as passout years.
+    `drop_count` deferred to Phase 2, where drop history exists to derive it.
+    NOT browser-verified: needs a signed-in admin and student.
 
 - **Final system verification & compliance audit — ARCH-FIX2 unit-12
   (COMPLETE — no database change):**

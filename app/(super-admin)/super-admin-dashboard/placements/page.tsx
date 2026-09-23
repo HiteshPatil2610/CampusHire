@@ -38,7 +38,7 @@ export default async function GlobalPlacementsPage({ searchParams }: PageProps) 
     pageSize: 25,
     departmentId: query.dept || undefined,
     company: query.company || undefined,
-    batchYear: Number.isFinite(batch) ? batch : undefined,
+    expectedPassoutYear: Number.isFinite(batch) ? batch : undefined,
     search: query.q || undefined,
     from: query.from || undefined,
     to: query.to || undefined,

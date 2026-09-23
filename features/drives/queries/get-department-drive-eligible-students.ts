@@ -9,7 +9,7 @@ import { evaluateStudentForDrive } from "./drive-eligibility";
 
 export interface DriveEligibleStudents {
   totalStudents: number;
-  eligible: { id: string; name: string; rollNumber: string | null; batchYear: number | null }[];
+  eligible: { id: string; name: string; rollNumber: string | null; expectedPassoutYear: number | null }[];
   /** Why the rest are not eligible, most common first: reason → count. */
   ineligibleReasons: { reason: string; students: number }[];
   placedExcluded: number;
@@ -80,7 +80,7 @@ export async function getDepartmentDriveEligibleStudents(
         id: student.id,
         name: student.name,
         rollNumber: student.rollNumber,
-        batchYear: student.batchYear,
+        expectedPassoutYear: student.expectedPassoutYear,
       });
       continue;
     }

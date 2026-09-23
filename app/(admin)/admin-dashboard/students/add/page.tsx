@@ -1,5 +1,6 @@
 import { requireDepartmentAdmin } from '@/lib/auth';
 import { AddStudentForm } from '@/components/admin/students/add-student-form';
+import { getDepartmentSettings } from '@/features/settings/queries/get-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,7 @@ export const dynamic = 'force-dynamic';
 export default async function AddStudentPage() {
   // Auth: department admin only
   const { department } = await requireDepartmentAdmin();
+  const settings = await getDepartmentSettings(department.id);
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 800, margin: '0 auto' }}>
@@ -33,7 +35,7 @@ export default async function AddStudentPage() {
 
       <AddStudentForm
         departmentCode={department.code}
-        departmentId={department.id}
+        defaultPassoutYear={settings.defaultPassoutYear}
       />
     </div>
   );

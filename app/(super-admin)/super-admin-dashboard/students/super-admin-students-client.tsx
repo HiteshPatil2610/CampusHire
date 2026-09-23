@@ -81,8 +81,11 @@ export function SuperAdminStudentsClient({
 
   function handleExportCsv() {
     const rows = students.map((student) => ({
+      'MIS No.': student.misNumber ?? '',
+      'PRN No.': student.prnNumber ?? '',
       'Roll Number': student.rollNumber,
       'Name': student.name,
+      'Batch': student.expectedPassoutYear ? formatBatch(student.expectedPassoutYear) : '',
       'Department': student.department.code,
       'Year': formatYear(student.academic?.currentSemester),
       'Email': student.email,
@@ -153,7 +156,7 @@ export function SuperAdminStudentsClient({
         <input
           type="text"
           className="input"
-          placeholder="Search by name, roll number, or email..."
+          placeholder="Search by name, MIS, roll number, PRN or email..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -204,8 +207,16 @@ export function SuperAdminStudentsClient({
                   </td>
                   <td>
                     <code style={{ fontSize: 12 }}>{student.rollNumber}</code>
+                    <div className="text-muted" style={{ fontSize: 11 }}>
+                      MIS {student.misNumber ?? '—'}
+                    </div>
                   </td>
-                  <td>{student.department.code}</td>
+                  <td>
+                    {student.department.code}
+                    <div className="text-muted" style={{ fontSize: 11 }}>
+                      {formatBatch(student.expectedPassoutYear)}
+                    </div>
+                  </td>
                   <td>{formatYear(student.academic?.currentSemester)}</td>
                   <td>{student.academic?.currentCGPA?.toFixed(2) || '—'}</td>
                   <td>
@@ -257,3 +268,4 @@ export function SuperAdminStudentsClient({
     </>
   );
 }
+import { formatBatch } from "@/features/students/utils/batch";

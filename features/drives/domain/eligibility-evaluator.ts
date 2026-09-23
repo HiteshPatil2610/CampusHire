@@ -5,6 +5,7 @@ import {
   RULE_SPECS,
   type EligibilityRuleInput,
 } from "./eligibility-rules";
+import { batchLabel } from "@/features/students/utils/batch";
 
 /**
  * The one eligibility evaluator.
@@ -42,7 +43,7 @@ export interface EligibilitySubject {
   /** Participating in campus placement. */
   optedIn: boolean;
   entryType: EntryType;
-  batchYear: number | null;
+  expectedPassoutYear: number | null;
   academic: {
     currentCGPA: number;
     activeBacklogs: number;
@@ -68,7 +69,7 @@ export function toEligibilitySubject(student: {
   optedIn: boolean;
   placements: { revokedAt: Date | null }[];
   entryType: EntryType;
-  batchYear: number | null;
+  expectedPassoutYear: number | null;
   academic: EligibilitySubject["academic"];
   skills: { skillName: string }[];
 }): EligibilitySubject {
@@ -77,7 +78,7 @@ export function toEligibilitySubject(student: {
     placed: student.placements.some((placement) => !placement.revokedAt),
     optedIn: student.optedIn,
     entryType: student.entryType,
-    batchYear: student.batchYear,
+    expectedPassoutYear: student.expectedPassoutYear,
     academic: student.academic
       ? {
           currentCGPA: student.academic.currentCGPA,
@@ -264,15 +265,15 @@ function evaluateRule(subject: EligibilitySubject, rule: EligibilityRuleInput): 
     }
 
     case "BATCH_YEAR": {
-      if (subject.batchYear === null) {
-        return fail(null, `Open to the ${description.replace(/^Batch of /, "")} batch only — your batch year is not on record`);
+      if (subject.expectedPassoutYear === null) {
+        return fail(null, `Open to the ${description.replace(/^Batch /, "")} batch only — your batch is not on record`);
       }
-      const value = String(subject.batchYear);
+      const value = String(subject.expectedPassoutYear);
       return rule.listValue.includes(value)
         ? pass(value)
         : fail(
             value,
-            `Your batch (${value}) is not targeted by this drive — open to the ${description.replace(/^Batch of /, "")} batch only`
+            `Your batch (${batchLabel(subject.expectedPassoutYear)}) is not targeted by this drive — open to the ${description.replace(/^Batch /, "")} batch only`
           );
     }
 

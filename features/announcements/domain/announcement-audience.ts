@@ -18,7 +18,7 @@ export interface AnnouncementViewer {
   /** A department admin's own department, or a student's. */
   departmentId: string | null;
   /** A student's batch year; irrelevant for admins. */
-  batchYear: number | null;
+  expectedPassoutYear: number | null;
 }
 
 export interface TargetedAnnouncement {
@@ -52,7 +52,7 @@ export function announcementTargets(
     if (announcement.audience === "ADMINS") return false;
     if (announcement.departmentId && announcement.departmentId !== viewer.departmentId) return false;
     if (announcement.batchYears.length > 0) {
-      return viewer.batchYear !== null && announcement.batchYears.includes(viewer.batchYear);
+      return viewer.expectedPassoutYear !== null && announcement.batchYears.includes(viewer.expectedPassoutYear);
     }
     return true;
   }
@@ -101,7 +101,7 @@ export function visibleAnnouncementWhere(
         {
           OR: [
             { batchYears: { isEmpty: true } },
-            ...(viewer.batchYear !== null ? [{ batchYears: { has: viewer.batchYear } }] : []),
+            ...(viewer.expectedPassoutYear !== null ? [{ batchYears: { has: viewer.expectedPassoutYear } }] : []),
           ],
         },
       ],

@@ -34,7 +34,13 @@ import type { EligibilityEvaluation } from "@/features/drives/domain/eligibility
  * Pure (hashing aside): the caller loads everything.
  */
 
-export const SNAPSHOT_SCHEMA_VERSION = 1;
+/**
+ * 1 — the original shape.
+ * 2 — `student.batchYear` (whose meaning was never defined) replaced by
+ *     `student.expectedPassoutYear`. Readers accept both; a version-1
+ *     payload's `batchYear` is shown as recorded, never reinterpreted.
+ */
+export const SNAPSHOT_SCHEMA_VERSION = 2;
 
 export interface SubmissionSnapshotInput {
   capturedAt: Date;
@@ -43,7 +49,7 @@ export interface SubmissionSnapshotInput {
     rollNumber: string | null;
     departmentId: string;
     departmentCode: string;
-    batchYear: number | null;
+    expectedPassoutYear: number | null;
     entryType: EntryType;
   };
   /** The academic record eligibility was evaluated on. */
@@ -252,7 +258,7 @@ export function buildBackfillSnapshot(application: {
         "application form configuration",
         "drive content as published",
         "placement state",
-        "batch year",
+        "batch",
       ],
     }),
   };

@@ -208,7 +208,7 @@ function student(extra: Record<string, unknown> = {}, cgpa = 8.2) {
     isPending: false,
     optedIn: true,
     entryType: "REGULAR" as const,
-    batchYear: 2026,
+    expectedPassoutYear: 2026,
     department: { code: "CSE" },
     skills: [] as { skillName: string; skillType?: string }[],
     projects: [],
@@ -250,7 +250,7 @@ describe("placement short-circuits the evaluator", () => {
     placed: false,
     optedIn: true,
     entryType: "REGULAR",
-    batchYear: 2026,
+    expectedPassoutYear: 2026,
     academic: {
       currentCGPA: 9,
       activeBacklogs: 0,
@@ -278,7 +278,7 @@ describe("placement short-circuits the evaluator", () => {
     // A placed student who would also fail every rule: only placement is reported,
     // and no rule result exists at all — the rules were never evaluated.
     const result = evaluateEligibility(
-      subject({ placed: true, batchYear: 2020, academic: null }),
+      subject({ placed: true, expectedPassoutYear: 2020, academic: null }),
       [...rules, rule("SKILL", "INCLUDES_ALL", ["Rust"])]
     );
 
@@ -311,7 +311,7 @@ describe("placement short-circuits the evaluator", () => {
   });
 
   it("explains placement alone, without listing other criteria", () => {
-    const placedAndWeak = student({ placements: [ACTIVE], batchYear: 2025 }, 5);
+    const placedAndWeak = student({ placements: [ACTIVE], expectedPassoutYear: 2025 }, 5);
     expect(getIneligibilityReasons(placedAndWeak as never, resolvedCse as never)).toEqual([
       STANDING_REASONS.PLACED,
     ]);
@@ -328,15 +328,15 @@ describe("batch targeting", () => {
   });
 
   it("a student in another batch fails, and is told why", () => {
-    const other = student({ batchYear: 2027 });
+    const other = student({ expectedPassoutYear: 2027 });
     expect(isStudentEligibleForDrive(other as never, resolvedCse as never)).toBe(false);
     expect(getIneligibilityReasons(other as never, resolvedCse as never).join(" ")).toMatch(
-      /Your batch \(2027\) is not targeted/
+      /Your batch \(2023-27\) is not targeted/
     );
   });
 
   it("a student with no batch on record fails rather than passing by default", () => {
-    const unknown = student({ batchYear: null });
+    const unknown = student({ expectedPassoutYear: null });
     expect(isStudentEligibleForDrive(unknown as never, resolvedCse as never)).toBe(false);
   });
 
@@ -374,7 +374,7 @@ describe("department isolation", () => {
     vi.mocked(prisma.student.findMany).mockResolvedValue([
       student({ id: "s-ok", name: "Eligible" }),
       student({ id: "s-placed", placements: [ACTIVE] }),
-      student({ id: "s-2027", batchYear: 2027 }),
+      student({ id: "s-2027", expectedPassoutYear: 2027 }),
       student({ id: "s-weak" }, 6),
     ] as never);
 
@@ -420,7 +420,7 @@ describe("list, apply and notifications agree", () => {
   it.each([
     ["an unplaced student in the targeted batch", student(), true],
     ["a placed student", student({ placements: [ACTIVE] }), false],
-    ["a student in another batch", student({ batchYear: 2027 }), false],
+    ["a student in another batch", student({ expectedPassoutYear: 2027 }), false],
   ])("%s gets the same answer from the list and from apply", async (_label, s, expected) => {
     asStudent(s);
 
@@ -450,7 +450,7 @@ describe("list, apply and notifications agree", () => {
     vi.mocked(prisma.student.findMany).mockResolvedValue([
       student({ id: "s-ok", userId: "u-ok" }),
       student({ id: "s-placed", userId: "u-placed", placements: [ACTIVE] }),
-      student({ id: "s-2027", userId: "u-2027", batchYear: 2027 }),
+      student({ id: "s-2027", userId: "u-2027", expectedPassoutYear: 2027 }),
     ] as never);
 
     const { notified } = await notifyEligibleStudentsOfDrive(master as never);

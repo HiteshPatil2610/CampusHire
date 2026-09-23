@@ -5,6 +5,7 @@ import {
   getDepartmentDriveEligibleStudents,
   type DriveEligibleStudents,
 } from "../queries/get-department-drive-eligible-students";
+import { formatBatch } from "@/features/students/utils/batch";
 
 /**
  * Who in this department is eligible for the drive, as saved — computed on
@@ -91,7 +92,7 @@ export function EligibleStudentsCard({ driveId, dirty }: { driveId: string; dirt
                         <tr key={student.id}>
                           <td>{student.rollNumber ?? "—"}</td>
                           <td>{student.name}</td>
-                          <td>{student.batchYear ?? "—"}</td>
+                          <td>{formatBatch(student.expectedPassoutYear)}</td>
                         </tr>
                       ))}
                     </tbody>

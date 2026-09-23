@@ -19,7 +19,7 @@ const record = (overrides: Partial<ApplicationRecord> = {}): ApplicationRecord =
   hashes: { form: "formhash1234", eligibility: "elighash5678", driveContent: "drive9012" },
   payload: {
     capturedAt: "2026-03-01T09:30:00Z",
-    student: { batchYear: 2027, rollNumber: "CS001" },
+    student: { expectedPassoutYear: 2027, rollNumber: "CS001" },
     academic: { currentCGPA: 8.4, activeBacklogs: 0 },
     eligibility: {
       eligible: true,

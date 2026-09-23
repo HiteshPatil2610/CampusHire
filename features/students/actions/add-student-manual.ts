@@ -1,19 +1,61 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireDepartmentAdmin } from "@/lib/auth";
+import { requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
 import { z } from "zod";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
+import {
+  isValidIdentifier,
+  isValidRollNumber,
+  normalizeEmail,
+  normalizeIdentifier,
+  normalizeName,
+  normalizePhone,
+  normalizeRollNumber,
+} from "../utils/student-identity";
+import { isValidPassoutYear } from "../utils/batch";
 
+/**
+ * One student added by hand: the same record, rules and normalisation as a
+ * row of the bulk import sheet (MIS, PRN optional, name, email, phone, roll
+ * number, batch), in the admin's own department.
+ */
 const addStudentManualSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters").trim(),
-  rollNumber: z.string().min(1, "Roll number is required").trim().toUpperCase(),
-  email: z.string().email("Invalid email address").toLowerCase().trim(),
-  phoneNumber: z.string().optional(),
-  batchYear: z.number().int().min(2000).max(2100).optional(),
+  misNumber: z
+    .string()
+    .transform(normalizeIdentifier)
+    .refine((value) => value !== "", "MIS number is required")
+    .refine(isValidIdentifier, "Enter a valid MIS number (3–30 letters, digits, - or /)"),
+  prnNumber: z
+    .string()
+    .optional()
+    .transform((value) => normalizeIdentifier(value) || null)
+    .refine((value) => value === null || isValidIdentifier(value), "Enter a valid PRN number"),
+  name: z
+    .string()
+    .transform(normalizeName)
+    .refine((value) => value.length >= 2, "Name must be at least 2 characters"),
+  rollNumber: z
+    .string()
+    .transform(normalizeRollNumber)
+    .refine((value) => value !== "", "Roll number is required")
+    .refine(isValidRollNumber, "Roll number too long"),
+  email: z.string().transform(normalizeEmail).pipe(z.string().email("Invalid email address")),
+  phoneNumber: z.string().transform((value, ctx) => {
+    const phone = normalizePhone(value);
+    if (!phone) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid 10-digit mobile number" });
+      return z.NEVER;
+    }
+    return phone;
+  }),
+  expectedPassoutYear: z
+    .number({ invalid_type_error: "Batch is required" })
+    .refine(isValidPassoutYear, "Choose a valid batch"),
 });
 
-export type AddStudentManualInput = z.infer<typeof addStudentManualSchema>;
+export type AddStudentManualInput = z.input<typeof addStudentManualSchema>;
 
 export type AddStudentManualResult =
   | { success: true; studentId: string }
@@ -23,10 +65,8 @@ export async function addStudentManual(
   input: AddStudentManualInput
 ): Promise<AddStudentManualResult> {
   try {
-    // 1. Auth: dept admin only, get department server-side
     const { user, department } = await requireDepartmentAdmin();
 
-    // 2. Validate input
     const validated = addStudentManualSchema.safeParse(input);
     if (!validated.success) {
       return {
@@ -34,58 +74,63 @@ export async function addStudentManual(
         error: validated.error.errors[0]?.message ?? "Invalid input",
       };
     }
+    const student = validated.data;
 
-    const { name, rollNumber, email, phoneNumber, batchYear } = validated.data;
-
-    // 3. Check for duplicate roll number (institution-wide unique)
+    // Every identifier is unique across the institution.
     const existing = await prisma.student.findFirst({
-      where: { OR: [{ rollNumber }, { email }] },
+      where: {
+        OR: [
+          { misNumber: student.misNumber },
+          { rollNumber: student.rollNumber },
+          { email: student.email },
+          ...(student.prnNumber ? [{ prnNumber: student.prnNumber }] : []),
+        ],
+      },
+      select: { misNumber: true, rollNumber: true, email: true, prnNumber: true },
     });
     if (existing) {
-      if (existing.rollNumber === rollNumber) {
-        return {
-          success: false,
-          error: "A student with this roll number already exists.",
-        };
-      }
-      return {
-        success: false,
-        error: "A student with this email already exists.",
-      };
+      const clash =
+        existing.misNumber === student.misNumber
+          ? "MIS number"
+          : existing.rollNumber === student.rollNumber
+            ? "roll number"
+            : existing.email === student.email
+              ? "email"
+              : "PRN number";
+      return { success: false, error: `A student with this ${clash} already exists.` };
     }
 
-    // 4. Create the pending student record
-    // departmentId is taken from the authenticated admin's context — NEVER from client
-    const student = await prisma.student.create({
+    // departmentId is taken from the authenticated admin — NEVER from client.
+    const created = await prisma.student.create({
       data: {
         userId: null, // no Clerk account yet
-        isPending: true, // will be linked when student self-registers
+        isPending: true, // linked when the student verifies with their MIS number
         departmentId: department.id,
-        name,
-        rollNumber,
-        email,
-        phoneNumber: phoneNumber ?? null,
-        batchYear: batchYear ?? null,
+        ...student,
       },
     });
 
-    // 5. Audit log
     await createAuditLog({
       action: AuditAction.CREATE,
       entityType: AuditEntityType.STUDENT,
-      entityId: student.id,
+      entityId: created.id,
       metadata: {
-        name,
-        rollNumber,
-        email,
+        misNumber: student.misNumber,
+        rollNumber: student.rollNumber,
         departmentId: department.id,
         addedBy: user.id,
         method: "manual",
       },
     });
 
-    return { success: true, studentId: student.id };
+    return { success: true, studentId: created.id };
   } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { success: false, error: error.message };
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { success: false, error: "A student with one of these identifiers was just added. Check the roster." };
+    }
     console.error("Error adding student manually:", error);
     return {
       success: false,

@@ -7,6 +7,7 @@ import {
   readSubmissionView,
   type SubmissionView,
 } from "../domain/submission-record";
+import { batchLabel } from "@/features/students/utils/batch";
 
 /**
  * What one student actually submitted, and what they were judged against at
@@ -58,7 +59,11 @@ export function SubmissionRecord({ applicationId }: { applicationId: string }) {
           : ""}
         {view.academic.cgpa !== null ? ` · CGPA ${view.academic.cgpa}` : ""}
         {view.academic.backlogs !== null ? ` · ${view.academic.backlogs} backlog(s)` : ""}
-        {view.academic.batchYear !== null ? ` · batch ${view.academic.batchYear}` : ""}
+        {view.academic.expectedPassoutYear !== null
+          ? ` · batch ${batchLabel(view.academic.expectedPassoutYear)}`
+          : view.academic.legacyBatchYear !== null
+            ? ` · batch year ${view.academic.legacyBatchYear} (as recorded)`
+            : ""}
       </div>
 
       <section>

@@ -3,6 +3,7 @@ import type {
   EligibilityRuleType,
   EntryType,
 } from "@prisma/client";
+import { batchLabel, isValidPassoutYear } from "@/features/students/utils/batch";
 
 /**
  * The drive eligibility rule catalogue.
@@ -21,7 +22,7 @@ import type {
  *   DIPLOMA_PERCENTAGE       StudentAcademic.diplomaPercentage    ≥   (NULL for regular)
  *   PRE_COLLEGE_PERCENTAGE   12th or diploma, by entry type       ≥
  *   CURRENT_SEMESTER         StudentAcademic.currentSemester      ≥ ≤ =
- *   BATCH_YEAR               Student.batchYear                    in
+ *   BATCH_YEAR               Student.expectedPassoutYear          in
  *   ENTRY_TYPE               Student.entryType                    in
  *   SKILL                    StudentSkill.skillName               all of / any of
  *
@@ -124,7 +125,7 @@ export const RULE_SPECS: Record<EligibilityRuleType, RuleSpec> = {
     needsAcademic: true,
   },
   BATCH_YEAR: {
-    label: "Batch year",
+    label: "Batch",
     operators: ["IN"],
     value: { kind: "list", item: "year", maxItems: 10 },
     needsAcademic: false,
@@ -301,6 +302,15 @@ const ENTRY_TYPE_TEXT: Record<string, string> = {
   DIPLOMA: "Lateral (diploma) entry",
 };
 
+/**
+ * A BATCH_YEAR value (an expected passout year, stored as text) as its batch
+ * label; a value that is not a year is shown as stored.
+ */
+function batchLabelOf(value: string): string {
+  const year = Number(value);
+  return isValidPassoutYear(year) ? batchLabel(year) : value;
+}
+
 /** A rule as a student or admin reads it: "CGPA ≥ 7.5". */
 export function describeRule(rule: EligibilityRuleInput): string {
   const spec = RULE_SPECS[rule.ruleType];
@@ -326,7 +336,7 @@ export function describeRule(rule: EligibilityRuleInput): string {
           ? `Semester ${n} or earlier`
           : `Semester ${n}`;
     case "BATCH_YEAR":
-      return list.length === 1 ? `Batch of ${list[0]}` : `Batch of ${list.join(", ")}`;
+      return `Batch ${list.map((year) => batchLabelOf(year)).join(", ")}`;
     case "ENTRY_TYPE":
       return list.length === 1
         ? `${ENTRY_TYPE_TEXT[list[0]] ?? list[0]} only`

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { AnnouncementRow } from "../queries/get-announcements";
 import { PRIORITY_PRESENTATION } from "@/features/notifications/utils/notification-priority";
 import type { NotificationPriority } from "@prisma/client";
+import { batchLabel } from "@/features/students/utils/batch";
 
 /**
  * One announcement in a list. The same card for every role; what differs is
@@ -38,7 +39,7 @@ export function AnnouncementCard({
         <span className={`badge ${presentation.badgeClass}`}>{presentation.label}</span>
         <span className="text-muted" style={{ fontSize: 11 }}>
           {announcement.departmentCode ?? "Institution-wide"}
-          {announcement.batchYears.length > 0 && ` · Batch ${announcement.batchYears.join(", ")}`}
+          {announcement.batchYears.length > 0 && ` · Batch ${announcement.batchYears.map(batchLabel).join(", ")}`}
           {announcement.audience === "ADMINS" && " · Admins"}
         </span>
         {announcement.status !== "PUBLISHED" && (

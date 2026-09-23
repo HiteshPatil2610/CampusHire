@@ -48,7 +48,7 @@ export default async function SuperAdminDriveApplicationsPage({
       pageSize: 50,
       departmentCode: dept || undefined,
       search: filters.q,
-      batchYear: Number.isFinite(batch) ? batch : undefined,
+      expectedPassoutYear: Number.isFinite(batch) ? batch : undefined,
       status,
       placement,
       appliedFrom: filters.from,

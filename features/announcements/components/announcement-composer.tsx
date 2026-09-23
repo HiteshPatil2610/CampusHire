@@ -8,6 +8,7 @@ import {
   saveAnnouncement,
   uploadAnnouncementFile,
 } from "../actions/manage-announcement";
+import { batchLabel } from "@/features/students/utils/batch";
 import type { AnnouncementRow } from "../queries/get-announcements";
 
 export interface ComposerDepartment {
@@ -271,7 +272,7 @@ export function AnnouncementComposer({
                         })
                       }
                     >
-                      {year}
+                      {batchLabel(year)}
                     </button>
                   );
                 })}

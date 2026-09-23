@@ -2,108 +2,72 @@ import { describe, it, expect } from "vitest";
 import { studentRegistrationSchema } from "../schemas/registration";
 
 const base = {
+  misNumber: "mis2023001",
   name: "Hitesh Patil",
+  rollNumber: "4242",
   departmentId: "cmtsxe83c0000tttcj2u7jbzl",
+  expectedPassoutYear: 2027,
+  entryType: "REGULAR" as const,
   phoneNumber: "9876543210",
 };
 
-describe("studentRegistrationSchema", () => {
-  it("accepts a regular student with a roll number", () => {
+describe("studentRegistrationSchema — first-time verification", () => {
+  it("accepts the required details, normalised, with no PRN", () => {
     const result = studentRegistrationSchema.safeParse({
       ...base,
-      entryType: "REGULAR",
-      rollNumber: "4242",
-    });
-
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects a regular student with no roll number", () => {
-    const result = studentRegistrationSchema.safeParse({
-      ...base,
-      entryType: "REGULAR",
-    });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].path).toEqual(["rollNumber"]);
-    }
-  });
-
-  it("rejects a regular student with a blank roll number", () => {
-    const result = studentRegistrationSchema.safeParse({
-      ...base,
-      entryType: "REGULAR",
-      rollNumber: "",
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  it("accepts a diploma student with no roll number", () => {
-    // Lateral entry may not have been issued one yet; they are blocked from
-    // applying until they add it, which is enforced in applyToDrive.
-    const result = studentRegistrationSchema.safeParse({
-      ...base,
-      entryType: "DIPLOMA",
-    });
-
-    expect(result.success).toBe(true);
-  });
-
-  it("still accepts a diploma student who does have a roll number", () => {
-    const result = studentRegistrationSchema.safeParse({
-      ...base,
-      entryType: "DIPLOMA",
+      name: "  Hitesh   Patil ",
       rollNumber: "lat-77",
+      phoneNumber: "+91 98765 43210",
     });
 
     expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.rollNumber).toBe("LAT-77");
-    }
-  });
-
-  it("requires an entry type", () => {
-    const result = studentRegistrationSchema.safeParse({
+    if (!result.success) return;
+    expect(result.data).toEqual({
       ...base,
-      rollNumber: "4242",
+      misNumber: "MIS2023001",
+      rollNumber: "LAT-77",
+      prnNumber: undefined,
     });
+  });
 
+  it("accepts an optional PRN, normalised", () => {
+    const result = studentRegistrationSchema.safeParse({ ...base, prnNumber: " 72123456a " });
+    expect(result.success && result.data.prnNumber).toBe("72123456A");
+  });
+
+  it("treats a blank PRN as not given", () => {
+    const result = studentRegistrationSchema.safeParse({ ...base, prnNumber: "   " });
+    expect(result.success && result.data.prnNumber).toBeUndefined();
+  });
+
+  it.each([
+    ["MIS number", { misNumber: "" }],
+    ["name", { name: " " }],
+    ["roll number", { rollNumber: "" }],
+    ["department", { departmentId: "" }],
+    ["batch", { expectedPassoutYear: undefined }],
+    ["phone number", { phoneNumber: "" }],
+    ["entry type", { entryType: undefined }],
+  ])("requires the %s", (_field, change) => {
+    expect(studentRegistrationSchema.safeParse({ ...base, ...change }).success).toBe(false);
+  });
+
+  it("requires a roll number from a diploma (lateral-entry) student too", () => {
+    const result = studentRegistrationSchema.safeParse({ ...base, entryType: "DIPLOMA", rollNumber: "" });
     expect(result.success).toBe(false);
   });
 
-  it("requires a phone number", () => {
-    const result = studentRegistrationSchema.safeParse({
-      name: base.name,
-      departmentId: base.departmentId,
-      entryType: "REGULAR",
-      rollNumber: "4242",
-    });
-
-    expect(result.success).toBe(false);
+  it.each([
+    ["a malformed MIS", { misNumber: "M!" }],
+    ["a malformed PRN", { prnNumber: "#" }],
+    ["a malformed phone", { phoneNumber: "not-a-phone" }],
+    ["an implausible batch", { expectedPassoutYear: 1999 }],
+  ])("rejects %s", (_label, change) => {
+    expect(studentRegistrationSchema.safeParse({ ...base, ...change }).success).toBe(false);
   });
 
-  it("rejects a malformed phone number", () => {
-    const result = studentRegistrationSchema.safeParse({
-      ...base,
-      phoneNumber: "not-a-phone",
-      entryType: "REGULAR",
-      rollNumber: "4242",
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  it("requires a department", () => {
-    const result = studentRegistrationSchema.safeParse({
-      name: base.name,
-      phoneNumber: base.phoneNumber,
-      departmentId: "",
-      entryType: "REGULAR",
-      rollNumber: "4242",
-    });
-
-    expect(result.success).toBe(false);
+  it("has no email field — the email is the signed-in account's", () => {
+    const result = studentRegistrationSchema.safeParse({ ...base, email: "someone@else.com" });
+    expect(result.success && "email" in result.data).toBe(false);
   });
 });

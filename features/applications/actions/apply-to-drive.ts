@@ -310,7 +310,7 @@ export async function applyToDrive(
         rollNumber: studentWithAcademic.rollNumber,
         departmentId: studentWithAcademic.departmentId,
         departmentCode: studentWithAcademic.department.code,
-        batchYear: studentWithAcademic.batchYear ?? null,
+        expectedPassoutYear: studentWithAcademic.expectedPassoutYear ?? null,
         entryType: studentWithAcademic.entryType,
       },
       academic: subject.academic!,

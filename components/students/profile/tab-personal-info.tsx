@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { updatePersonalInfo } from '@/features/students/actions/profile-personal';
 import { updateProfilePhoto } from '@/features/students/actions/profile-photo';
 import type { CompleteProfile } from '@/features/students/queries/profile-completion';
+import { formatBatch } from '@/features/students/utils/batch';
 
 export interface TabPersonalInfoProps {
   profile: CompleteProfile;
@@ -338,12 +339,24 @@ export default function TabPersonalInfo({ profile }: TabPersonalInfoProps) {
             />
           </div>
         </div>
-        {profile.student.batchYear && (
+        {/* Institutional identity: set by the department's roster and
+            read-only here. */}
+        <div className="field-row">
           <div className="field">
-            <label>Batch Year</label>
+            <label>MIS Number</label>
+            <input type="text" value={profile.student.misNumber ?? '—'} readOnly />
+          </div>
+          <div className="field">
+            <label>PRN Number</label>
+            <input type="text" value={profile.student.prnNumber ?? '—'} readOnly />
+          </div>
+        </div>
+        {profile.student.expectedPassoutYear !== null && (
+          <div className="field">
+            <label>Batch</label>
             <input
               type="text"
-              value={String(profile.student.batchYear)}
+              value={`${formatBatch(profile.student.expectedPassoutYear)} (passing out ${profile.student.expectedPassoutYear})`}
               readOnly
             />
           </div>

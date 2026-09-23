@@ -11,6 +11,7 @@ import { BulkStageMoveDialog } from "./bulk-stage-move-dialog";
 import { StageHistory } from "./stage-history";
 import { SubmissionRecord } from "./submission-record";
 import { MAX_BULK_MOVES } from "../domain/bulk-limits";
+import { batchLabel, formatBatch } from "@/features/students/utils/batch";
 
 /**
  * The Applications tab of a department drive: who applied, where they are in
@@ -147,7 +148,7 @@ export function DriveApplicationsWorkspace({
       applications.map((app) => ({
         Name: app.student.name,
         "Roll Number": app.student.rollNumber ?? "",
-        Batch: app.student.batchYear ?? "",
+        Batch: app.student.expectedPassoutYear ? batchLabel(app.student.expectedPassoutYear) : "",
         "CGPA (at application)": app.snapshotCgpa ?? "N/A",
         "Backlogs (at application)": app.snapshotBacklogs ?? "N/A",
         "Applied Date": new Date(app.appliedAt).toLocaleDateString("en-IN"),
@@ -216,7 +217,7 @@ export function DriveApplicationsWorkspace({
           <option value="">All batches</option>
           {batchYears.map((year) => (
             <option key={year} value={String(year)}>
-              Batch {year}
+              Batch {batchLabel(year)}
             </option>
           ))}
         </select>
@@ -373,7 +374,7 @@ export function DriveApplicationsWorkspace({
                           </span>
                         )}
                       </td>
-                      <td style={{ fontSize: 13 }}>{app.student.batchYear ?? "—"}</td>
+                      <td style={{ fontSize: 13 }}>{formatBatch(app.student.expectedPassoutYear)}</td>
                       <td style={{ fontSize: 13 }} title={`Backlogs at application: ${app.snapshotBacklogs ?? "N/A"}`}>
                         <strong>{app.snapshotCgpa?.toFixed(2) ?? "N/A"}</strong>
                       </td>

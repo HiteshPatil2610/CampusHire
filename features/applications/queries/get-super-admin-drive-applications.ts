@@ -49,7 +49,7 @@ export async function getSuperAdminDriveApplications(
     departmentCode?: string;
     /** Matches name, roll number or email. */
     search?: string;
-    batchYear?: number;
+    expectedPassoutYear?: number;
     status?: "IN_PROGRESS" | "SELECTED" | "REJECTED" | "WITHDRAWN";
     placement?: "placed" | "unplaced";
     /** ISO dates (YYYY-MM-DD), inclusive, on the day the application was made. */
@@ -91,9 +91,9 @@ export async function getSuperAdminDriveApplications(
   // Every filter comes from a URL, so each is checked before it reaches the
   // query.
   const search = params.search?.trim().slice(0, 100) || undefined;
-  const batchYear =
-    Number.isInteger(params.batchYear) && params.batchYear! > 1900 && params.batchYear! < 3000
-      ? params.batchYear
+  const expectedPassoutYear =
+    Number.isInteger(params.expectedPassoutYear) && params.expectedPassoutYear! > 1900 && params.expectedPassoutYear! < 3000
+      ? params.expectedPassoutYear
       : undefined;
   const status =
     params.status && ["IN_PROGRESS", "SELECTED", "REJECTED", "WITHDRAWN"].includes(params.status)
@@ -109,7 +109,7 @@ export async function getSuperAdminDriveApplications(
 
   const studentFilter = {
       ...(params.departmentCode ? { department: { code: params.departmentCode } } : {}),
-      ...(batchYear ? { batchYear } : {}),
+      ...(expectedPassoutYear ? { expectedPassoutYear } : {}),
       ...(params.placement === "placed"
         ? { placements: { some: ACTIVE_PLACEMENT_WHERE } }
         : params.placement === "unplaced"

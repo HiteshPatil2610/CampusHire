@@ -137,7 +137,7 @@ describe("department settings", () => {
       defaultVenue: "Seminar Hall",
       defaultReportingTime: "8:30 AM",
       coordinatorEmail: "coord@college.edu",
-      defaultBatchYear: 2027,
+      defaultPassoutYear: 2027,
     });
 
     expect(result.success).toBe(true);

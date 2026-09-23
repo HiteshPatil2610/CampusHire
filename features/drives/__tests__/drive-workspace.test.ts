@@ -74,7 +74,7 @@ const student = (id: string, over: object = {}) => ({
   id,
   name: `Student ${id}`,
   rollNumber: `R${id}`,
-  batchYear: 2027,
+  expectedPassoutYear: 2027,
   userId: `user-${id}`,
   departmentId: CSE,
   isPending: false,
@@ -108,7 +108,7 @@ describe("getDriveStudents", () => {
     vi.mocked(prisma.student.findMany).mockResolvedValue([
       student("1"),
       student("2", { placements: [{ id: "p1", revokedAt: null }] }),
-      student("3", { batchYear: 2026 }),
+      student("3", { expectedPassoutYear: 2026 }),
       student("4", { academic: null }),
     ] as never);
 
@@ -166,7 +166,7 @@ describe("getDriveApplications filters", () => {
     await getDriveApplications({
       driveId: DRIVE_ID,
       search: "asha",
-      batchYear: 2027,
+      expectedPassoutYear: 2027,
       stageId: "stage-1",
       status: "IN_PROGRESS",
     });
@@ -177,7 +177,7 @@ describe("getDriveApplications filters", () => {
       driveId: DRIVE_ID,
       status: "IN_PROGRESS",
       currentStageId: "stage-1",
-      student: { departmentId: CSE, batchYear: 2027 },
+      student: { departmentId: CSE, expectedPassoutYear: 2027 },
     });
     expect((where.student as { OR: unknown[] }).OR).toHaveLength(3);
   });
@@ -186,7 +186,7 @@ describe("getDriveApplications filters", () => {
     await getDriveApplications({
       driveId: DRIVE_ID,
       status: "HACKED" as never,
-      batchYear: Number.NaN,
+      expectedPassoutYear: Number.NaN,
       page: Number.NaN,
     });
 
@@ -401,7 +401,7 @@ describe("Super Admin global placements", () => {
     await getGlobalPlacements({
       departmentId: "dept-1",
       company: "Acme",
-      batchYear: 2027,
+      expectedPassoutYear: 2027,
       driveId: "drive-9",
       search: "asha",
       from: "2026-01-01",
@@ -414,7 +414,7 @@ describe("Super Admin global placements", () => {
       revokedAt: null,
       companyName: { equals: "Acme", mode: "insensitive" },
       driveId: "drive-9",
-      student: { departmentId: "dept-1", batchYear: 2027 },
+      student: { departmentId: "dept-1", expectedPassoutYear: 2027 },
     });
     expect(where.placedAt).toEqual({
       gte: new Date("2026-01-01T00:00:00.000Z"),
@@ -423,7 +423,7 @@ describe("Super Admin global placements", () => {
   });
 
   it("drops malformed dates and batch years instead of passing them on", async () => {
-    await getGlobalPlacements({ from: "yesterday", to: "2026-13-45", batchYear: 12 });
+    await getGlobalPlacements({ from: "yesterday", to: "2026-13-45", expectedPassoutYear: 12 });
 
     const [call] = vi.mocked(prisma.studentPlacement.count).mock.calls;
     const where = (call[0] as { where: Record<string, unknown> }).where;

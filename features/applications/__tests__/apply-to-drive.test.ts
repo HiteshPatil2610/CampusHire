@@ -117,6 +117,8 @@ describe("applyToDrive", () => {
     id: "student-1",
     userId: "user-1",
     departmentId: "dept-1",
+    misNumber: "MIS2021001",
+    prnNumber: null,
     rollNumber: "CS2021001",
     name: "Test Student",
     email: "student@example.com",
@@ -133,7 +135,7 @@ describe("applyToDrive", () => {
     dateOfBirth: null,
     address: null,
     personalEmail: null,
-    batchYear: 2025,
+    expectedPassoutYear: 2025,
     // Not placed: the evaluator's standing check passes.
     placements: [] as { revokedAt: Date | null }[],
     createdAt: new Date(),
@@ -336,7 +338,7 @@ describe("applyToDrive", () => {
           snapshot: {
             create: expect.objectContaining({
               origin: "SUBMISSION",
-              schemaVersion: 1,
+              schemaVersion: 2,
               formHash: expect.stringMatching(/^[0-9a-f]{64}$/),
               eligibilityHash: expect.stringMatching(/^[0-9a-f]{64}$/),
               driveContentHash: expect.stringMatching(/^[0-9a-f]{64}$/),

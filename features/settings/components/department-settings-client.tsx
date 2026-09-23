@@ -65,7 +65,7 @@ export function DepartmentSettingsClient({
     coordinatorPhone: settings.coordinatorPhone ?? "",
     coordinatorEmail: settings.coordinatorEmail ?? "",
     defaultInstructions: settings.defaultInstructions ?? "",
-    defaultBatchYear: settings.defaultBatchYear ? String(settings.defaultBatchYear) : "",
+    defaultPassoutYear: settings.defaultPassoutYear ? String(settings.defaultPassoutYear) : "",
   });
 
   function save() {
@@ -77,7 +77,7 @@ export function DepartmentSettingsClient({
         coordinatorPhone: form.coordinatorPhone || null,
         coordinatorEmail: form.coordinatorEmail || null,
         defaultInstructions: form.defaultInstructions || null,
-        defaultBatchYear: form.defaultBatchYear ? Number(form.defaultBatchYear) : null,
+        defaultPassoutYear: form.defaultPassoutYear ? Number(form.defaultPassoutYear) : null,
       });
       if (!result.success) {
         toast({ title: "Not saved", description: result.error, variant: "destructive" });
@@ -226,10 +226,10 @@ export function DepartmentSettingsClient({
             </p>
             <Field
               id="batch"
-              label="Default batch year"
+              label="Default batch (expected passout year)"
               type="number"
-              value={form.defaultBatchYear}
-              onChange={(value) => setForm({ ...form, defaultBatchYear: value })}
+              value={form.defaultPassoutYear}
+              onChange={(value) => setForm({ ...form, defaultPassoutYear: value })}
               placeholder="e.g. 2027"
             />
             <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>

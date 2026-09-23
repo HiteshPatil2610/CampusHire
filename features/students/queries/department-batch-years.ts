@@ -18,13 +18,13 @@ export async function getDepartmentBatchYears(
   departmentId: string
 ): Promise<DepartmentBatchYear[]> {
   const rows = await prisma.student.groupBy({
-    by: ["batchYear"],
-    where: { departmentId, batchYear: { not: null } },
+    by: ["expectedPassoutYear"],
+    where: { departmentId, expectedPassoutYear: { not: null } },
     _count: { _all: true },
-    orderBy: { batchYear: "asc" },
+    orderBy: { expectedPassoutYear: "asc" },
   });
 
   return rows
-    .filter((row): row is typeof row & { batchYear: number } => row.batchYear !== null)
-    .map((row) => ({ year: row.batchYear, students: row._count._all }));
+    .filter((row): row is typeof row & { expectedPassoutYear: number } => row.expectedPassoutYear !== null)
+    .map((row) => ({ year: row.expectedPassoutYear, students: row._count._all }));
 }

@@ -1,100 +1,142 @@
 import { describe, it, expect } from "vitest";
 import {
+  ALREADY_LINKED,
+  DETAILS_MISMATCH,
   decideRegistrationOutcome,
-  mergeOntoImportedRecord,
+  mergeOntoRosterRecord,
+  type RosterRecord,
 } from "../utils/registration-match";
+import type { StudentRegistration } from "../schemas/registration";
 
-describe("decideRegistrationOutcome", () => {
-  it("links a sign-up to an unclaimed imported record", () => {
-    const outcome = decideRegistrationOutcome({
-      id: "stu_1",
-      isPending: true,
-      userId: null,
-    });
+const EMAIL = "aditi.sharma@college.edu";
 
-    expect(outcome).toEqual({ kind: "link", studentId: "stu_1" });
+const submitted: StudentRegistration = {
+  misNumber: "MIS2023001",
+  prnNumber: undefined,
+  name: "Aditi Sharma",
+  rollNumber: "21CS042",
+  departmentId: "dept-comp",
+  expectedPassoutYear: 2027,
+  entryType: "REGULAR",
+  phoneNumber: "9876543210",
+};
+
+/** The roster row the department imported for that student. */
+const imported: RosterRecord = {
+  id: "stu_1",
+  userId: null,
+  isPending: true,
+  misNumber: "MIS2023001",
+  email: EMAIL,
+  name: "Aditi Sharma",
+  rollNumber: "21CS042",
+  departmentId: "dept-comp",
+  expectedPassoutYear: 2027,
+};
+
+function decide(overrides: Partial<Parameters<typeof decideRegistrationOutcome>[0]> = {}) {
+  return decideRegistrationOutcome({
+    submitted,
+    verifiedEmail: EMAIL,
+    byMis: imported,
+    byEmail: imported,
+    ...overrides,
+  });
+}
+
+describe("decideRegistrationOutcome — MIS-based verification", () => {
+  it("links when the MIS matches and every cross-check agrees", () => {
+    expect(decide()).toEqual({ kind: "link", studentId: "stu_1" });
   });
 
-  it("queues a sign-up nobody imported", () => {
-    const outcome = decideRegistrationOutcome(null);
+  it("tolerates case, full stops and spacing in the name — nothing looser", () => {
+    expect(decide({ submitted: { ...submitted, name: "  aditi   SHARMA " } }).kind).toBe("link");
+    expect(decide({ byMis: { ...imported, name: "A. Sharma" }, byEmail: { ...imported, name: "A. Sharma" } }).kind).toBe("refuse");
+  });
 
+  it.each([
+    ["name", { name: "Priya Patel" }],
+    ["roll number", { rollNumber: "21CS099" }],
+    ["department", { departmentId: "dept-mech" }],
+    ["batch", { expectedPassoutYear: 2028 }],
+  ])("refuses when the %s does not match — a partial match unlocks nothing", (_field, change) => {
+    const outcome = decide({ submitted: { ...submitted, ...change } });
+    expect(outcome).toEqual({ kind: "refuse", reason: DETAILS_MISMATCH });
+  });
+
+  it("does not say which field was wrong", () => {
+    const outcome = decide({ submitted: { ...submitted, rollNumber: "WRONG" } });
+    expect(outcome.kind === "refuse" && outcome.reason).not.toMatch(/roll number is/i);
+  });
+
+  it("refuses a record already linked to another account", () => {
+    const claimed = { ...imported, userId: "user_other", isPending: false };
+    expect(decide({ byMis: claimed, byEmail: claimed })).toEqual({ kind: "refuse", reason: ALREADY_LINKED });
+  });
+
+  it("sends a full match with a different sheet email to an admin, never links it", () => {
+    // The details are right but the account's verified email is not the one
+    // on the roster. Only the admin can vouch that this account is them.
+    const outcome = decide({ verifiedEmail: "aditi.personal@gmail.com", byEmail: null });
     expect(outcome.kind).toBe("request-review");
   });
 
-  it("refuses to re-link a record another account already claimed", () => {
-    // Silently re-linking would hand one student another's record.
-    const outcome = decideRegistrationOutcome({
-      id: "stu_1",
-      isPending: false,
-      userId: "user_other",
-    });
-
-    expect(outcome.kind).toBe("blocked");
+  it("refuses when the verified email belongs to a different roster record than the MIS", () => {
+    const someoneElse = { ...imported, id: "stu_2", misNumber: "MIS2023002" };
+    expect(decide({ byEmail: someoneElse }).kind).toBe("refuse");
   });
 
-  it("refuses even when the claimed record is still marked pending", () => {
-    const outcome = decideRegistrationOutcome({
-      id: "stu_1",
-      isPending: true,
-      userId: "user_other",
-    });
-
-    expect(outcome.kind).toBe("blocked");
+  it("refuses a typo'd MIS when the email names a record with a different MIS", () => {
+    const outcome = decide({ submitted: { ...submitted, misNumber: "MIS2023009" }, byMis: null });
+    expect(outcome).toEqual({ kind: "refuse", reason: DETAILS_MISMATCH });
   });
 
-  it("sends an unlinked but non-pending record for review rather than guessing", () => {
-    const outcome = decideRegistrationOutcome({
-      id: "stu_1",
-      isPending: false,
-      userId: null,
-    });
+  it("queues someone nobody imported", () => {
+    expect(decide({ byMis: null, byEmail: null }).kind).toBe("request-review");
+  });
 
-    expect(outcome.kind).toBe("request-review");
+  it("sends an unclaimed but not-pending record to an admin", () => {
+    const odd = { ...imported, isPending: false };
+    expect(decide({ byMis: odd, byEmail: odd }).kind).toBe("request-review");
   });
 });
 
-describe("mergeOntoImportedRecord", () => {
-  const submitted = {
-    name: "Priya Patel",
-    rollNumber: "21CS104",
-    departmentId: "dept_other",
-    phoneNumber: "9876543210",
-    entryType: "DIPLOMA" as const,
-  };
+describe("existing student compatibility", () => {
+  // A roster row imported before MIS numbers and batches existed.
+  const legacy: RosterRecord = { ...imported, misNumber: null, expectedPassoutYear: null };
 
-  it("takes the student's phone number", () => {
-    const merged = mergeOntoImportedRecord(submitted, { rollNumber: "R1" });
-
-    expect(merged.phoneNumber).toBe("9876543210");
+  it("a pre-MIS roster row is claimed by its verified email when the other details agree", () => {
+    expect(decide({ byMis: null, byEmail: legacy })).toEqual({ kind: "link", studentId: "stu_1" });
   });
 
-  it("never overwrites a roll number the admin imported", () => {
-    const merged = mergeOntoImportedRecord(submitted, { rollNumber: "R1" });
-
-    expect(merged.rollNumber).toBeUndefined();
+  it("a pre-MIS roster row still refuses a wrong roll number", () => {
+    const outcome = decide({ byMis: null, byEmail: legacy, submitted: { ...submitted, rollNumber: "X" } });
+    expect(outcome.kind).toBe("refuse");
   });
 
-  it("fills a roll number the import left blank", () => {
-    const merged = mergeOntoImportedRecord(submitted, { rollNumber: null });
-
-    expect(merged.rollNumber).toBe("21CS104");
+  it("claiming a pre-MIS row fills in its MIS number and batch", () => {
+    expect(mergeOntoRosterRecord(submitted, { misNumber: null, prnNumber: null, expectedPassoutYear: null })).toEqual({
+      phoneNumber: "9876543210",
+      misNumber: "MIS2023001",
+      expectedPassoutYear: 2027,
+    });
   });
+});
 
-  it("leaves a blank roll number blank", () => {
-    const merged = mergeOntoImportedRecord(
-      { ...submitted, rollNumber: "   " },
-      { rollNumber: null }
+describe("mergeOntoRosterRecord", () => {
+  it("never overwrites what the registrar owns", () => {
+    const merged = mergeOntoRosterRecord(
+      { ...submitted, prnNumber: "PRN1" },
+      { misNumber: "MIS2023001", prnNumber: "PRN-ON-FILE", expectedPassoutYear: 2027 }
     );
-
-    expect(merged.rollNumber).toBeUndefined();
+    expect(merged).toEqual({ phoneNumber: "9876543210" });
   });
 
-  it("never carries the self-asserted department or entry type across", () => {
-    // Both decide eligibility and which academic records are required, so the
-    // admin's imported values must stand.
-    const merged = mergeOntoImportedRecord(submitted, { rollNumber: null });
-
-    expect(merged).not.toHaveProperty("departmentId");
-    expect(merged).not.toHaveProperty("entryType");
+  it("fills a PRN the sheet left blank", () => {
+    const merged = mergeOntoRosterRecord(
+      { ...submitted, prnNumber: "PRN1" },
+      { misNumber: "MIS2023001", prnNumber: null, expectedPassoutYear: 2027 }
+    );
+    expect(merged).toEqual({ phoneNumber: "9876543210", prnNumber: "PRN1" });
   });
 });

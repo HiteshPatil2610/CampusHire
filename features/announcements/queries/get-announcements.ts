@@ -62,19 +62,19 @@ export async function announcementViewerFor(user: User): Promise<AnnouncementVie
   if (user.role === "STUDENT") {
     const student = await prisma.student.findUnique({
       where: { userId: user.id },
-      select: { departmentId: true, batchYear: true },
+      select: { departmentId: true, expectedPassoutYear: true },
     });
     return {
       role: "STUDENT",
       departmentId: student?.departmentId ?? null,
-      batchYear: student?.batchYear ?? null,
+      expectedPassoutYear: student?.expectedPassoutYear ?? null,
     };
   }
   if (user.role === "DEPT_ADMIN") {
     const admin = await getActiveDepartmentAdmin(user.id);
-    return { role: "DEPT_ADMIN", departmentId: admin?.departmentId ?? null, batchYear: null };
+    return { role: "DEPT_ADMIN", departmentId: admin?.departmentId ?? null, expectedPassoutYear: null };
   }
-  return { role: "SUPER_ADMIN", departmentId: null, batchYear: null };
+  return { role: "SUPER_ADMIN", departmentId: null, expectedPassoutYear: null };
 }
 
 function toRow(
@@ -185,13 +185,13 @@ export async function getManagedAnnouncements(
 /** The batch years a department's students are in, for batch targeting. */
 export async function getTargetableBatchYears(departmentId: string | null): Promise<number[]> {
   const rows = await prisma.student.findMany({
-    where: { batchYear: { not: null }, ...(departmentId ? { departmentId } : {}) },
-    distinct: ["batchYear"],
-    select: { batchYear: true },
-    orderBy: { batchYear: "desc" },
+    where: { expectedPassoutYear: { not: null }, ...(departmentId ? { departmentId } : {}) },
+    distinct: ["expectedPassoutYear"],
+    select: { expectedPassoutYear: true },
+    orderBy: { expectedPassoutYear: "desc" },
     take: 20,
   });
-  return rows.map((row) => row.batchYear!).filter((year): year is number => year !== null);
+  return rows.map((row) => row.expectedPassoutYear!).filter((year): year is number => year !== null);
 }
 
 export type { Role };

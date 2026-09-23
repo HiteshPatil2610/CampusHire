@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { exportToCsv } from "@/lib/csv-export";
 import type { GlobalPlacementsResult } from "@/features/students/queries/get-global-placements";
+import { batchLabel, formatBatch } from "@/features/students/utils/batch";
 
 interface Filters {
   dept: string;
@@ -59,7 +60,7 @@ export function GlobalPlacementsClient({ result, filters }: { result: GlobalPlac
         Student: row.studentName,
         "Roll Number": row.rollNumber ?? "",
         Department: row.departmentCode,
-        Batch: row.batchYear ?? "",
+        Batch: row.expectedPassoutYear ? batchLabel(row.expectedPassoutYear) : "",
         Company: row.companyName,
         Role: row.roleName,
         Package: row.packageDisplay ?? "",
@@ -119,7 +120,7 @@ export function GlobalPlacementsClient({ result, filters }: { result: GlobalPlac
         <select value={draft.batch} onChange={(e) => update("batch", e.target.value)} aria-label="Batch" style={inputStyle}>
           <option value="">All batches</option>
           {result.options.batchYears.map((year) => (
-            <option key={year} value={String(year)}>Batch {year}</option>
+            <option key={year} value={String(year)}>Batch {batchLabel(year)}</option>
           ))}
         </select>
         <label style={{ fontSize: 12, display: "flex", gap: 4, alignItems: "center" }}>
@@ -204,7 +205,7 @@ export function GlobalPlacementsClient({ result, filters }: { result: GlobalPlac
                     <div className="text-muted" style={{ fontSize: 11 }}>{row.rollNumber}</div>
                   </td>
                   <td style={{ fontSize: 13 }}>{row.departmentCode}</td>
-                  <td style={{ fontSize: 13 }}>{row.batchYear ?? "—"}</td>
+                  <td style={{ fontSize: 13 }}>{formatBatch(row.expectedPassoutYear)}</td>
                   <td style={{ fontSize: 13 }}>
                     <strong>{row.companyName}</strong>
                     <div className="text-muted" style={{ fontSize: 11 }}>{row.roleName}</div>

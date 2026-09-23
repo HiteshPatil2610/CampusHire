@@ -8,6 +8,8 @@ function createMockProfile(overrides?: Partial<CompleteProfile>): CompleteProfil
     id: "student-1",
     userId: "user-1",
     departmentId: "dept-1",
+    misNumber: "MIS2021001",
+    prnNumber: null,
     rollNumber: "CS2021001",
     name: "Test Student",
     email: "student@example.com",
@@ -24,7 +26,7 @@ function createMockProfile(overrides?: Partial<CompleteProfile>): CompleteProfil
     dateOfBirth: null,
     address: null,
     personalEmail: null,
-    batchYear: 2025,
+    expectedPassoutYear: 2025,
     createdAt: new Date(),
     updatedAt: new Date(),
     department: {

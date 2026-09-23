@@ -69,7 +69,12 @@ export default async function StudentDashboardPage() {
     // they have and are waiting on a department admin to approve them.
     const request = await getMyAccessRequest(user.id);
 
-    if (request && request.status !== 'APPROVED') {
+    // A pending request made before MIS verification cannot be approved as
+    // it stands; the student verifies again, with their MIS number.
+    const needsReverification =
+      request?.status === 'PENDING' && request.misNumber === null;
+
+    if (request && request.status !== 'APPROVED' && !needsReverification) {
       return (
         <AwaitingApproval
           email={request.email}

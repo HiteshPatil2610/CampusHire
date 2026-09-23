@@ -81,6 +81,8 @@ export async function getDepartmentStudents(
           OR: [
             { name: { contains: search, mode: "insensitive" as const } },
             { rollNumber: { contains: search, mode: "insensitive" as const } },
+            { misNumber: { contains: search, mode: "insensitive" as const } },
+            { prnNumber: { contains: search, mode: "insensitive" as const } },
             { email: { contains: search, mode: "insensitive" as const } },
           ],
         }

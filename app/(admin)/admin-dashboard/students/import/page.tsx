@@ -30,10 +30,7 @@ export default async function ImportPage() {
         </div>
       </div>
 
-      <ExcelImportClient
-        departmentCode={department.code}
-        departmentId={department.id}
-      />
+      <ExcelImportClient departmentCode={department.code} />
 
       {/*
         Sign-ups that could not be matched against the imported roster. A
@@ -72,9 +69,13 @@ export default async function ImportPage() {
             id: request.id,
             name: request.name,
             email: request.email,
+            misNumber: request.misNumber,
+            prnNumber: request.prnNumber,
             rollNumber: request.rollNumber,
+            expectedPassoutYear: request.expectedPassoutYear,
             phoneNumber: request.phoneNumber,
             entryType: request.entryType,
+            rosterMatch: request.rosterMatch,
             createdAt: request.createdAt,
           }))}
           departmentCode={department.code}

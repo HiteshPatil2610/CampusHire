@@ -9,7 +9,7 @@ export interface GlobalPlacementFilters {
   pageSize?: number;
   departmentId?: string;
   company?: string;
-  batchYear?: number;
+  expectedPassoutYear?: number;
   driveId?: string;
   /** Matches the student's name, roll number or email. */
   search?: string;
@@ -25,7 +25,7 @@ export interface GlobalPlacementRow {
   studentId: string;
   studentName: string;
   rollNumber: string | null;
-  batchYear: number | null;
+  expectedPassoutYear: number | null;
   departmentCode: string;
   departmentName: string;
   companyName: string;
@@ -81,9 +81,9 @@ export async function getGlobalPlacements(
   const from = parseDay(filters.from);
   const to = parseDay(filters.to, true);
   const search = filters.search?.trim().slice(0, 100) || undefined;
-  const batchYear =
-    Number.isInteger(filters.batchYear) && filters.batchYear! > 1900 && filters.batchYear! < 3000
-      ? filters.batchYear
+  const expectedPassoutYear =
+    Number.isInteger(filters.expectedPassoutYear) && filters.expectedPassoutYear! > 1900 && filters.expectedPassoutYear! < 3000
+      ? filters.expectedPassoutYear
       : undefined;
 
   const where: Prisma.StudentPlacementWhereInput = {
@@ -93,7 +93,7 @@ export async function getGlobalPlacements(
     ...(from || to ? { placedAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
     student: {
       ...(filters.departmentId ? { departmentId: filters.departmentId.slice(0, 64) } : {}),
-      ...(batchYear ? { batchYear } : {}),
+      ...(expectedPassoutYear ? { expectedPassoutYear } : {}),
       ...(search
         ? {
             OR: [
@@ -120,7 +120,7 @@ export async function getGlobalPlacements(
               id: true,
               name: true,
               rollNumber: true,
-              batchYear: true,
+              expectedPassoutYear: true,
               department: { select: { code: true, name: true } },
             },
           },
@@ -142,10 +142,10 @@ export async function getGlobalPlacements(
         orderBy: { companyName: "asc" },
       }),
       prisma.student.findMany({
-        where: { batchYear: { not: null }, placements: { some: {} } },
-        distinct: ["batchYear"],
-        select: { batchYear: true },
-        orderBy: { batchYear: "desc" },
+        where: { expectedPassoutYear: { not: null }, placements: { some: {} } },
+        distinct: ["expectedPassoutYear"],
+        select: { expectedPassoutYear: true },
+        orderBy: { expectedPassoutYear: "desc" },
       }),
     ]);
 
@@ -157,7 +157,7 @@ export async function getGlobalPlacements(
       studentId: row.student.id,
       studentName: row.student.name,
       rollNumber: row.student.rollNumber,
-      batchYear: row.student.batchYear,
+      expectedPassoutYear: row.student.expectedPassoutYear,
       departmentCode: row.student.department.code,
       departmentName: row.student.department.name,
       companyName: row.companyName,
@@ -182,7 +182,7 @@ export async function getGlobalPlacements(
     options: {
       departments,
       companies: companyRows.map((row) => row.companyName),
-      batchYears: batchRows.map((row) => row.batchYear!).filter((year) => year !== null),
+      batchYears: batchRows.map((row) => row.expectedPassoutYear!).filter((year) => year !== null),
     },
   };
 }

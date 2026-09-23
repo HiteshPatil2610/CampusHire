@@ -7,10 +7,12 @@ import {
   addStudentManual,
   type AddStudentManualInput,
 } from '@/features/students/actions/add-student-manual';
+import { batchLabel, selectablePassoutYears } from '@/features/students/utils/batch';
 
 interface AddStudentFormProps {
   departmentCode: string;
-  departmentId: string; // For display only - server uses requireDepartmentAdmin()
+  /** The department's default batch (DepartmentSettings), prefilled. */
+  defaultPassoutYear: number | null;
 }
 
 /**
@@ -21,19 +23,30 @@ interface AddStudentFormProps {
  */
 export function AddStudentForm({
   departmentCode,
-  departmentId,
+  defaultPassoutYear,
 }: AddStudentFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
   const [form, setForm] = useState({
+    misNumber: '',
+    prnNumber: '',
     name: '',
     rollNumber: '',
     email: '',
     phoneNumber: '',
-    batchYear: '',
+    expectedPassoutYear: defaultPassoutYear ? String(defaultPassoutYear) : '',
   });
+
+  // The default batch stays choosable even when it falls outside the usual
+  // window of years.
+  const passoutYears = [
+    ...new Set([
+      ...selectablePassoutYears(),
+      ...(defaultPassoutYear ? [defaultPassoutYear] : []),
+    ]),
+  ].sort((a, b) => a - b);
 
   function handleChange(field: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -43,10 +56,17 @@ export function AddStudentForm({
     e.preventDefault();
 
     // Basic client-side validation
-    if (!form.name.trim() || !form.rollNumber.trim() || !form.email.trim()) {
+    if (
+      !form.misNumber.trim() ||
+      !form.name.trim() ||
+      !form.rollNumber.trim() ||
+      !form.email.trim() ||
+      !form.phoneNumber.trim() ||
+      !form.expectedPassoutYear
+    ) {
       toast({
         title: 'Validation Error',
-        description: 'Please fill in Name, Roll Number, and Email.',
+        description: 'Please fill in MIS No., Name, Roll No., Email, Phone and Batch.',
         variant: 'destructive',
       });
       return;
@@ -54,11 +74,13 @@ export function AddStudentForm({
 
     startTransition(async () => {
       const input: AddStudentManualInput = {
-        name: form.name.trim(),
-        rollNumber: form.rollNumber.trim(),
-        email: form.email.trim(),
-        phoneNumber: form.phoneNumber.trim() || undefined,
-        batchYear: form.batchYear ? parseInt(form.batchYear, 10) : undefined,
+        misNumber: form.misNumber,
+        prnNumber: form.prnNumber.trim() || undefined,
+        name: form.name,
+        rollNumber: form.rollNumber,
+        email: form.email,
+        phoneNumber: form.phoneNumber,
+        expectedPassoutYear: Number(form.expectedPassoutYear),
       };
 
       const result = await addStudentManual(input);
@@ -97,7 +119,30 @@ export function AddStudentForm({
         />
       </div>
 
-      {/* Roll Number and Batch Year */}
+      {/* MIS and PRN */}
+      <div className="field-row">
+        <div className="field">
+          <label>MIS No. *</label>
+          <input
+            required
+            value={form.misNumber}
+            onChange={(e) => handleChange('misNumber', e.target.value.toUpperCase())}
+            placeholder="e.g. MIS2023001"
+            disabled={isPending}
+          />
+        </div>
+        <div className="field">
+          <label>PRN No.</label>
+          <input
+            value={form.prnNumber}
+            onChange={(e) => handleChange('prnNumber', e.target.value.toUpperCase())}
+            placeholder="Optional"
+            disabled={isPending}
+          />
+        </div>
+      </div>
+
+      {/* Roll Number and Batch */}
       <div className="field-row">
         <div className="field">
           <label>Roll Number *</label>
@@ -110,16 +155,20 @@ export function AddStudentForm({
           />
         </div>
         <div className="field">
-          <label>Batch Year</label>
-          <input
-            type="number"
-            min="2000"
-            max="2100"
-            value={form.batchYear}
-            onChange={(e) => handleChange('batchYear', e.target.value)}
-            placeholder="e.g. 2026"
+          <label>Batch *</label>
+          <select
+            required
+            value={form.expectedPassoutYear}
+            onChange={(e) => handleChange('expectedPassoutYear', e.target.value)}
             disabled={isPending}
-          />
+          >
+            <option value="">Select batch</option>
+            {passoutYears.map((year) => (
+              <option key={year} value={year}>
+                {batchLabel(year)} (passout {year})
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -137,8 +186,9 @@ export function AddStudentForm({
           />
         </div>
         <div className="field">
-          <label>Phone Number</label>
+          <label>Phone Number *</label>
           <input
+            required
             type="tel"
             value={form.phoneNumber}
             onChange={(e) => handleChange('phoneNumber', e.target.value)}

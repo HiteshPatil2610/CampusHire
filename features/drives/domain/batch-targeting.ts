@@ -4,7 +4,7 @@ import type { EligibilityRuleInput } from "./eligibility-rules";
  * Batch targeting — which batches a department drive is open to.
  *
  * It is not a separate store: it is the `BATCH_YEAR IN (…)` eligibility rule
- * on `Student.batchYear`, evaluated by the one evaluator like every other
+ * on `Student.expectedPassoutYear`, evaluated by the one evaluator like every other
  * rule. These helpers only read and write that rule, so the picker, the
  * publish check and the evaluator can never disagree about what "targeted"
  * means.

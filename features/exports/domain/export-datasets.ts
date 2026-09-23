@@ -98,7 +98,7 @@ export function applicationInDataset(
  * Admin additionally gets the department, since their export spans them.
  * The list is the allowlist: a column not named here cannot be written.
  */
-const COMMON_STUDENT_COLUMNS = ["Name", "Roll number", "Email", "Batch", "CGPA", "Active backlogs"] as const;
+const COMMON_STUDENT_COLUMNS = ["Name", "MIS number", "Roll number", "Email", "Batch", "CGPA", "Active backlogs"] as const;
 
 const APPLICATION_COLUMNS = ["Applied on", "Stage", "Status"] as const;
 

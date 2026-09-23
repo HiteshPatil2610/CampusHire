@@ -72,7 +72,7 @@ export interface DepartmentSettingsView {
   coordinatorPhone: string | null;
   coordinatorEmail: string | null;
   defaultInstructions: string | null;
-  defaultBatchYear: number | null;
+  defaultPassoutYear: number | null;
   updatedAt: Date | null;
   updatedByName: string | null;
 }
@@ -84,7 +84,7 @@ export const EMPTY_DEPARTMENT_SETTINGS: DepartmentSettingsView = {
   coordinatorPhone: null,
   coordinatorEmail: null,
   defaultInstructions: null,
-  defaultBatchYear: null,
+  defaultPassoutYear: null,
   updatedAt: null,
   updatedByName: null,
 };
@@ -112,7 +112,7 @@ export async function getDepartmentSettings(
       coordinatorPhone: row.coordinatorPhone,
       coordinatorEmail: row.coordinatorEmail,
       defaultInstructions: row.defaultInstructions,
-      defaultBatchYear: row.defaultBatchYear,
+      defaultPassoutYear: row.defaultPassoutYear,
       updatedAt: row.updatedAt,
       updatedByName: row.updatedBy ? row.updatedBy.name ?? row.updatedBy.email : null,
     };

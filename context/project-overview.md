@@ -15,7 +15,7 @@ CampusHire is a campus placement management platform for a single college with m
 ## Core User Flow
 
 **Student**
-1. Student registers with college email, name, roll number, and department (self-serve).
+1. Student signs up with their college email, then verifies against the department's roster with MIS number, name, phone, roll number, department and batch (PRN optional).
 2. Student verifies their college email via a one-time code sent by Clerk during sign-up.
 3. Student logs in and lands on their dashboard (profile completion %, quick actions, notifications).
 4. Student fills out their profile across tabs: personal info, academic info, skills & links, projects, experience, certifications, placement preferences.
@@ -42,7 +42,7 @@ A department can have more than one department admin (e.g. a primary and a backu
 ## Features
 
 ### Authentication & Roles
-- Student accounts originate from the department admin's imported roster. A student who signs up and matches that roster by verified email gets access immediately; one who does not is held for admin approval rather than admitted automatically
+- Student accounts originate from the department admin's imported roster. A student who signs up and matches that roster — by MIS number, cross-checked on name, roll number, department and batch, with the verified email — gets access immediately; one who does not is held for admin approval rather than admitted automatically
 - College-email sign-up for students, with Clerk email verification
 - Department admin and super admin accounts created by the super admin — no public sign-up for those roles
 - Three roles: `STUDENT`, `DEPT_ADMIN`, `SUPER_ADMIN`, enforced at every route and mutation
@@ -54,7 +54,8 @@ A department can have more than one department admin (e.g. a primary and a backu
 
 ### Department Admin — Student Management
 - Searchable, filterable student roster scoped to the admin's own department
-- Bulk student onboarding via Excel/CSV upload with a downloadable template, row-level validation (valid / duplicate roll number / missing email), and an error report for rejected rows
+- Bulk student onboarding via Excel/CSV upload (MIS NO., PRN NO., NAME, EMAIL, PH. NO., ROLL NO., DEPT, BATCH) with a downloadable template, row-level validation carrying every error tag a row has (missing field, invalid email/phone, duplicate MIS/PRN/roll number within the file or already registered), import of the clean rows only, an error review, and an exportable error sheet
+- A student's batch is their expected passout year (2027), shown as its label (2023-27)
 - View and edit individual student records
 
 ### Drives & Eligibility Matching

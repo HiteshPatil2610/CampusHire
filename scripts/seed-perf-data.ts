@@ -185,7 +185,7 @@ async function seed() {
         isPending: rand() < 0.15,          // some still un-registered
         optedIn: rand() > 0.08,            // a few opted out
         entryType: rand() < 0.2 ? 'DIPLOMA' : 'REGULAR',
-        batchYear: 2026,
+        expectedPassoutYear: 2026,
       });
     }
     const res = await prisma.student.createMany({ data: rows, skipDuplicates: true });

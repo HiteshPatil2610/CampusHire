@@ -15,7 +15,7 @@ export async function getAccessRequests(
 ) {
   const { department } = await requireDepartmentAdmin();
 
-  return prisma.studentAccessRequest.findMany({
+  const requests = await prisma.studentAccessRequest.findMany({
     where: {
       // CRITICAL: an admin only ever sees requests for their own department.
       departmentId: department.id,
@@ -27,6 +27,28 @@ export async function getAccessRequests(
       reviewedBy: { select: { email: true, name: true } },
     },
   });
+
+  // Which requests name an MIS number already on this department's roster,
+  // unclaimed: approving those links the account to that record rather than
+  // creating a new one. One query for the whole queue.
+  const misNumbers = requests
+    .map((request) => request.misNumber)
+    .filter((mis): mis is string => mis !== null);
+  const onRoster = new Set(
+    misNumbers.length === 0
+      ? []
+      : (
+          await prisma.student.findMany({
+            where: { departmentId: department.id, userId: null, misNumber: { in: misNumbers } },
+            select: { misNumber: true },
+          })
+        ).map((student) => student.misNumber)
+  );
+
+  return requests.map((request) => ({
+    ...request,
+    rosterMatch: request.misNumber !== null && onRoster.has(request.misNumber),
+  }));
 }
 
 /** Badge count for the pending queue. */

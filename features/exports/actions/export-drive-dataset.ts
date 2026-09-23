@@ -7,6 +7,7 @@ import {
   getActiveDepartmentAdmin,
   requireAnyRole,
 } from "@/lib/auth";
+import { batchLabel } from "@/features/students/utils/batch";
 import { createAuditLog, AuditAction, AuditEntityType } from "@/lib/audit";
 import { rowsToCsv } from "@/lib/csv-format";
 import { ACTIVE_PLACEMENT_WHERE } from "@/features/students/utils/placement-status";
@@ -49,15 +50,17 @@ type Row = Record<string, unknown>;
 
 const studentColumns = (student: {
   name: string;
+  misNumber: string | null;
   rollNumber: string | null;
   email: string;
-  batchYear: number | null;
+  expectedPassoutYear: number | null;
   academic: { currentCGPA: number; activeBacklogs: number } | null;
 }): Row => ({
   Name: student.name,
+  "MIS number": student.misNumber,
   "Roll number": student.rollNumber,
   Email: student.email,
-  Batch: student.batchYear,
+  Batch: student.expectedPassoutYear === null ? null : batchLabel(student.expectedPassoutYear),
   CGPA: student.academic?.currentCGPA ?? null,
   "Active backlogs": student.academic?.activeBacklogs ?? null,
 });
@@ -189,9 +192,10 @@ async function buildRows(
       select: {
         id: true,
         name: true,
+        misNumber: true,
         rollNumber: true,
         email: true,
-        batchYear: true,
+        expectedPassoutYear: true,
         academic: { select: { currentCGPA: true, activeBacklogs: true } },
       },
     });
@@ -227,9 +231,10 @@ async function buildRows(
         student: {
           select: {
             name: true,
+            misNumber: true,
             rollNumber: true,
             email: true,
-            batchYear: true,
+            expectedPassoutYear: true,
             department: { select: { code: true } },
             academic: { select: { currentCGPA: true, activeBacklogs: true } },
           },
@@ -260,9 +265,10 @@ async function buildRows(
       student: {
         select: {
           name: true,
+          misNumber: true,
           rollNumber: true,
           email: true,
-          batchYear: true,
+          expectedPassoutYear: true,
           department: { select: { code: true } },
           academic: { select: { currentCGPA: true, activeBacklogs: true } },
           placements: { where: ACTIVE_PLACEMENT_WHERE, select: { id: true }, take: 1 },

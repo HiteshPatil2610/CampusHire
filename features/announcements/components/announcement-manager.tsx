@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { archiveAnnouncement, publishAnnouncement } from "../actions/manage-announcement";
 import { AnnouncementComposer, type ComposerDepartment } from "./announcement-composer";
 import type { AnnouncementRow } from "../queries/get-announcements";
+import { batchLabel } from "@/features/students/utils/batch";
 
 interface AnnouncementManagerProps {
   isSuperAdmin: boolean;
@@ -118,7 +119,7 @@ export function AnnouncementManager({
                         {announcement.departmentCode ?? "Institution-wide"} ·{" "}
                         {announcement.audience.toLowerCase()}
                         {announcement.batchYears.length > 0 &&
-                          ` · batch ${announcement.batchYears.join(", ")}`}
+                          ` · batch ${announcement.batchYears.map(batchLabel).join(", ")}`}
                       </span>
                     </div>
                     <Link

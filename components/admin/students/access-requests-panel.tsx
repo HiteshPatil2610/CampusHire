@@ -4,14 +4,20 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { reviewAccessRequest } from '@/features/students/actions/review-access-request';
+import { formatBatch } from '@/features/students/utils/batch';
 
 export interface AccessRequestRow {
   id: string;
   name: string;
   email: string;
+  misNumber: string | null;
+  prnNumber: string | null;
   rollNumber: string | null;
+  expectedPassoutYear: number | null;
   phoneNumber: string;
   entryType: 'REGULAR' | 'DIPLOMA';
+  /** The MIS number is on the roster, unclaimed: approving links to it. */
+  rosterMatch: boolean;
   createdAt: Date;
 }
 
@@ -110,13 +116,27 @@ export default function AccessRequestsPanel({
               >
                 {request.entryType === 'DIPLOMA' ? 'Diploma' : 'Regular'}
               </span>
-              <span className="badge badge-amber" style={{ fontSize: 10 }}>
-                Not in roster
-              </span>
+              {request.misNumber === null ? (
+                <span className="badge badge-gray" style={{ fontSize: 10 }}>
+                  Awaiting re-verification
+                </span>
+              ) : request.rosterMatch ? (
+                <span className="badge badge-accent" style={{ fontSize: 10 }}>
+                  On roster — different email
+                </span>
+              ) : (
+                <span className="badge badge-amber" style={{ fontSize: 10 }}>
+                  Not in roster
+                </span>
+              )}
             </div>
 
             <div className="text-secondary" style={{ fontSize: 12, marginTop: 3 }}>
               {request.email}
+            </div>
+            <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+              MIS: {request.misNumber || '—'} · PRN: {request.prnNumber || '—'} · Batch:{' '}
+              {formatBatch(request.expectedPassoutYear)}
             </div>
             <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
               Roll no: {request.rollNumber || '—'} · Phone: {request.phoneNumber} ·

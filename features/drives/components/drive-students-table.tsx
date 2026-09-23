@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { DriveStudentRow, DriveStudents } from "../queries/get-drive-students";
 import { exportToCsv } from "@/lib/csv-export";
+import { batchLabel, formatBatch } from "@/features/students/utils/batch";
 
 /**
  * Eligible Students and Registered Students for one drive.
@@ -60,7 +61,7 @@ export function DriveStudentsTable({ mode, data }: { mode: Mode; data: DriveStud
     const term = search.trim().toLowerCase();
     return base.filter((student) => {
       if (term && !`${student.name} ${student.rollNumber ?? ""}`.toLowerCase().includes(term)) return false;
-      if (batch && String(student.batchYear ?? "") !== batch) return false;
+      if (batch && String(student.expectedPassoutYear ?? "") !== batch) return false;
       if (eligibility && student.eligibility !== eligibility) return false;
       if (placement === "placed" && !student.placed) return false;
       if (placement === "unplaced" && student.placed) return false;
@@ -85,7 +86,7 @@ export function DriveStudentsTable({ mode, data }: { mode: Mode; data: DriveStud
       rows.map((student) => ({
         Name: student.name,
         "Roll Number": student.rollNumber ?? "",
-        Batch: student.batchYear ?? "",
+        Batch: student.expectedPassoutYear ? batchLabel(student.expectedPassoutYear) : "",
         Eligibility: ELIGIBILITY_BADGE[student.eligibility].text,
         Reason: student.reason ?? "",
         Placed: student.placed ? "Yes" : "No",
@@ -132,7 +133,7 @@ export function DriveStudentsTable({ mode, data }: { mode: Mode; data: DriveStud
           <option value="">All batches</option>
           {data.batchYears.map((year) => (
             <option key={year} value={String(year)}>
-              Batch {year}
+              Batch {batchLabel(year)}
             </option>
           ))}
         </select>
@@ -204,7 +205,7 @@ export function DriveStudentsTable({ mode, data }: { mode: Mode; data: DriveStud
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{student.name}</div>
                       <div className="text-muted" style={{ fontSize: 11 }}>{student.rollNumber ?? "No roll number"}</div>
                     </td>
-                    <td style={{ fontSize: 13 }}>{student.batchYear ?? "—"}</td>
+                    <td style={{ fontSize: 13 }}>{formatBatch(student.expectedPassoutYear)}</td>
                     <td>
                       <span className={`badge ${badge.tone}`} style={{ fontSize: 11 }}>{badge.text}</span>
                       {student.reason && (

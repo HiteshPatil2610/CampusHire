@@ -6,6 +6,7 @@ import type { DepartmentStudentsResult } from '@/features/students/queries/get-d
 import { StudentDetailsDialog } from './student-details-dialog';
 import Pagination from '@/components/ui/pagination';
 import { exportToCsv } from '@/lib/csv-export';
+import { formatBatch } from '@/features/students/utils/batch';
 import { PLACEMENT_STATE_BADGES } from '@/features/students/utils/placement-status';
 
 type RosterStatusFilter =
@@ -82,8 +83,11 @@ export function StudentRosterClient({
 
   function handleExportCsv() {
     const csvData = initialData.data.map((s) => ({
+      'MIS No.': s.misNumber ?? '—',
+      'PRN No.': s.prnNumber ?? '—',
       'Roll Number': s.rollNumber,
       'Full Name': s.name,
+      'Batch': formatBatch(s.expectedPassoutYear),
       'Department': s.department.code,
       'CGPA': s.academic?.currentCGPA ?? '—',
       'Backlogs': s.academic?.activeBacklogs ?? 0,
@@ -116,7 +120,7 @@ export function StudentRosterClient({
         }}
       >
         <input
-          placeholder={`Search ${departmentCode} students by name or roll number…`}
+          placeholder={`Search ${departmentCode} students by name, MIS or roll number…`}
           value={searchInput}
           onChange={(e) => handleSearchChange(e.target.value)}
           style={{
@@ -221,6 +225,9 @@ export function StudentRosterClient({
                       >
                         {student.rollNumber}
                       </span>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                        MIS {student.misNumber ?? '—'}
+                      </div>
                     </td>
                     <td>
                       <span
@@ -232,6 +239,9 @@ export function StudentRosterClient({
                       >
                         {student.department.code}
                       </span>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                        {formatBatch(student.expectedPassoutYear)}
+                      </div>
                     </td>
                     <td>
                       <strong>{student.academic?.currentCGPA ?? '—'}</strong>{' '}

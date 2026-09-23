@@ -185,7 +185,7 @@ function student(extra: Record<string, unknown> = {}, academic: Record<string, u
     isPending: false,
     optedIn: true,
     entryType: "REGULAR",
-    batchYear: 2026,
+    expectedPassoutYear: 2026,
     dateOfBirth: new Date("2004-01-01"),
     address: "Should never reach a snapshot",
     department: { code: "CSE" },
@@ -273,7 +273,7 @@ describe("a valid application", () => {
     await applyToDrive(DRIVE_ID, validOptions);
     const data = createdData();
 
-    expect(data.snapshot.create).toMatchObject({ origin: "SUBMISSION", schemaVersion: 1 });
+    expect(data.snapshot.create).toMatchObject({ origin: "SUBMISSION", schemaVersion: 2 });
     // Kept for existing readers.
     expect(data.snapshotCgpa).toBe(8.2);
     expect(data.snapshotBacklogs).toBe(0);
@@ -284,7 +284,7 @@ describe("a valid application", () => {
     const snap = storedSnapshot();
 
     expect(snap.academic).toMatchObject({ currentCGPA: 8.2, activeBacklogs: 0 });
-    expect(snap.student).toMatchObject({ batchYear: 2026, departmentCode: "CSE", rollNumber: "CS-001" });
+    expect(snap.student).toMatchObject({ expectedPassoutYear: 2026, departmentCode: "CSE", rollNumber: "CS-001" });
     expect(snap.placement).toEqual({ activePlacementCount: 0, placed: false });
     expect(snap.eligibility.eligible).toBe(true);
     // The master's CGPA and backlog rules, and CSE's own batch rule.
@@ -450,7 +450,7 @@ describe("the server refuses", () => {
   });
 
   it("a student outside the targeted batch", async () => {
-    vi.mocked(prisma.student.findUnique).mockResolvedValue(student({ batchYear: 2025 }) as never);
+    vi.mocked(prisma.student.findUnique).mockResolvedValue(student({ expectedPassoutYear: 2025 }) as never);
     const result = await refused();
     expect(result.error).toMatch(/not eligible/i);
   });

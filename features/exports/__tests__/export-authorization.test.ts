@@ -71,7 +71,7 @@ const application = (overrides: object = {}) => ({
     name: "Asha",
     rollNumber: "R1",
     email: "asha@college.edu",
-    batchYear: 2026,
+    expectedPassoutYear: 2026,
     department: { code: "CSE" },
     academic: { currentCGPA: 8.5, activeBacklogs: 0 },
     placements: [],
@@ -185,7 +185,7 @@ describe("whose students are in the file", () => {
         name: "Asha",
         rollNumber: "R1",
         email: "asha@college.edu",
-        batchYear: 2026,
+        expectedPassoutYear: 2026,
         academic: { currentCGPA: 8.5, activeBacklogs: 0 },
       },
     ] as never);
@@ -209,7 +209,7 @@ describe("what is in the file", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     const [header] = result.csv.split("\n");
-    expect(header).toBe("Name,Roll number,Email,Batch,CGPA,Active backlogs,Applied on,Stage,Status");
+    expect(header).toBe("Name,MIS number,Roll number,Email,Batch,CGPA,Active backlogs,Applied on,Stage,Status");
     expect(result.csv).not.toContain("user_secret");
     expect(result.csv).not.toContain("Department");
   });

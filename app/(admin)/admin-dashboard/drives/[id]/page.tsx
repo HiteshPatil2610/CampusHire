@@ -155,7 +155,7 @@ export default async function DriveWorkspacePage({ params, searchParams }: PageP
             page: Number.isFinite(page) ? page : 1,
             pageSize: 25,
             search: query.q,
-            batchYear: Number.isFinite(batch) ? batch : undefined,
+            expectedPassoutYear: Number.isFinite(batch) ? batch : undefined,
             stageId: query.stage || undefined,
             status,
             placement:

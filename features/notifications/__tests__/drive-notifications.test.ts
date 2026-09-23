@@ -78,7 +78,7 @@ const student = (id: string, overrides: object = {}) => ({
   isPending: false,
   optedIn: true,
   rollNumber: `R-${id}`,
-  batchYear: 2026,
+  expectedPassoutYear: 2026,
   entryType: "REGULAR",
   academic: { currentCGPA: 8.5, pastBacklogCount: 0, activeBacklogs: 0 },
   skills: [],
@@ -194,8 +194,8 @@ describe("a published drive reaches exactly the eligible students", () => {
       }),
     ] as never);
     vi.mocked(prisma.student.findMany).mockResolvedValue([
-      student("s1", { batchYear: 2026 }),
-      student("s2", { batchYear: 2027 }),
+      student("s1", { expectedPassoutYear: 2026 }),
+      student("s2", { expectedPassoutYear: 2027 }),
     ] as never);
 
     const result = await notifyEligibleStudentsOfDrive(drive as never, { departmentIds: [CSE] });

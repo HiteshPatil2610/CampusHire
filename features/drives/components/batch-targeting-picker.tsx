@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { batchLabel } from "@/features/students/utils/batch";
 
 /**
  * Pick the batches a drive is open to.
@@ -75,9 +76,9 @@ export function BatchTargetingPicker({
               checked={chosen.has(year)}
               disabled={locked}
               onChange={() => toggle(year)}
-              aria-label={`Batch of ${year}`}
+              aria-label={`Batch ${batchLabel(Number(year))}`}
             />
-            <strong>{year}</strong>
+            <strong>{batchLabel(Number(year))}</strong>
             <span className="text-muted">
               {counts.get(year) ?? 0} student{counts.get(year) === 1 ? "" : "s"}
             </span>

@@ -16,6 +16,7 @@ import {
   resolvePlacementState,
 } from '@/features/students/utils/placement-status';
 import { StudentPlacementPanel } from './student-placement-panel';
+import { formatBatch } from '@/features/students/utils/batch';
 
 interface StudentDetailsDialogProps {
   studentId: string | null; // null = closed
@@ -220,8 +221,13 @@ export function StudentDetailsDialog({
                   <div
                     style={{ fontSize: 12, color: 'var(--text-secondary)' }}
                   >
-                    Roll No: <strong>{student.rollNumber}</strong> · Dept:{' '}
-                    <strong>{student.department.code}</strong>
+                    MIS: <strong>{student.misNumber ?? '—'}</strong> · Roll No:{' '}
+                    <strong>{student.rollNumber}</strong> · Dept:{' '}
+                    <strong>{student.department.code}</strong> · Batch:{' '}
+                    <strong>{formatBatch(student.expectedPassoutYear)}</strong>
+                    {student.prnNumber && (
+                      <> · PRN: <strong>{student.prnNumber}</strong></>
+                    )}
                     {academic?.currentSemester && (
                       <> (Sem {academic.currentSemester})</>
                     )}
