@@ -25,12 +25,12 @@ export function generateImportTemplate(departmentCode: string, now: Date = new D
   const notes = XLSX.utils.aoa_to_sheet([
     ['Column', 'Required', 'Accepts'],
     [IMPORT_HEADERS.misNumber, 'Yes', 'MIS number, 3–30 letters/digits; unique'],
-    [IMPORT_HEADERS.prnNumber, 'No', 'University PRN, 3–30 letters/digits; unique when given'],
+    [IMPORT_HEADERS.prnNumber, 'Yes', 'University PRN, 3–30 letters/digits; unique'],
     [IMPORT_HEADERS.name, 'Yes', 'Full name'],
     [IMPORT_HEADERS.email, 'Yes', 'Email address; unique. The student signs up with this address.'],
     [IMPORT_HEADERS.phoneNumber, 'Yes', '10-digit mobile number (a +91 prefix is fine)'],
     [IMPORT_HEADERS.rollNumber, 'Yes', 'Roll number; unique'],
-    [IMPORT_HEADERS.department, 'Yes', `Must be ${departmentCode} — you can only import your own department`],
+    [IMPORT_HEADERS.department, 'Yes', `Your department: ${departmentCode}, its name or a common short form (e.g. "comps") — you can only import your own department`],
     [IMPORT_HEADERS.batch, 'Yes', `Expected passout year (${passout}) or batch (${batchLabel(passout)})`],
     [IMPORT_HEADERS.entryType, 'No', '1 = lateral entry after a diploma; blank or 0 = regular'],
   ]);

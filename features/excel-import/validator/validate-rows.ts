@@ -23,6 +23,7 @@ import {
   normalizeRollNumber,
 } from '@/features/students/utils/student-identity';
 import { parseBatch } from '@/features/students/utils/batch';
+import { matchDepartment } from '@/features/departments/utils/department-match';
 
 /**
  * Judging an import sheet. Pure — the database's contribution arrives as an
@@ -38,6 +39,12 @@ import { parseBatch } from '@/features/students/utils/batch';
 export interface ImportDepartment {
   code: string;
   name: string;
+  /**
+   * The institution's other departments. A DEPT value is read against all of
+   * them, so one that means another department ("IT") is never taken as this
+   * one, and one equally close to two is not guessed at.
+   */
+  otherDepartments?: { code: string; name: string }[];
 }
 
 const emailShape = z.string().email().max(200);
@@ -60,9 +67,15 @@ interface RowJudgement {
   student: ImportStudent | null;
 }
 
-function departmentMatches(value: string, department: ImportDepartment): boolean {
-  const typed = value.trim().toLowerCase();
-  return typed === department.code.toLowerCase() || typed === department.name.toLowerCase();
+/**
+ * What the DEPT column says, read loosely: case, spacing, filler words and
+ * common short forms do not matter ("comps", "Computer Science Engineering"
+ * and "COMP" are all COMP), and a small typo is forgiven. See
+ * `matchDepartment`. Returns the department it means, or null for none.
+ */
+function departmentMeant(value: string, department: ImportDepartment) {
+  const own = { code: department.code, name: department.name };
+  return matchDepartment(value, [own, ...(department.otherDepartments ?? [])]);
 }
 
 /** Every problem with one row, judged on its own. */
@@ -103,7 +116,11 @@ export function validateRow(row: ParsedRow, department: ImportDepartment): RowJu
 
   const phoneNumber = normalizePhone(v.phoneNumber);
   if (v.phoneNumber && !phoneNumber) {
-    add('INVALID_PHONE', 'phoneNumber', `"${v.phoneNumber}" is not a valid 10-digit mobile number`);
+    add(
+      'INVALID_PHONE',
+      'phoneNumber',
+      `"${v.phoneNumber}" is not a valid Indian mobile number — 10 digits starting with 6, 7, 8 or 9`
+    );
   }
 
   const rollNumber = normalizeRollNumber(v.rollNumber);
@@ -112,12 +129,21 @@ export function validateRow(row: ParsedRow, department: ImportDepartment): RowJu
     else add('INVALID_ROLL', 'rollNumber', 'Roll No. must be at most 50 characters');
   }
 
-  if (v.department && !departmentMatches(v.department, department)) {
-    add(
-      'WRONG_DEPARTMENT',
-      'department',
-      `"${v.department}" is not ${department.code} — students can only be imported into your own department`
-    );
+  if (v.department) {
+    const meant = departmentMeant(v.department, department);
+    if (!meant) {
+      add(
+        'WRONG_DEPARTMENT',
+        'department',
+        `"${v.department}" is not a department we recognise — use ${department.code} or ${department.name}`
+      );
+    } else if (meant.code !== department.code) {
+      add(
+        'WRONG_DEPARTMENT',
+        'department',
+        `"${v.department}" is ${meant.code}, not ${department.code} — students can only be imported into your own department`
+      );
+    }
   }
 
   const expectedPassoutYear = parseBatch(v.batch);

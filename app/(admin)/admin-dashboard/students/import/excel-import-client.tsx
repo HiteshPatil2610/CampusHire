@@ -261,7 +261,7 @@ export function ExcelImportClient({ departmentCode }: ExcelImportClientProps) {
       <div>
         <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <p className="text-secondary" style={{ fontSize: 12, margin: 0 }}>
-            Columns: MIS NO., PRN NO. (optional), NAME, EMAIL, PH. NO., ROLL NO., DEPT, BATCH
+            Columns: MIS NO., PRN NO., NAME, EMAIL, PH. NO., ROLL NO., DEPT, BATCH
             (e.g. 2027 or 2023-27), and optionally DIPLOMA (1 for lateral entry).
           </p>
           <button type="button" className="btn btn-outline" onClick={downloadTemplate}>

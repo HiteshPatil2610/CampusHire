@@ -55,10 +55,63 @@ Update this file after every meaningful implementation change.
 - All V1 frontend integration units complete ✅
 - ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 1174 tests pass, 0 failures (after Phase 3).
+- Current baseline: 1205 tests pass, 0 failures (after PRN became required in the import).
 
 ## Completed
 
+- **Bulk import — DEPT read loosely; clearer phone message (owner testing
+  feedback):** the DEPT column is matched by
+  `features/departments/utils/department-match.ts` (`matchDepartment`): case,
+  punctuation and filler words ("engineering", "dept", "B.E.") ignored, common
+  short forms per department ("comps", "CSE", "Computer Science Engineering",
+  "E&TC", "info tech"…), and a small typo forgiven on longer values ("cpmps").
+  It is resolved against every department, so a value meaning another one is
+  reported as that department ("is IT, not COMP") and a value close to two is
+  not guessed. The phone rule is unchanged — Indian mobiles are 10 digits
+  starting 6–9 — but the message now says so.
+  **PRN No. is now required in the admin's bulk import** (owner's rule: optional
+  only for a student registering themselves). A blank PRN is held as Missing
+  Field; a sheet without the PRN NO. column is refused; the template says so.
+  Manual single-student add still treats PRN as optional.
+- **PHASE 4 — Unified drive posting (Item 10) (CODE COMPLETE — no migration;
+  production build and browser check not yet run):**
+  - **One form:** `features/drives/components/drive-form/drive-form.tsx`
+    (`DriveForm`) serves the Super Admin's Post Drive (new page
+    `/super-admin-dashboard/drives/new`, replacing the 5-step modal) and a
+    department admin's Post and Edit Drive. Role differences only: Super Admin
+    picks All departments (default) or specific ones, sets recruitment stages
+    and edit permissions, batches optional; a department admin is locked to
+    their own department, sets selection rounds, logistics and the application
+    form, batch required. Draft saving kept for the Super Admin (old wizard
+    drafts are read once and carried over).
+  - **One schema / rules / actions:** `schemas/drive-form.ts`
+    (`driveFormSchema`, `.strict()`), `domain/drive-form-rules.ts`
+    (`checkDriveFormForRole`, `resolveCentralDepartmentIds`),
+    `components/drive-form/drive-form-values.ts` (`checkDriveForm` — the same
+    schema and rules in the browser, with inline field errors),
+    `actions/drive-form-actions.ts` (`postDrive`, `saveDrive`; kind decided
+    from the session; returns `fieldErrors`). `drive-write-data.ts` now builds
+    both kinds from one set of content columns.
+  - **Removed (all callers migrated, tests green, no references left):**
+    `post-drive-form.tsx`, `edit-drive-form.tsx`, `post-central-drive-modal.tsx`,
+    `createDrive`, `createCentralDrive`, `updateDrive`, `updateCentralDrive`,
+    `schemas/drive.ts`, `schemas/central-drive.ts`, `driveCoreShape`.
+  - **Behaviour changes to know:** a central drive now takes a numeric package
+    (LPA) plus optional display text, an explicit apply method, a JD URL, and
+    shows max backlogs (default from settings) — the same fields as a
+    department drive. Department drives gain JD text, requirements and skills.
+    "All departments" means every department active when the drive is saved.
+    A request carrying `isCentralDrive`, `departmentId`, `createdByUserId`,
+    `lifecycleStatus` or the old `eligibleDepartments` is refused, not stripped.
+  - **Fixed:** Central Drive Processing (`DepartmentDriveConfigPanel`) showed
+    dates via `toISOString()`, putting a next stage date on the previous day;
+    now India days.
+  - **Not done (Item 13 has no spec):** the "Department Logistics & Additional
+    Drive Information" card and the Central Drive Processing layout are
+    unchanged; processing keeps its inherit/override model.
+  - **Tests:** 1193 pass (role matrix + UI render tests; first `.tsx` test —
+    `vitest.config.ts` now compiles JSX). 15/15 mutations caught. `tsc` clean,
+    lint 0 errors.
 - **PHASE 3 — Drive dates, eligible batches and drive origin (Items 9, 11, 12,
   16) (COMPLETE — migration applied to production 2026-09-23):**
   - **Schema** (`20260930000000_drive_application_window`): `Drive.driveDate`

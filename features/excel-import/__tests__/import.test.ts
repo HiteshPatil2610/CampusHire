@@ -17,6 +17,13 @@ import { requireDepartmentAdmin } from "@/lib/auth";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     student: { findMany: vi.fn(), createMany: vi.fn() },
+    // The other departments, which the DEPT column is also read against.
+    department: {
+      findMany: vi.fn(async () => [
+        { code: "IT", name: "Information Technology" },
+        { code: "MECH", name: "Mechanical Engineering" },
+      ]),
+    },
     $transaction: vi.fn(),
   },
 }));
@@ -116,8 +123,8 @@ describe("import — parser", () => {
   it("matches headers loosely and ignores unknown columns", async () => {
     const result = await parseImportFile(
       sheet([
-        ["Row #", "mis_no", "Name", "Email", "Ph No", "Roll No", "Dept", "Batch", "Error Tags"],
-        ["5", "MIS1", "A B", "a@b.co", "9876543210", "R1", "COMP", "2027", "Invalid Email"],
+        ["Row #", "mis_no", "prn no", "Name", "Email", "Ph No", "Roll No", "Dept", "Batch", "Error Tags"],
+        ["5", "MIS1", "PRN1", "A B", "a@b.co", "9876543210", "R1", "COMP", "2027", "Invalid Email"],
       ]),
       "fixed.xlsx"
     );
@@ -145,6 +152,18 @@ describe("import — parser", () => {
     if (!result.success) expect(result.error).toContain("MIS NO.");
   });
 
+  it("refuses a sheet without a PRN NO. column", async () => {
+    const result = await parseImportFile(
+      sheet([
+        ["MIS NO.", "NAME", "EMAIL", "PH. NO.", "ROLL NO.", "DEPT", "BATCH"],
+        ["MIS1", "A B", "a@b.co", "9876543210", "R1", "COMP", "2027"],
+      ]),
+      "students.xlsx"
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("PRN NO.");
+  });
+
   it("refuses unsupported file types", async () => {
     const result = await parseImportFile(Buffer.from("x"), "students.pdf");
     expect(result.success).toBe(false);
@@ -152,7 +171,7 @@ describe("import — parser", () => {
 
   it("skips fully empty rows but keeps sheet row numbers", async () => {
     const result = await parseImportFile(
-      sheet([HEADER, ["MIS1", "", "A B", "a@b.co", "9876543210", "R1", "COMP", "2027"], [], ["MIS2", "", "C D", "c@d.co", "9876543211", "R2", "COMP", "2027"]]),
+      sheet([HEADER, ["MIS1", "PRN1", "A B", "a@b.co", "9876543210", "R1", "COMP", "2027"], [], ["MIS2", "", "C D", "c@d.co", "9876543211", "R2", "COMP", "2027"]]),
       "students.xlsx"
     );
     expect(result.success).toBe(true);
@@ -187,13 +206,16 @@ describe("import — validation", () => {
     ]);
   });
 
-  it("PRN is optional", () => {
+  it("PRN is required in an admin's import", () => {
     const result = evaluateImport(
       [{ rowNumber: 2, values: without(row(2).values, "prnNumber") }],
       DEPARTMENT,
       NOTHING_REGISTERED
     );
-    expect(result.ready[0].student.prnNumber).toBeNull();
+    expect(result.ready).toHaveLength(0);
+    expect(result.rejected[0].issues).toEqual([
+      expect.objectContaining({ tag: "MISSING_FIELD", field: "prnNumber", message: "PRN NO. is empty" }),
+    ]);
   });
 
   it("2. a missing required field is tagged Missing Field, per column", () => {
@@ -235,6 +257,29 @@ describe("import — validation", () => {
     expect(validateRow(row(2, { department: "computer engineering" }), DEPARTMENT).issues).toEqual([]);
   });
 
+  it("reads the department loosely — case, short forms and small typos", () => {
+    for (const department of ["comps", "COMPS", "Comp", "cpmps", "Computer Science Engineering", "CSE", "computer engg."]) {
+      expect(validateRow(row(2, { department }), DEPARTMENT).issues, department).toEqual([]);
+    }
+  });
+
+  it("names the other department a value means, instead of guessing it is ours", () => {
+    const withOthers = { ...DEPARTMENT, otherDepartments: [{ code: "IT", name: "Information Technology" }] };
+    const { issues } = validateRow(row(2, { department: "Information Tech" }), withOthers);
+
+    expect(issues.map((i) => i.tag)).toEqual(["WRONG_DEPARTMENT"]);
+    expect(issues[0].message).toContain("is IT, not COMP");
+    expect(validateRow(row(2, { department: "Civil" }), withOthers).issues[0].message).toContain("not a department we recognise");
+  });
+
+  it("explains what a valid mobile number is", () => {
+    const { issues } = validateRow(row(2, { phoneNumber: "1234567890" }), DEPARTMENT);
+
+    expect(issues.map((i) => i.tag)).toEqual(["INVALID_PHONE"]);
+    expect(issues[0].message).toContain("starting with 6, 7, 8 or 9");
+    expect(validateRow(row(2, { phoneNumber: "+91 98765 43210" }), DEPARTMENT).issues).toEqual([]);
+  });
+
   it("5. duplicate MIS within the file marks every row that shares it", () => {
     const result = evaluateImport(
       [row(2), row(3, { misNumber: "MIS002" }), row(4)],
@@ -272,13 +317,14 @@ describe("import — validation", () => {
     const inDb = evaluateImport([row(2)], DEPARTMENT, { ...NOTHING_REGISTERED, prnNumbers: new Set(["PRN002"]) });
     expect(inDb.rejected[0].issues[0]).toMatchObject({ tag: "DUPLICATE_PRN", duplicateScope: "DATABASE" });
 
-    // Blank PRNs are not duplicates of each other.
+    // Blank PRNs are held as missing, never as duplicates of each other.
     const blanks = evaluateImport(
       [{ rowNumber: 2, values: without(row(2).values, "prnNumber") }, { rowNumber: 3, values: without(row(3).values, "prnNumber") }],
       DEPARTMENT,
       NOTHING_REGISTERED
     );
-    expect(blanks.ready).toHaveLength(2);
+    expect(blanks.ready).toHaveLength(0);
+    expect(blanks.rejected.flatMap((r) => r.tags)).toEqual(["MISSING_FIELD", "MISSING_FIELD"]);
   });
 
   it("7. duplicate roll number — in the file and in the database", () => {
@@ -407,9 +453,9 @@ describe("import — commit", () => {
   it("imports the clean rows, returns the held ones, and deletes the file", async () => {
     serveSheet([
       HEADER,
-      ["MIS1", "", "A B", "a@b.co", "9876543210", "R1", "COMP", "2027"],
-      ["MIS2", "", "C D", "not-an-email", "9876543211", "R2", "COMP", "2027"],
-      ["MIS3", "", "E F", "e@f.co", "9876543212", "R3", "COMP", "2022-26"],
+      ["MIS1", "PRN1", "A B", "a@b.co", "9876543210", "R1", "COMP", "2027"],
+      ["MIS2", "PRN2", "C D", "not-an-email", "9876543211", "R2", "COMP", "2027"],
+      ["MIS3", "PRN3", "E F", "e@f.co", "9876543212", "R3", "COMP", "2022-26"],
     ]);
 
     const result = await commitImport({ blobUrl: BLOB_URL, fileName: "students.xlsx" });
@@ -427,7 +473,7 @@ describe("import — commit", () => {
   });
 
   it("re-checks the database at commit time, not trusting the preview", async () => {
-    serveSheet([HEADER, ["MIS1", "", "A B", "a@b.co", "9876543210", "R1", "COMP", "2027"]]);
+    serveSheet([HEADER, ["MIS1", "PRN1", "A B", "a@b.co", "9876543210", "R1", "COMP", "2027"]]);
     vi.mocked(prisma.student.findMany).mockResolvedValue([
       { misNumber: "MIS1", prnNumber: null, rollNumber: "OTHER", email: "x@y.co" },
     ] as never);
@@ -441,7 +487,7 @@ describe("import — commit", () => {
   });
 
   it("writes nothing when the transaction fails", async () => {
-    serveSheet([HEADER, ["MIS1", "", "A B", "a@b.co", "9876543210", "R1", "COMP", "2027"]]);
+    serveSheet([HEADER, ["MIS1", "PRN1", "A B", "a@b.co", "9876543210", "R1", "COMP", "2027"]]);
     vi.mocked(prisma.$transaction).mockRejectedValueOnce(new Error("connection lost"));
 
     const result = await commitImport({ blobUrl: BLOB_URL, fileName: "students.xlsx" });

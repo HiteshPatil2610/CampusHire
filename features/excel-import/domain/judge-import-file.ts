@@ -57,6 +57,17 @@ export async function judgeImportFile(
   const parsed = await parseImportFile(buffer, fileName);
   if (!parsed.success) return parsed;
 
-  const existing = await loadExistingIdentifiers(parsed.rows);
-  return { success: true, evaluation: evaluateImport(parsed.rows, department, existing) };
+  const [existing, otherDepartments] = await Promise.all([
+    loadExistingIdentifiers(parsed.rows),
+    // The DEPT column is read against every department, so a value meaning
+    // another one is reported as that department rather than guessed as ours.
+    prisma.department.findMany({
+      where: { code: { not: department.code } },
+      select: { code: true, name: true },
+    }),
+  ]);
+  return {
+    success: true,
+    evaluation: evaluateImport(parsed.rows, { ...department, otherDepartments }, existing),
+  };
 }

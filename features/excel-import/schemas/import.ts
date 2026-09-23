@@ -51,9 +51,14 @@ export const IMPORT_FIELDS: ImportField[] = [
   "entryType",
 ];
 
-/** Columns the header row must contain. PRN and DIPLOMA may be absent. */
+/**
+ * Columns the header row must contain. Only DIPLOMA may be absent. PRN is
+ * required here — an admin's roster is the institution's record — even
+ * though a student registering themselves may leave it out.
+ */
 export const REQUIRED_COLUMNS: ImportField[] = [
   "misNumber",
+  "prnNumber",
   "name",
   "email",
   "phoneNumber",
