@@ -2,7 +2,9 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 // Define route matchers for each role group
-const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"]);
+// The invitation page is public: an invited admin has no account until they
+// finish Clerk's sign-up there.
+const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)", "/accept-invitation(.*)"]);
 const isStudentRoute = createRouteMatcher(["/student-dashboard(.*)"]);
 const isAdminRoute = createRouteMatcher(["/admin-dashboard(.*)"]);
 const isSuperAdminRoute = createRouteMatcher(["/super-admin-dashboard(.*)"]);

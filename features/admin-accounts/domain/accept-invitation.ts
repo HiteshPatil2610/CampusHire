@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { AuditAction, AuditEntityType, createAuditLogInTransaction } from "@/lib/audit";
 import { deliverNotificationSafely, superAdminRecipients } from "@/lib/notifications";
+import { isInvitationExpired } from "./invitation-policy";
 
 /**
  * Turning an accepted Clerk invitation into department admin authorization.
@@ -39,7 +40,7 @@ export function invitedNameFrom(metadata: InvitationMetadata | null | undefined)
 export interface AcceptanceOutcome {
   applied: boolean;
   departmentId?: string;
-  reason?: "NO_INVITATION" | "ALREADY_ADMIN" | "DEPARTMENT_INACTIVE" | "NOT_INVITED";
+  reason?: "NO_INVITATION" | "EXPIRED" | "ALREADY_ADMIN" | "DEPARTMENT_INACTIVE" | "NOT_INVITED";
 }
 
 /**
@@ -72,10 +73,13 @@ export async function applyAdminInvitation(params: {
   // No open invitation for this address and department: the metadata proves
   // nothing on its own.
   if (!invitation) return { applied: false, reason: "NO_INVITATION" };
+  // A lapsed invitation is never honoured, whatever reached us: Clerk expires
+  // the link too, and this holds even if it did not.
+  const now = new Date();
+  if (isInvitationExpired(invitation, now)) return { applied: false, reason: "EXPIRED" };
   if (!invitation.department.isActive) return { applied: false, reason: "DEPARTMENT_INACTIVE" };
   if (existingAdmin) return { applied: false, reason: "ALREADY_ADMIN" };
 
-  const now = new Date();
   await prisma.$transaction(async (tx) => {
     // Only one acceptance wins, however many times this runs.
     const claim = await tx.adminInvitation.updateMany({

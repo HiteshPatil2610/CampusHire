@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin } from "@/lib/auth";
+import { invitationExpiresAt, isInvitationExpired } from "../domain/invitation-policy";
 
 /**
  * Everyone who administers a department, and everyone who has been invited
@@ -34,6 +35,10 @@ export interface AdminAccountRow {
   disableReason: string | null;
   /** Set for an invitation row, so it can be resent or revoked. */
   invitationId: string | null;
+  /** When the invitation's current link stops working (invitation rows only). */
+  inviteExpiresAt: Date | null;
+  /** The link has lapsed: resend to issue a new one. */
+  inviteExpired: boolean;
 }
 
 export interface AdminAccountsResult {
@@ -101,6 +106,8 @@ export async function getAdminAccounts(
       disabledByName: personName(admin.disabledBy),
       disableReason: admin.disableReason,
       invitationId: null,
+      inviteExpiresAt: null,
+      inviteExpired: false,
     };
   });
 
@@ -123,6 +130,8 @@ export async function getAdminAccounts(
     disabledByName: null,
     disableReason: null,
     invitationId: invitation.id,
+    inviteExpiresAt: invitationExpiresAt(invitation),
+    inviteExpired: isInvitationExpired(invitation),
   }));
 
   // Waiting first: an invitation nobody has accepted is the row that needs

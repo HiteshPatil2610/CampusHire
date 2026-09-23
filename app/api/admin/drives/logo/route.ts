@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getActiveDepartmentAdmin, getCurrentUser } from "@/lib/auth";
 import { uploadCompanyLogo } from "@/lib/blob";
 
 /**
@@ -14,6 +14,15 @@ export async function POST(request: NextRequest) {
     const user = await getCurrentUser();
 
     if (!user || (user.role !== "DEPT_ADMIN" && user.role !== "SUPER_ADMIN")) {
+      return NextResponse.json(
+        { success: false, error: "Not authorized" },
+        { status: 403 }
+      );
+    }
+
+    // A department admin must still hold their department: a revoked admin's
+    // role alone uploads nothing.
+    if (user.role === "DEPT_ADMIN" && !(await getActiveDepartmentAdmin(user.id))) {
       return NextResponse.json(
         { success: false, error: "Not authorized" },
         { status: 403 }

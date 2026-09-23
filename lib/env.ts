@@ -18,6 +18,10 @@ const envSchema = z.object({
   // redirect, which still works.
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
 
+  // Who a removed admin can write to about it, shown on the Access Revoked
+  // page. Optional: without it the page points them to the placement office.
+  SUPPORT_CONTACT_EMAIL: z.string().email().optional(),
+
   // Vercel Blob Storage
   BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(), // Optional for local dev without Blob
 

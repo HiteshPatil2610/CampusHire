@@ -917,6 +917,25 @@ password and told the admin to use "forgot password", is gone.
   department's notifications too. Reactivation restores the role if it was
   changed while they were out. Moving an admin to another department leaves
   what they did in the old one exactly where it is.
+- **The link (Phase 6, Item 23).** Clerk's invitation is the secure
+  set-password link: Clerk emails it (`notify: true`), the ticket is
+  single-use and Clerk-generated, and it lapses after `INVITATION_TTL_DAYS`
+  (7, `expiresInDays`; a resend restarts it). It opens `/accept-invitation`
+  (public), which explains the invitation and hosts Clerk's sign-up, where the
+  invitee chooses their own password; the link falls back to the request's own
+  origin when `NEXT_PUBLIC_APP_URL` is unset. `applyAdminInvitation` refuses a
+  lapsed invitation (`invitation-policy.ts`) even if a ticket got through, and
+  the INVITED → ACCEPTED compare-and-set makes a used invitation unusable. The
+  Admins page shows each link's expiry.
+- **Revoking access (Phase 6, Item 22).** Disabling ends every live Clerk
+  session at once (`end-sessions.ts`: `getSessionList` + `revokeSession`),
+  after the DB change commits. Enforcement never depends on that call: every
+  page, action and API re-reads the admin's status per request. A revoked
+  admin who signs in again is sent from the admin area (and `/notifications`)
+  to `/access-revoked` (`redirectIfAccessRevoked`), which says access was
+  revoked and how to appeal (`SUPPORT_CONTACT_EMAIL`, else the placement
+  office) and shows nothing else — no reason, actor or department. The
+  logo-upload API now checks the admin is active, not just the role.
 - **Audited:** invited, resent, revoked, accepted, disabled, reactivated,
   department changed.
 

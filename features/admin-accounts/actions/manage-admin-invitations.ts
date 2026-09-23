@@ -9,6 +9,8 @@ import { AuditAction, AuditEntityType, createAuditLogInTransaction } from "@/lib
 import { deliverNotificationSafely, superAdminRecipients } from "@/lib/notifications";
 import { env } from "@/lib/env";
 import { checkInvitationConflict } from "../domain/invitation-conflicts";
+import { INVITATION_TTL_DAYS } from "../domain/invitation-policy";
+import { headers } from "next/headers";
 
 /**
  * Inviting a department admin.
@@ -43,11 +45,31 @@ function revalidateAdminViews() {
   revalidatePath("/super-admin-dashboard/departments");
 }
 
-/** Where Clerk sends someone who accepts. */
-function acceptUrl(): string | undefined {
-  const base = env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
-  return base ? `${base}/sign-up` : undefined;
+/**
+ * Where the invitation link lands: CampusHire's own page, which says what the
+ * invitation is and hosts Clerk's sign-up — where the invitee sets their
+ * password. The configured app URL, else the address this request came to,
+ * so a deployment without NEXT_PUBLIC_APP_URL still links back to itself.
+ */
+async function acceptUrl(): Promise<string | undefined> {
+  const configured = env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  if (configured) return `${configured}/accept-invitation`;
+  try {
+    const request = await headers();
+    const host = request.get("x-forwarded-host") ?? request.get("host");
+    if (!host) return undefined;
+    const proto = request.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+    return `${proto}://${host}/accept-invitation`;
+  } catch {
+    return undefined;
+  }
 }
+
+/**
+ * What every invitation asks of Clerk: send the email (Clerk delivers it),
+ * and let the single-use link lapse after `INVITATION_TTL_DAYS`.
+ */
+const INVITATION_OPTIONS = { notify: true, expiresInDays: INVITATION_TTL_DAYS } as const;
 
 export async function inviteDepartmentAdmin(
   input: z.infer<typeof inviteSchema>
@@ -120,7 +142,8 @@ export async function inviteDepartmentAdmin(
     try {
       const invitation = await clerk.invitations.createInvitation({
         emailAddress: email,
-        redirectUrl: acceptUrl(),
+        redirectUrl: await acceptUrl(),
+        ...INVITATION_OPTIONS,
         ignoreExisting: false,
         publicMetadata: { role: "DEPT_ADMIN", departmentId: department.id, invitedName: name },
       });
@@ -188,7 +211,7 @@ export async function inviteDepartmentAdmin(
     return {
       success: true,
       invitationId: record.id,
-      message: `Invitation sent to ${email}. They become an admin of ${department.code} when they accept it.`,
+      message: `Invitation sent to ${email}. The link lets them set a password and sign in, and works for ${INVITATION_TTL_DAYS} days. They become an admin of ${department.code} when they accept it.`,
     };
   } catch (error) {
     if (error instanceof AuthorizationError) return { success: false, error: error.message };
@@ -243,7 +266,8 @@ export async function resendAdminInvitation(
     try {
       const created = await clerk.invitations.createInvitation({
         emailAddress: invitation.email,
-        redirectUrl: acceptUrl(),
+        redirectUrl: await acceptUrl(),
+        ...INVITATION_OPTIONS,
         ignoreExisting: true,
         publicMetadata: {
           role: "DEPT_ADMIN",
@@ -287,7 +311,7 @@ export async function resendAdminInvitation(
     return {
       success: true,
       invitationId: invitation.id,
-      message: `A new invitation was sent to ${invitation.email}. The earlier link no longer works.`,
+      message: `A new invitation was sent to ${invitation.email}, valid for ${INVITATION_TTL_DAYS} days. The earlier link no longer works.`,
     };
   } catch (error) {
     if (error instanceof AuthorizationError) return { success: false, error: error.message };

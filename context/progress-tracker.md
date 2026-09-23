@@ -55,10 +55,40 @@ Update this file after every meaningful implementation change.
 - All V1 frontend integration units complete ✅
 - ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 1256 tests pass, 0 failures (after the July 1 / undo notifications).
+- Current baseline: 1277 tests pass, 0 failures (after Phase 6).
 
 ## Completed
 
+- **PHASE 6 — Admin access revocation + invitation (Items 22, 23)
+  (CODE COMPLETE — no migration; not browser-verified, not built):**
+  - **Traced:** invitations already went through Clerk (no password ever
+    created, emailed or stored; role and department from the invitation's
+    metadata, matched against an open `AdminInvitation` for that address and
+    department; CAS acceptance). Removing an admin already disabled the
+    `DepartmentAdmin` row (no delete), refused by `requireDepartmentAdmin` /
+    `getActiveDepartmentAdmin` on every path. Gaps found: no session
+    invalidation, no Access Revoked page (a revoked admin hit a generic
+    error), no invitation expiry, the link landed on the bare sign-up page (or
+    Clerk's default when `NEXT_PUBLIC_APP_URL` is unset — it is unset in
+    `.env`), and the logo-upload API checked the role only.
+  - **Auth:** `endAllSessions` on disable; `redirectIfAccessRevoked` in the
+    admin and notifications layouts; `/access-revoked` page (revoked admins
+    only; sign-out; appeal contact); logo API requires an active admin.
+  - **Clerk:** invitations now `notify: true`, `expiresInDays: 7`,
+    `redirectUrl: /accept-invitation` (origin fallback); new public
+    `/accept-invitation` page hosting `<SignUp>` (sets the password) or
+    `<SignIn>` for an existing account.
+  - **Database:** none. Expiry is derived from `invitedAt` / `resentAt`.
+  - **Env:** optional `SUPPORT_CONTACT_EMAIL` (Access Revoked page).
+  - **Tests:** 1277 pass; 21 new covering all 11 requested cases plus the
+    origin fallback, resend clock, racing acceptance, Clerk-down removal,
+    page guards and the API. 7/7 mutations caught.
+  - **Needs the owner (outside the code):** (1) the invitation email's
+    wording is Clerk's template — edit it in Clerk Dashboard → Customization →
+    Emails → Invitation to say "set your password"; (2) set
+    `NEXT_PUBLIC_APP_URL` and `SUPPORT_CONTACT_EMAIL` on each deployment;
+    (3) on the production Clerk instance, make sure the app's domain is
+    allowed as a redirect URL; (4) test once end to end with a real inbox.
 - **PHASE 5 — One eligibility engine: final year, marks, profile-save
   re-check (Items 7, 8) (CODE COMPLETE — no migration; not browser-verified,
   not built):**

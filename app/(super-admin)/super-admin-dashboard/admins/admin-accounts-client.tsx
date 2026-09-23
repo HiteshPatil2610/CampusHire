@@ -427,6 +427,11 @@ export function AdminAccountsClient({ rows, counts, departments, selectedDepartm
                         Invited {when(row.invitedAt)}
                         {row.invitedByName && ` by ${row.invitedByName}`}
                         {row.resendCount > 0 && ` · resent ${row.resendCount}×`}
+                        {row.inviteExpired ? (
+                          <span style={{ color: "var(--red)" }}> · link expired — resend to send a new one</span>
+                        ) : (
+                          row.inviteExpiresAt && ` · link valid until ${when(row.inviteExpiresAt)}`
+                        )}
                       </>
                     )}
                     {row.state !== "INVITED" && (

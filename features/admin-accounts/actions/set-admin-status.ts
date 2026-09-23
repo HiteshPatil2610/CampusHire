@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin, AuthorizationError } from "@/lib/auth";
 import { AuditAction, AuditEntityType, createAuditLogInTransaction } from "@/lib/audit";
 import { deliverNotificationSafely } from "@/lib/notifications";
+import { endAllSessions } from "../domain/end-sessions";
 
 /**
  * Disabling, reactivating and moving a department admin.
@@ -14,7 +15,9 @@ import { deliverNotificationSafely } from "@/lib/notifications";
  * drives they published, the applications they moved and every audit entry
  * naming them. What goes is the authorization — `requireDepartmentAdmin`
  * refuses a disabled row, so every department-scoped action refuses them from
- * that moment.
+ * that moment. Their live Clerk sessions are ended too (`endAllSessions`), so
+ * they are signed out everywhere now rather than at their next sign-in, and
+ * signing in again lands them on the Access Revoked page.
  *
  * Authorization: SUPER_ADMIN only.
  */
@@ -43,7 +46,7 @@ async function loadAdmin(userId: string) {
   return prisma.departmentAdmin.findUnique({
     where: { userId },
     include: {
-      user: { select: { id: true, email: true, name: true, role: true } },
+      user: { select: { id: true, clerkId: true, email: true, name: true, role: true } },
       department: { select: { id: true, code: true, name: true, isActive: true } },
     },
   });
@@ -94,6 +97,10 @@ export async function disableDepartmentAdmin(
       );
     });
 
+    // Signed out everywhere, now. The database refusal above already holds on
+    // their next request; this ends the sessions at Clerk as well.
+    const sessions = await endAllSessions(admin.user.clerkId);
+
     // Their account still exists, so tell them why it stopped working.
     await deliverNotificationSafely({
       event: "ACCOUNT_UPDATE",
@@ -113,7 +120,11 @@ export async function disableDepartmentAdmin(
     revalidateAdminViews();
     return {
       success: true,
-      message: `${admin.user.name ?? admin.user.email} can no longer administer ${admin.department.code}. Their history is unchanged.`,
+      message:
+        `${admin.user.name ?? admin.user.email} can no longer administer ${admin.department.code}. Their history is unchanged. ` +
+        (sessions.failed
+          ? "Some of their sessions could not be ended at Clerk; they are refused on every request regardless."
+          : `Signed out of ${sessions.ended} active session${sessions.ended === 1 ? "" : "s"}.`),
     };
   } catch (error) {
     if (error instanceof AuthorizationError) return { success: false, error: error.message };
