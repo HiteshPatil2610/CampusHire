@@ -60,7 +60,7 @@ Update this file after every meaningful implementation change.
 ## Completed
 
 - **PHASE 1 — Student data foundation + bulk import & verification
-  (CODE COMPLETE — migration rehearsed, NOT YET APPLIED):**
+  (COMPLETE — migration applied to production 2026-09-23):**
   - **Schema** (`20260928000000_student_identity_passout_year`):
     `Student.misNumber` (unique), `prnNumber` (unique), `expectedPassoutYear`;
     the same three on `StudentAccessRequest`; `Student.batchYear` **dropped,
@@ -124,7 +124,8 @@ Update this file after every meaningful implementation change.
     validated, bad MIS / bad year / duplicate MIS refused; afterwards
     `batchYear` still present, no `misNumber`). A Neon rehearsal branch could
     not be created: the project is at its 10-branch limit.
-  - **Open before deploy:** a free branch slot for the
+  - **Deployed:** backup `pre-student-identity-backup-20260928` created (slot freed by deleting `pre-rules-backup-20260920`, with the owner's approval), then `prisma migrate deploy` (run by the owner). Verified after: 16 migrations applied, 3 students / 10 users / 7 requests kept, 5 CHECKs validated, 3 indexes, `batchYear` gone.
+  - **(was) Open before deploy:** a free branch slot for the
     `pre-student-identity-backup-20260928` backup, then `migrate deploy`.
     Until it is applied, this code does not run against the database.
   - **Open after deploy:** the 3 existing students (COMP, rolls 4233, 55, 41)
