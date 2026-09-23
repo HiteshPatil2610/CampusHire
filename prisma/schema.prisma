@@ -193,6 +193,9 @@ model User {
   notificationDispatches  NotificationDispatch[]       @relation("DispatchTriggeredBy")
   announcements           Announcement[]               @relation("AnnouncementAuthor")
   archivedAnnouncements   Announcement[]               @relation("AnnouncementArchivedBy")
+  studentDropsRecorded    StudentDrop[]                @relation("StudentDropRecordedBy")
+  studentDropsUndone      StudentDrop[]                @relation("StudentDropUndoneBy")
+  academicCutovers        AcademicCycleCutover[]       @relation("AcademicCutoverRecordedBy")
 }
 
 // Department model - represents academic departments
@@ -362,12 +365,82 @@ model Student {
   applications   DriveApplication[]
   semesterMarks  SemesterMark[]
   placements     StudentPlacement[]
+  // Every drop recorded against the student, undone ones included. The
+  // student's drop count is the number not undone — derived, not stored.
+  drops          StudentDrop[]
 
   // A department's roster by batch. Also serves the plain departmentId
   // lookup (leftmost column), so no separate index is kept for it.
   @@index([departmentId, expectedPassoutYear])
   @@index([isPending])
   @@index([optedIn])
+}
+
+// A student's academic year level. Never stored on Student: it is derived
+// from `expectedPassoutYear` and the academic cycle by `yearLevelFor`
+// (features/students/domain/academic-year.ts). Stored only on a drop record,
+// as the historical fact of what the level was when the drop happened.
+enum StudentYearLevel {
+  FIRST_YEAR
+  SECOND_YEAR
+  THIRD_YEAR
+  FOURTH_YEAR
+  GRADUATED
+}
+
+// One drop: an admin recording that a student repeats a year. The drop moves
+// `Student.expectedPassoutYear` one year later in the same transaction, and
+// this row is the history of it — who, when, why, and the state before and
+// after.
+//
+// Immutable (trigger) except for its single undo, which is allowed only until
+// `undoDeadline` (48 hours after the drop; a CHECK fixes the interval, and the
+// trigger refuses a late undo). Undoing restores the previous passout year,
+// only while this drop's year is still the one in force. Rows are never
+// deleted by the app, and a student holding drop history cannot be deleted
+// (Restrict).
+model StudentDrop {
+  id                  String           @id @default(cuid())
+  studentId           String
+  droppedById         String
+  droppedAt           DateTime         @default(now())
+  // The academic cycle the levels below were read in, e.g. "2026-27".
+  academicYear        String
+  previousPassoutYear Int
+  newPassoutYear      Int
+  previousLevel       StudentYearLevel
+  newLevel            StudentYearLevel
+  reason              String           @db.Text
+  undoDeadline        DateTime
+  undoneAt            DateTime?
+  undoneById          String?
+  undoReason          String?          @db.Text
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  droppedBy User    @relation("StudentDropRecordedBy", fields: [droppedById], references: [id], onDelete: Restrict)
+  undoneBy  User?   @relation("StudentDropUndoneBy", fields: [undoneById], references: [id], onDelete: SetNull)
+
+  @@index([studentId, droppedAt])
+}
+
+// The ledger of annual cutovers: one row per academic cycle, written the
+// first time the cycle is observed after it begins (July 1). It changes no
+// student — year levels are derived — and records when the transition was
+// observed, by whom, and how many students stood at each level then. The
+// primary key is the cycle, so recording twice writes nothing the second time.
+model AcademicCycleCutover {
+  // e.g. "2026-27"
+  academicYear     String   @id
+  // The passout year of that cycle's final-year batch, e.g. 2027.
+  finalYearPassout Int      @unique
+  effectiveFrom    DateTime
+  recordedAt       DateTime @default(now())
+  recordedById     String?
+  graduatedCount   Int
+  fourthYearCount  Int
+  thirdYearCount   Int
+
+  recordedBy User? @relation("AcademicCutoverRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
 }
 
 // SemesterMark - per-semester SGPA records for a student

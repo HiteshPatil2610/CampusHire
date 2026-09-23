@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import StatusBadge from "@/components/ui/status-badge";
 import Pagination from "@/components/ui/pagination";
 import { exportToCsv } from "@/lib/csv-export";
+import { YEAR_LEVEL_LABELS, yearLevelFor } from "@/features/students/domain/academic-year";
 import type { Student, Department, StudentAcademic } from "@prisma/client";
 import {
   PLACEMENT_STATE_BADGES,
@@ -43,12 +44,11 @@ interface Props {
   };
 }
 
-const YEAR_SUFFIXES = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
-function formatYear(currentSemester: number | undefined): string {
-  if (!currentSemester) return '—';
-  const year = Math.ceil(currentSemester / 2);
-  return YEAR_SUFFIXES[year - 1] || `${year}th`;
+/** Year level, derived from the batch and the academic cycle. */
+function formatYear(expectedPassoutYear: number | null): string {
+  const level = yearLevelFor(expectedPassoutYear);
+  return level ? YEAR_LEVEL_LABELS[level] : '—';
 }
 
 export function SuperAdminStudentsClient({
@@ -87,7 +87,7 @@ export function SuperAdminStudentsClient({
       'Name': student.name,
       'Batch': student.expectedPassoutYear ? formatBatch(student.expectedPassoutYear) : '',
       'Department': student.department.code,
-      'Year': formatYear(student.academic?.currentSemester),
+      'Year': formatYear(student.expectedPassoutYear),
       'Email': student.email,
       'Phone': student.phoneNumber || '',
       'CGPA': student.academic?.currentCGPA?.toString() || '',
@@ -217,7 +217,7 @@ export function SuperAdminStudentsClient({
                       {formatBatch(student.expectedPassoutYear)}
                     </div>
                   </td>
-                  <td>{formatYear(student.academic?.currentSemester)}</td>
+                  <td>{formatYear(student.expectedPassoutYear)}</td>
                   <td>{student.academic?.currentCGPA?.toFixed(2) || '—'}</td>
                   <td>
                     {student.academic?.activeBacklogs !== undefined ? (

@@ -55,9 +55,46 @@ Update this file after every meaningful implementation change.
 - All V1 frontend integration units complete ✅
 - ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 1113 tests pass, 0 failures (after Phase 1).
+- Current baseline: 1144 tests pass, 0 failures (after Phase 2).
 
 ## Completed
+
+- **PHASE 2 — Year-level promotion + dropout lifecycle (Item 18) (CODE
+  COMPLETE — migration rehearsed, NOT YET APPLIED):**
+  - **Design:** year level is derived (`yearLevelFor(expectedPassoutYear,
+    now)`, cycle turns July 1 IST) — the owner's choice — so annual promotion
+    writes nothing and can never double-apply; a drop moves the passout year
+    +1 and the level follows. No year-level column was added.
+  - **Schema** (`20260929000000_student_drop_lifecycle`, additive): enum
+    `StudentYearLevel`; `StudentDrop` (before/after passout year and level,
+    cycle, reason, actor, time, 48-hour `undoDeadline`, one-time undo with
+    actor and reason; CHECKs + immutability trigger; `Restrict` from Student);
+    `AcademicCycleCutover` (one row per cycle, PK = cycle; counts; immutable).
+  - **Actions:** `dropStudent`, `undoStudentDrop` (manage-drop.ts; DEPT_ADMIN
+    own students or SUPER_ADMIN; one transaction each with compare-and-set and
+    an audit row: DROP / UNDO on `StudentDrop`). `getStudentAcademicRecord`
+    for the dialog. `ensureAcademicCutoverRecorded` (Super Admin dashboard load)
+    and `scripts/record-academic-cutover.ts` both call
+    `recordAcademicCutover` (CUTOVER audit).
+  - **UI:** "Academic standing" panel in the department admin's student
+    dialog (level, batch, drop count, Mark as Drop with preview + reason,
+    history, Undo within the window). Derived level now shown on the roster,
+    profile, profile header, student drives page and Super Admin directory
+    (the three "semester / 2" year calculations are gone).
+  - **Tests:** 31 new (all 14 requested cases, plus the exact 48-hour window,
+    concurrency, authorization, cutover race); suite 1144 pass, 0 fail.
+    16 of 16 mutations caught. `tsc`, lint (0 errors), `next build` clean.
+  - **Migration:** drift check empty; rehearsed on production in a forced
+    rollback with 12 probes (valid drop; two-year jump, 72-hour window and
+    blank reason refused; edit refused; undo in window ok; second and late
+    undo refused; deleting a student with drops refused; duplicate, edited and
+    mismatched cutover refused) — all passed, nothing persisted.
+  - **Open:** backup branch + `migrate deploy` (branch limit is 10 — another
+    backup must be deleted first). The 3 existing students have no batch, so
+    they show "Batch not on record" and cannot be dropped until one is set
+    (no admin edit-student action exists). The Super Admin has no student
+    dialog, so it can use the drop actions but has no UI for them yet. Not
+    browser-verified.
 
 - **PHASE 1 — Student data foundation + bulk import & verification
   (COMPLETE — migration applied to production 2026-09-23):**

@@ -131,6 +131,9 @@ export function AuditLogsTable({ initialData }: AuditLogsTableProps) {
               <option value="APPLY">APPLY</option>
               <option value="IMPORT">IMPORT</option>
               <option value="ROLE_CHANGE">ROLE_CHANGE</option>
+              <option value="DROP">DROP</option>
+              <option value="UNDO">UNDO</option>
+              <option value="CUTOVER">CUTOVER</option>
             </select>
           </div>
 
@@ -146,6 +149,8 @@ export function AuditLogsTable({ initialData }: AuditLogsTableProps) {
               <option value="DriveApplication">DriveApplication</option>
               <option value="Student">Student</option>
               <option value="BulkImport">BulkImport</option>
+              <option value="StudentDrop">StudentDrop</option>
+              <option value="AcademicCycleCutover">AcademicCycleCutover</option>
             </select>
           </div>
 

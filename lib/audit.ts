@@ -48,6 +48,9 @@ export const AuditAction = {
   REACTIVATE: "REACTIVATE",
   EXPORT: "EXPORT",
   BULK_TRANSITION: "BULK_TRANSITION",
+  DROP: "DROP",
+  UNDO: "UNDO",
+  CUTOVER: "CUTOVER",
 } as const;
 
 /**
@@ -70,6 +73,8 @@ export const AuditEntityType = {
   ADMIN_INVITATION: "AdminInvitation",
   INSTITUTION_SETTINGS: "InstitutionSettings",
   DEPARTMENT_SETTINGS: "DepartmentSettings",
+  STUDENT_DROP: "StudentDrop",
+  ACADEMIC_CUTOVER: "AcademicCycleCutover",
 } as const;
 
 /**

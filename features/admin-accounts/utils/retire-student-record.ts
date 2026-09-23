@@ -16,6 +16,8 @@ import type { AccessRequestStatus, Prisma } from "@prisma/client";
  * A `StudentPlacement` cascades the same way and is the placement history
  * itself — an off-campus placement can exist with no application at all — so
  * a record holding any placement (active or revoked) is refused too.
+ * A `StudentDrop` is the same kind of history (and `Restrict` in the
+ * database), so a record with any drop — undone ones included — is refused.
  */
 
 export type RetirementDecision =
@@ -34,6 +36,8 @@ export function decideStudentRetirement(input: {
   applicationCount: number;
   /** Placement records, revoked ones included — they are history too. */
   placementCount?: number;
+  /** Drop records, undone ones included. */
+  dropCount?: number;
 }): RetirementDecision {
   if (!input.hasStudentRecord) {
     return { action: "none", reason: "Account has no student record." };
@@ -59,9 +63,19 @@ export function decideStudentRetirement(input: {
     };
   }
 
+  if ((input.dropCount ?? 0) > 0) {
+    return {
+      action: "refuse",
+      reason:
+        `Student record has ${input.dropCount} drop record(s). ` +
+        `That academic history cannot be deleted. ` +
+        `Resolve manually before promoting this account.`,
+    };
+  }
+
   return {
     action: "delete",
-    reason: "Student record carries no applications or placements and can be retired.",
+    reason: "Student record carries no applications, placements or drops and can be retired.",
   };
 }
 
@@ -82,7 +96,7 @@ export async function retireStudentRecord(
     select: {
       id: true,
       rollNumber: true,
-      _count: { select: { applications: true, placements: true } },
+      _count: { select: { applications: true, placements: true, drops: true } },
     },
   });
 
@@ -90,6 +104,7 @@ export async function retireStudentRecord(
     hasStudentRecord: Boolean(student),
     applicationCount: student?._count.applications ?? 0,
     placementCount: student?._count.placements ?? 0,
+    dropCount: student?._count.drops ?? 0,
   });
 
   if (decision.action !== "delete" || !student) {

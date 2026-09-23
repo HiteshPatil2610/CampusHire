@@ -7,11 +7,14 @@ import { ActionRequiredPanel } from "@/features/dashboard/components/action-requ
 import KpiCard from "@/components/shared/kpi-card";
 import StatusBadge from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
+import { ensureAcademicCutoverRecorded } from "@/features/students/actions/academic-cutover";
 import { eligibleDepartmentIdsOf, eligibleDepartmentLinksInclude } from "@/features/drives/utils/eligible-departments";
 
 export default async function SuperAdminDashboardPage() {
   await requireSuperAdmin();
 
+  // The annual cutover is recorded on the first Super Admin visit after
+  // July 1 (no scheduler). Idempotent, and a failure never blocks the page.
   const [stats, deptMatrix, centralDrives, actionItems] = await Promise.all([
     getSystemStats(),
     getDepartmentMatrix(),
@@ -20,6 +23,7 @@ export default async function SuperAdminDashboardPage() {
       include: { department: true, ...eligibleDepartmentLinksInclude },
     }),
     getSuperAdminActionItems(),
+    ensureAcademicCutoverRecorded(),
   ]);
 
   const deptCodeById = new Map(deptMatrix.map((d) => [d.id, d.code]));

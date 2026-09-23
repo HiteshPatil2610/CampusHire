@@ -16,6 +16,7 @@ import {
   resolvePlacementState,
 } from '@/features/students/utils/placement-status';
 import { StudentPlacementPanel } from './student-placement-panel';
+import { StudentAcademicPanel } from './student-academic-panel';
 import { formatBatch } from '@/features/students/utils/batch';
 
 interface StudentDetailsDialogProps {
@@ -241,6 +242,12 @@ export function StudentDetailsDialog({
                 </span>
               </div>
             </div>
+
+            {/* Academic standing — year level, batch and drops */}
+            <StudentAcademicPanel
+              studentId={studentId}
+              onChanged={() => setReloadKey((key) => key + 1)}
+            />
 
             {/* Placement — the source of the Placed state */}
             <StudentPlacementPanel

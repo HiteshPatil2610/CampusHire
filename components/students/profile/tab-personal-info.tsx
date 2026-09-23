@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { updatePersonalInfo } from '@/features/students/actions/profile-personal';
 import { updateProfilePhoto } from '@/features/students/actions/profile-photo';
 import type { CompleteProfile } from '@/features/students/queries/profile-completion';
-import { formatBatch } from '@/features/students/utils/batch';
+import { describeStanding } from '@/features/students/domain/academic-year';
 
 export interface TabPersonalInfoProps {
   profile: CompleteProfile;
@@ -356,7 +356,7 @@ export default function TabPersonalInfo({ profile }: TabPersonalInfoProps) {
             <label>Batch</label>
             <input
               type="text"
-              value={`${formatBatch(profile.student.expectedPassoutYear)} (passing out ${profile.student.expectedPassoutYear})`}
+              value={`${describeStanding(profile.student.expectedPassoutYear)} (passing out ${profile.student.expectedPassoutYear})`}
               readOnly
             />
           </div>

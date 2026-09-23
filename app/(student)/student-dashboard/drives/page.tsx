@@ -8,6 +8,7 @@ import { calculateProfileCompletion } from '@/features/students/queries/profile-
 import { DrivesFilterBar } from '@/components/drives/drives-filter-bar';
 import { DrivesGrid } from '@/components/drives/drives-grid';
 import Link from 'next/link';
+import { YEAR_LEVEL_LABELS, yearLevelFor } from '@/features/students/domain/academic-year';
 
 export const dynamic = 'force-dynamic';
 
@@ -138,12 +139,10 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
     applicantCounts[row.driveId] = row._count._all;
   }
 
-  // Year of study derived from the real current semester (2 semesters per year)
-  const YEAR_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
-  const currentSemester = studentWithProfile.academic?.currentSemester;
-  const studyYear = currentSemester
-    ? YEAR_LABELS[Math.ceil(currentSemester / 2) - 1] ?? null
-    : null;
+  // Year of study is derived from the batch (expected passout year) and the
+  // academic cycle — the one definition, in academic-year.ts.
+  const yearLevel = yearLevelFor(studentWithProfile.expectedPassoutYear);
+  const studyYear = yearLevel ? YEAR_LEVEL_LABELS[yearLevel] : null;
 
   const nameParts = studentWithProfile.name.trim().split(/\s+/);
   const initials = nameParts
@@ -202,7 +201,7 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
             }}
           >
             <span>{studentWithProfile.department.code}</span>
-            {studyYear && <span>{studyYear} year</span>}
+            {studyYear && <span>{studyYear}</span>}
             {studentWithProfile.rollNumber && (
               <span>Roll {studentWithProfile.rollNumber}</span>
             )}

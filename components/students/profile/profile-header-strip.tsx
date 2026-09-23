@@ -2,6 +2,7 @@
 
 import { Save } from 'lucide-react';
 import ProgressBar from '@/components/ui/progress-bar';
+import { YEAR_LEVEL_LABELS, yearLevelFor } from '@/features/students/domain/academic-year';
 import { useProfileSave } from './profile-save-context';
 import type {
   CompleteProfile,
@@ -22,14 +23,6 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-/** "4th Year" from the student's current semester, two semesters per year. */
-function yearLabel(currentSemester: number | undefined): string | null {
-  if (!currentSemester) return null;
-  const year = Math.ceil(currentSemester / 2);
-  const suffixes = ['th', 'st', 'nd', 'rd'];
-  const suffix = suffixes[year] ?? suffixes[0];
-  return `${year}${suffix} Year`;
-}
 
 export default function ProfileHeaderStrip({
   profile,
@@ -39,7 +32,9 @@ export default function ProfileHeaderStrip({
   const { save, isSaving, canSave } = useProfileSave();
   const pct = completion.percentage;
 
-  const year = yearLabel(profile.academic?.currentSemester);
+  // Derived from the batch and the academic cycle, never from the semester.
+  const level = yearLevelFor(student.expectedPassoutYear);
+  const year = level ? YEAR_LEVEL_LABELS[level] : null;
   const subtitle = [student.department.name, year, student.email]
     .filter(Boolean)
     .join(' · ');

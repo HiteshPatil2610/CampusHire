@@ -7,6 +7,7 @@ import { StudentDetailsDialog } from './student-details-dialog';
 import Pagination from '@/components/ui/pagination';
 import { exportToCsv } from '@/lib/csv-export';
 import { formatBatch } from '@/features/students/utils/batch';
+import { describeStanding } from '@/features/students/domain/academic-year';
 import { PLACEMENT_STATE_BADGES } from '@/features/students/utils/placement-status';
 
 type RosterStatusFilter =
@@ -240,7 +241,7 @@ export function StudentRosterClient({
                         {student.department.code}
                       </span>
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                        {formatBatch(student.expectedPassoutYear)}
+                        {describeStanding(student.expectedPassoutYear)}
                       </div>
                     </td>
                     <td>

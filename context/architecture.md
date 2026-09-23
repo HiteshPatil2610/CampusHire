@@ -492,6 +492,51 @@ DriveApplicationField { driveId? | driveDepartmentConfigId?, fieldKey, label,
   stored permission is honoured only if the key allows it. Remove both with
   the columns.
 
+## The academic year is derived; a drop is a recorded transition
+
+```
+Student.expectedPassoutYear ──► yearLevelFor(passout, now)   FIRST … FOURTH_YEAR | GRADUATED
+StudentDrop { previous/new passout year, previous/new level, academicYear,
+              reason, droppedBy/At, undoDeadline (+48h), undoneAt/By, undoReason }
+AcademicCycleCutover { academicYear (PK), finalYearPassout, effectiveFrom,
+                       recordedBy/At, graduated/fourth/third-year counts }
+```
+
+- **Year level is never stored.** `features/students/domain/academic-year.ts`
+  derives it from the expected passout year and the academic cycle, which
+  turns at the start of July 1, India time ("after June 30"): from then the
+  batch passing out this calendar year is GRADUATED and next year's is
+  FOURTH_YEAR. There is no year-level column to disagree with the batch. Every
+  screen that shows a year reads `yearLevelFor` — the old "semester / 2"
+  calculations on the student drives page, the profile header and the Super
+  Admin directory were replaced — and `StudentAcademic.currentSemester` stays
+  a separate, student-reported fact.
+- **Annual promotion needs no write,** so it cannot run halfway and cannot
+  promote anyone twice. The cutover is a ledger: `recordAcademicCutover` writes
+  one `AcademicCycleCutover` row per cycle (the primary key makes a second run
+  write nothing) with an audit entry. CampusHire has no scheduler, so it runs
+  on the first Super Admin dashboard visit of the cycle
+  (`ensureAcademicCutoverRecorded`); `scripts/record-academic-cutover.ts` runs
+  the same function from a cron.
+- **A drop is one transaction** (`dropStudent`): the passout year moves one
+  later by compare-and-set, a `StudentDrop` row records the state before and
+  after, and an audit row records the act. The level moves back a step because
+  it is derived from the year. A reason is required.
+- **Undo is a window, not a history editor** (`undoStudentDrop`,
+  `decideUndo`): within 48 hours, once, and only while that drop's year is
+  still in force — so the latest drop must be undone first. A trigger makes
+  the row immutable apart from that single undo; CHECKs fix the window at
+  exactly 48 hours, require the undo inside it, and require the batch to move
+  exactly one year. Outside the window a drop is permanent.
+- **Drop count is derived** — the student's drops not undone
+  (`utils/drop-count.ts`: `ACTIVE_DROPS_WHERE`, `countActiveDrops`).
+- **Who.** A department admin for their own students, or the Super Admin; not
+  found and not yours read the same. A student with drop history cannot be
+  deleted (`Restrict`), and retiring a promoted account refuses such a record.
+- **Later readers** — the batch filter, drive eligibility, semester filtering,
+  the Super Admin directory — consume `expectedPassoutYear`, `yearLevelFor` and
+  `ACTIVE_DROPS_WHERE`, and re-implement none of them.
+
 ## Placement is permanent exclusion
 
 ```
@@ -983,7 +1028,7 @@ is worth more than any query-level optimisation in this file.
 12. Self-asserted registration details are never written into `Student` before a department admin approves them. They live in `StudentAccessRequest` until then, so an unapproved sign-up can never appear in a department roster, in `totalStudents`, or in the placement-rate denominator. Approving is what creates the `Student` row, and it takes the department from the reviewing admin, not from the applicant.
 15. Being promoted to an admin role ends an account's student-ness in the same transaction as the promotion: its `Student` row is retired and any *pending* `StudentAccessRequest` is deleted, so a promoted account leaves the waiting list and gets its new role's access immediately (`retireStudentAccess`). The pending request is deleted rather than given a terminal status — `REJECTED` would permanently block re-registration if the account is later demoted back to `STUDENT`, and `APPROVED` would claim a `Student` row was created when none was. Approval is independently refused for any applicant who is no longer a `STUDENT`, so a stale queue open in another tab cannot put an admin back in the roster. A student record carrying `DriveApplication` history is never silently deleted: it refuses, and the refusal aborts the promotion.
 13. `Student.misNumber`, `rollNumber` and `expectedPassoutYear` are required at every write boundary (import, manual add, verification, approval) — for lateral-entry students too since Phase 1 — and nullable in the database only for students created earlier. `applyToDrive` still refuses any application without a roll number. All three are registrar-owned: verification and the profile can fill a blank, never overwrite an existing value.
-14. Anything that can be computed is computed, not stored. `getDriveStatus()` derives open/closed from a deadline and `placement-status.ts` derives placement from active placement records. A stored equivalent has to be set correctly at every write site, and the first caller that forgets produces a silently wrong value — which is exactly how `placementStatus` came to read zero everywhere. A notification's category and priority *are* stored, but no caller chooses them: one writer sets them from the event registry, which is the same "one place decides" guarantee by another route.
+14. Anything that can be computed is computed, not stored. `getDriveStatus()` derives open/closed from a deadline, `placement-status.ts` derives placement from active placement records, and `academic-year.ts` derives a student's year level from their expected passout year and the academic cycle (a drop count is likewise the drops not undone). A stored equivalent has to be set correctly at every write site, and the first caller that forgets produces a silently wrong value — which is exactly how `placementStatus` came to read zero everywhere. A notification's category and priority *are* stored, but no caller chooses them: one writer sets them from the event registry, which is the same "one place decides" guarantee by another route.
 22. Authorization belongs to the function: an exported action or a query a client component can reach checks the caller itself, typed `where` clauses keep the scope from being lost to a typo, refusals are recognised by error type, and not-found and not-yours read alike.
 21. An export is a dataset name the server resolves, never a query the client shapes: the actor, the drive, the department and the columns are all decided server-side, an allowlist bounds every column, and every export is audited. Action-required items are computed from current state and never stored.
 19. Department admin authorization is a live `DepartmentAdmin` row with status ACTIVE in an active department, asked through `requireDepartmentAdmin` or `getActiveDepartmentAdmin` and nowhere else. Disabling an admin takes access away and keeps everything they did. Admins are invited through Clerk — CampusHire never creates, emails or stores a password — and an invitation is accepted only when one was actually issued for that address and department.
