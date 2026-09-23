@@ -38,6 +38,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { notifyEligibleStudentsOfDrive } from "../actions/notify-eligible-students-of-drive";
 import { primeDeliveryMocks } from "./delivery-test-helpers";
+import { FINAL_YEAR_PASSOUT, REQUIRED_MARKS } from "@/features/drives/__tests__/final-year-fixtures";
 
 const CSE = "dept-cse";
 const IT = "dept-it";
@@ -78,7 +79,9 @@ const student = (id: string, overrides: object = {}) => ({
   isPending: false,
   optedIn: true,
   rollNumber: `R-${id}`,
-  expectedPassoutYear: 2026,
+  // Final year, semesters 1–6 on record: the final-year requirements pass.
+  expectedPassoutYear: FINAL_YEAR_PASSOUT,
+  semesterMarks: REQUIRED_MARKS,
   entryType: "REGULAR",
   academic: { currentCGPA: 8.5, pastBacklogCount: 0, activeBacklogs: 0 },
   skills: [],
@@ -188,14 +191,14 @@ describe("a published drive reaches exactly the eligible students", () => {
             operator: "IN",
             numberValue: null,
             textValue: null,
-            listValue: ["2026"],
+            listValue: [String(FINAL_YEAR_PASSOUT)],
           },
         ],
       }),
     ] as never);
     vi.mocked(prisma.student.findMany).mockResolvedValue([
-      student("s1", { expectedPassoutYear: 2026 }),
-      student("s2", { expectedPassoutYear: 2027 }),
+      student("s1", { expectedPassoutYear: FINAL_YEAR_PASSOUT }),
+      student("s2", { expectedPassoutYear: FINAL_YEAR_PASSOUT + 1 }),
     ] as never);
 
     const result = await notifyEligibleStudentsOfDrive(drive as never, { departmentIds: [CSE] });

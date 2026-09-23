@@ -111,6 +111,8 @@ import {
   withTargetedBatchYears,
 } from "@/features/drives/domain/batch-targeting";
 import type { EligibilityRuleInput } from "@/features/drives/domain/eligibility-rules";
+import { FINAL_YEAR_PASSOUT, REQUIRED_MARKS } from "@/features/drives/__tests__/final-year-fixtures";
+import { batchLabel } from "@/features/students/utils/batch";
 
 const DRIVE_ID = "clzzzzzzzzzzzzzzzzzzzzzzz";
 const CSE = "dept-cse";
@@ -151,7 +153,7 @@ const cseInstance = {
   maxActiveBacklogs: null,
   applicationFields: null,
   formFields: [],
-  eligibilityRules: [rule("BATCH_YEAR", "IN", ["2026"])],
+  eligibilityRules: [rule("BATCH_YEAR", "IN", [String(FINAL_YEAR_PASSOUT)])],
   venue: null,
   reportingTime: null,
   coordinatorName: null,
@@ -209,7 +211,9 @@ function student(extra: Record<string, unknown> = {}, cgpa = 8.2) {
     isPending: false,
     optedIn: true,
     entryType: "REGULAR" as const,
-    expectedPassoutYear: 2026,
+    expectedPassoutYear: FINAL_YEAR_PASSOUT,
+    // Final year with semesters 1–6 on record: the final-year requirements pass.
+    semesterMarks: REQUIRED_MARKS,
     department: { code: "CSE" },
     skills: [] as { skillName: string; skillType?: string }[],
     projects: [],
@@ -252,7 +256,8 @@ describe("placement short-circuits the evaluator", () => {
     placed: false,
     optedIn: true,
     entryType: "REGULAR",
-    expectedPassoutYear: 2026,
+    expectedPassoutYear: FINAL_YEAR_PASSOUT,
+    semestersWithMarks: [1, 2, 3, 4, 5, 6],
     academic: {
       currentCGPA: 9,
       activeBacklogs: 0,
@@ -266,7 +271,7 @@ describe("placement short-circuits the evaluator", () => {
     ...overrides,
   });
 
-  const rules = [rule("CGPA", "GTE", 7), rule("BATCH_YEAR", "IN", ["2026"])];
+  const rules = [rule("CGPA", "GTE", 7), rule("BATCH_YEAR", "IN", [String(FINAL_YEAR_PASSOUT)])];
 
   it("excludes a placed student even when every rule would pass", () => {
     const result = evaluateEligibility(subject({ placed: true }), rules);
@@ -313,7 +318,7 @@ describe("placement short-circuits the evaluator", () => {
   });
 
   it("explains placement alone, without listing other criteria", () => {
-    const placedAndWeak = student({ placements: [ACTIVE], expectedPassoutYear: 2025 }, 5);
+    const placedAndWeak = student({ placements: [ACTIVE], expectedPassoutYear: FINAL_YEAR_PASSOUT - 1 }, 5);
     expect(getIneligibilityReasons(placedAndWeak as never, resolvedCse as never)).toEqual([
       STANDING_REASONS.PLACED,
     ]);
@@ -330,10 +335,10 @@ describe("batch targeting", () => {
   });
 
   it("a student in another batch fails, and is told why", () => {
-    const other = student({ expectedPassoutYear: 2027 });
+    const other = student({ expectedPassoutYear: FINAL_YEAR_PASSOUT + 1 });
     expect(isStudentEligibleForDrive(other as never, resolvedCse as never)).toBe(false);
     expect(getIneligibilityReasons(other as never, resolvedCse as never).join(" ")).toMatch(
-      /Your batch \(2023-27\) is not targeted/
+      new RegExp(`Your batch \\(${batchLabel(FINAL_YEAR_PASSOUT + 1)}\\) is not targeted`)
     );
   });
 
@@ -376,7 +381,7 @@ describe("department isolation", () => {
     vi.mocked(prisma.student.findMany).mockResolvedValue([
       student({ id: "s-ok", name: "Eligible" }),
       student({ id: "s-placed", placements: [ACTIVE] }),
-      student({ id: "s-2027", expectedPassoutYear: 2027 }),
+      student({ id: "s-2027", expectedPassoutYear: FINAL_YEAR_PASSOUT + 1 }),
       student({ id: "s-weak" }, 6),
     ] as never);
 
@@ -422,7 +427,7 @@ describe("list, apply and notifications agree", () => {
   it.each([
     ["an unplaced student in the targeted batch", student(), true],
     ["a placed student", student({ placements: [ACTIVE] }), false],
-    ["a student in another batch", student({ expectedPassoutYear: 2027 }), false],
+    ["a student in another batch", student({ expectedPassoutYear: FINAL_YEAR_PASSOUT + 1 }), false],
   ])("%s gets the same answer from the list and from apply", async (_label, s, expected) => {
     asStudent(s);
 
@@ -452,7 +457,7 @@ describe("list, apply and notifications agree", () => {
     vi.mocked(prisma.student.findMany).mockResolvedValue([
       student({ id: "s-ok", userId: "u-ok" }),
       student({ id: "s-placed", userId: "u-placed", placements: [ACTIVE] }),
-      student({ id: "s-2027", userId: "u-2027", expectedPassoutYear: 2027 }),
+      student({ id: "s-2027", userId: "u-2027", expectedPassoutYear: FINAL_YEAR_PASSOUT + 1 }),
     ] as never);
 
     const { notified } = await notifyEligibleStudentsOfDrive(master as never);

@@ -1,5 +1,6 @@
 "use server";
 
+import { afterStudentProfileSave } from "../domain/after-profile-save";
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { projectSchema, type ProjectInput } from "../schemas/profile";
@@ -33,6 +34,10 @@ export async function addProject(input: ProjectInput): Promise<ActionResult> {
         endDate: validated.endDate ? new Date(validated.endDate) : null,
       },
     });
+
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
 
     return { success: true, projectId: project.id };
   } catch (error) {
@@ -92,6 +97,10 @@ export async function updateProject(
       },
     });
 
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
+
     return { success: true, projectId };
   } catch (error) {
     console.error("Update project error:", error);
@@ -135,6 +144,10 @@ export async function removeProject(projectId: string): Promise<ActionResult> {
     await prisma.studentProject.delete({
       where: { id: projectId },
     });
+
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
 
     return { success: true };
   } catch (error) {

@@ -8,6 +8,10 @@
  * Safe to run any number of times: a cycle already recorded writes nothing.
  * Year levels never depend on it — they are derived — so a cron that never
  * runs changes no student; it only leaves the ledger to the next visit.
+ *
+ * It then tells this cycle's final-year batch about the open drives they can
+ * apply to. That part runs every time (it is what to re-run if the dashboard's
+ * attempt failed) and is idempotent: a student is told about a drive once.
  */
 import { config } from "dotenv";
 import { resolve } from "path";
@@ -19,6 +23,7 @@ config({ path: resolve(process.cwd(), ".env.local"), override: true });
 
 import { prisma } from "@/lib/prisma";
 import { recordAcademicCutover } from "@/features/students/domain/record-academic-cutover";
+import { notifyNewlyEligibleDrivesForBatch } from "@/features/notifications/domain/newly-eligible-drives";
 
 async function main() {
   const email = process.argv[2]?.trim().toLowerCase();
@@ -40,6 +45,11 @@ async function main() {
   } else {
     console.log(`Cutover ${result.cycle.label} was already recorded at ${result.recordedAt.toISOString()} — nothing written.`);
   }
+
+  const told = await notifyNewlyEligibleDrivesForBatch(result.cycle.finalYearPassout);
+  console.log(
+    `Final-year batch ${result.cycle.finalYearPassout}: ${told.students} students checked, ${told.notifications} new "New Drive Available" notifications.`
+  );
 }
 
 main()

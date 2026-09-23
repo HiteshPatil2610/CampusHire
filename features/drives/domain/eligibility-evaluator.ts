@@ -1,11 +1,13 @@
 import type { EntryType } from "@prisma/client";
-import { preCollegePercentage } from "@/features/students/utils/entry-type";
+import { firstSemesterFor, preCollegePercentage } from "@/features/students/utils/entry-type";
 import {
   describeRule,
   RULE_SPECS,
   type EligibilityRuleInput,
 } from "./eligibility-rules";
 import { batchLabel } from "@/features/students/utils/batch";
+import { YEAR_LEVEL_LABELS, yearLevelFor } from "@/features/students/domain/academic-year";
+import type { DriveStatus } from "../utils/drive-status";
 
 /**
  * The one eligibility evaluator.
@@ -43,6 +45,11 @@ export interface EligibilitySubject {
   /** Participating in campus placement. */
   optedIn: boolean;
   entryType: EntryType;
+  /**
+   * The authoritative batch (Phase 1). The year level — and so whether the
+   * student is in semester 7/8 — is derived from it (Phase 2): a promotion or
+   * a drop changes this one value and every later check follows.
+   */
   expectedPassoutYear: number | null;
   academic: {
     currentCGPA: number;
@@ -53,6 +60,8 @@ export interface EligibilitySubject {
     diplomaPercentage: number | null;
     currentSemester: number;
   } | null;
+  /** Semesters the student has marks uploaded for. */
+  semestersWithMarks: number[];
   /** Skill names as the student recorded them. */
   skills: string[];
 }
@@ -62,7 +71,8 @@ export interface EligibilitySubject {
  *
  * `placements` is required: load it with `ACTIVE_PLACEMENTS_SELECT`
  * (features/students/utils/placement-status.ts). Only unrevoked placements
- * count, whichever rows are passed.
+ * count, whichever rows are passed. `semesterMarks` is required too: load it
+ * with `SEMESTER_MARKS_SELECT` (below) — the final-year marks gate reads it.
  */
 export function toEligibilitySubject(student: {
   isPending: boolean;
@@ -71,6 +81,7 @@ export function toEligibilitySubject(student: {
   entryType: EntryType;
   expectedPassoutYear: number | null;
   academic: EligibilitySubject["academic"];
+  semesterMarks: { semester: number }[];
   skills: { skillName: string }[];
 }): EligibilitySubject {
   return {
@@ -90,9 +101,13 @@ export function toEligibilitySubject(student: {
           currentSemester: student.academic.currentSemester,
         }
       : null,
+    semestersWithMarks: [...new Set((student.semesterMarks ?? []).map((mark) => mark.semester))],
     skills: student.skills.map((skill) => skill.skillName),
   };
 }
+
+/** What every eligibility loader selects for the marks gate. */
+export const SEMESTER_MARKS_SELECT = { select: { semester: true } } as const;
 
 export interface RuleResult {
   rule: EligibilityRuleInput;
@@ -108,12 +123,47 @@ export interface RuleResult {
 /** Why evaluation stopped before the rules, if it did. */
 export type StandingBlock = "NOT_APPROVED" | "PLACED" | "OPTED_OUT" | "DEPARTMENT";
 
+/**
+ * Why a student is not eligible, as a stable code — for callers that branch
+ * or count (admin lists, tests, notifications). The student is shown the
+ * matching `reasons` text, which only ever describes their own record.
+ */
+export type EligibilityCode =
+  | "NOT_APPROVED"
+  | "PLACED"
+  | "OPTED_OUT"
+  | "APPLICATION_NOT_OPEN"
+  | "APPLICATION_CLOSED"
+  | "WRONG_DEPARTMENT"
+  | "WRONG_BATCH"
+  | "WRONG_SEMESTER"
+  | "MISSING_ACADEMIC_RECORD"
+  | "MISSING_REQUIRED_MARKS"
+  | "BELOW_CGPA"
+  | "ACTIVE_BACKLOG_LIMIT"
+  | "CRITERIA_NOT_MET";
+
+/** A requirement every drive has, beyond its own rule set (Item 8). */
+export interface RequirementResult {
+  code: "WRONG_SEMESTER" | "MISSING_REQUIRED_MARKS";
+  passed: boolean;
+  /** "Final year (semester 7 or 8)". */
+  description: string;
+  actual: string | null;
+  reason: string | null;
+}
+
 export interface EligibilityEvaluation {
   eligible: boolean;
-  /** Set when a standing check failed; no rule was evaluated. */
+  /** Set when a standing check failed; nothing else was evaluated. */
   blockedBy: StandingBlock | null;
+  /** Every failure, as codes, in pipeline order. Empty when eligible. */
+  codes: EligibilityCode[];
+  /** The final-year and marks requirements (Item 8). */
+  requirements: RequirementResult[];
+  /** The drive's own rules. */
   results: RuleResult[];
-  /** Human-readable reasons, one per distinct failure. */
+  /** Human-readable reasons, one per distinct failure, in pipeline order. */
   reasons: string[];
 }
 
@@ -126,6 +176,42 @@ export const STANDING_REASONS: Record<StandingBlock, string> = {
     "You have opted out of campus placement. Ask your department admin to opt you back in.",
   DEPARTMENT: "Your department is not eligible for this drive.",
 };
+
+const STANDING_CODES: Record<StandingBlock, EligibilityCode> = {
+  NOT_APPROVED: "NOT_APPROVED",
+  PLACED: "PLACED",
+  OPTED_OUT: "OPTED_OUT",
+  DEPARTMENT: "WRONG_DEPARTMENT",
+};
+
+export const WINDOW_REASONS = {
+  upcoming: "Applications have not opened yet",
+  closed: "Drive is closed",
+} as const;
+
+/**
+ * The last semester whose marks a final-year student must have uploaded.
+ *
+ * Item 8 (confirmed): a semester 7 student needs marks for semesters 1–6.
+ * Semester 8 (owner, 2026-09-24): no automatic semester-7 requirement — the
+ * department admin reminds students when results are due — so every
+ * final-year student is held to semesters 1–6. Uploaded marks count without
+ * an admin's verification (also the owner's decision).
+ */
+export const FINAL_YEAR_REQUIRED_MARKS_THROUGH = 6;
+
+/**
+ * The semesters whose marks a final-year student must have: from their first
+ * semester (3 for a lateral-entry student, who never took 1 and 2) through
+ * `FINAL_YEAR_REQUIRED_MARKS_THROUGH`.
+ */
+export function requiredMarkSemesters(entryType: EntryType): number[] {
+  const semesters: number[] = [];
+  for (let semester = firstSemesterFor(entryType); semester <= FINAL_YEAR_REQUIRED_MARKS_THROUGH; semester++) {
+    semesters.push(semester);
+  }
+  return semesters;
+}
 
 /**
  * The standing checks, in order; the first failure. Exported so a caller
@@ -143,37 +229,138 @@ export function evaluateStanding(
   return null;
 }
 
+/**
+ * Item 8: only final-year students — semester 7 or 8 — qualify, and only
+ * with the required semester marks uploaded. The year level is derived from
+ * the batch and today's academic cycle (`yearLevelFor`), never from the
+ * semester a student typed, so it cannot be claimed, and a promotion or a
+ * drop moves it. Semester 5–6 (third year) and graduated batches are out.
+ */
+export function evaluateFinalYearRequirements(
+  subject: Pick<EligibilitySubject, "expectedPassoutYear" | "entryType" | "semestersWithMarks">,
+  now: Date = new Date()
+): RequirementResult[] {
+  const level = yearLevelFor(subject.expectedPassoutYear, now);
+  const finalYear: RequirementResult = {
+    code: "WRONG_SEMESTER",
+    description: "Final year (semester 7 or 8)",
+    passed: level === "FOURTH_YEAR",
+    actual: level ? YEAR_LEVEL_LABELS[level] : null,
+    reason:
+      level === "FOURTH_YEAR"
+        ? null
+        : level === null
+          ? "Open to final-year (semester 7 and 8) students only — your batch is not on record"
+          : `Open to final-year (semester 7 and 8) students only — you are in ${YEAR_LEVEL_LABELS[level]}`,
+  };
+  // Marks are asked of final-year students only; for anyone else the year
+  // is already the whole answer.
+  if (!finalYear.passed) return [finalYear];
+
+  const required = requiredMarkSemesters(subject.entryType);
+  const have = new Set(subject.semestersWithMarks);
+  const missing = required.filter((semester) => !have.has(semester));
+  const range = `${required[0]}–${required[required.length - 1]}`;
+
+  return [
+    finalYear,
+    {
+      code: "MISSING_REQUIRED_MARKS",
+      description: `Marks uploaded for semesters ${range}`,
+      passed: missing.length === 0,
+      actual: missing.length === 0 ? "All uploaded" : `Missing ${missing.join(", ")}`,
+      reason:
+        missing.length === 0
+          ? null
+          : `Upload your marks for semester${missing.length === 1 ? "" : "s"} ${missing.join(", ")} to see final-year drives`,
+    },
+  ];
+}
+
+/** The code a failed rule is reported under. */
+function ruleCode(result: RuleResult): EligibilityCode {
+  if (result.reason === ACADEMIC_MISSING) return "MISSING_ACADEMIC_RECORD";
+  switch (result.rule.ruleType) {
+    case "BATCH_YEAR":
+      return "WRONG_BATCH";
+    case "CGPA":
+      return "BELOW_CGPA";
+    case "ACTIVE_BACKLOGS":
+      return "ACTIVE_BACKLOG_LIMIT";
+    default:
+      return "CRITERIA_NOT_MET";
+  }
+}
+
+/**
+ * The eligibility pipeline — one function, the only one:
+ *
+ *   standing (approved, not placed, opted in)   stops here if it fails
+ *   → department assigned                        stops here if it fails
+ *   → application window open                   (when `window` is given)
+ *   → batch (the drive's BATCH_YEAR rule)
+ *   → final year: semester 7 or 8
+ *   → required semester marks uploaded
+ *   → every other rule of the drive (CGPA, backlogs, …)
+ *
+ * After department, every failure is reported, so a student sees everything
+ * to fix at once; `eligible` is true only when nothing failed.
+ */
 export function evaluateEligibility(
   subject: EligibilitySubject,
   rules: EligibilityRuleInput[],
-  /** Whether the student's department is assigned to the drive. */
-  options: { departmentEligible?: boolean } = {}
+  options: {
+    /** Whether the student's department is assigned to the drive. */
+    departmentEligible?: boolean;
+    /** The drive's application window now, when the caller decides on it. */
+    window?: DriveStatus;
+    now?: Date;
+  } = {}
 ): EligibilityEvaluation {
   // Short-circuit: a student who fails standing is not evaluated further.
   const blockedBy = evaluateStanding(subject, options.departmentEligible ?? true);
   if (blockedBy) {
-    return { eligible: false, blockedBy, results: [], reasons: [STANDING_REASONS[blockedBy]] };
+    return {
+      eligible: false,
+      blockedBy,
+      codes: [STANDING_CODES[blockedBy]],
+      requirements: [],
+      results: [],
+      reasons: [STANDING_REASONS[blockedBy]],
+    };
   }
 
-  const results = rules.map((rule) => evaluateRule(subject, rule));
+  const codes: EligibilityCode[] = [];
+  const reasons: string[] = [];
+  const fail = (code: EligibilityCode, reason: string) => {
+    if (!codes.includes(code)) codes.push(code);
+    if (!reasons.includes(reason)) reasons.push(reason);
+  };
 
-  // Several academic rules fail for the same missing record; say it once.
-  const reasons = [
-    ...new Set(
-      results
-        .filter((result) => !result.passed)
-        .map((result) => result.reason!)
-    ),
-  ];
+  if (options.window === "upcoming") fail("APPLICATION_NOT_OPEN", WINDOW_REASONS.upcoming);
+  if (options.window === "closed") fail("APPLICATION_CLOSED", WINDOW_REASONS.closed);
+
+  // Batch first, then the final-year requirements, then everything else.
+  const batchRules = rules.filter((rule) => rule.ruleType === "BATCH_YEAR");
+  const otherRules = rules.filter((rule) => rule.ruleType !== "BATCH_YEAR");
+  const batchResults = batchRules.map((rule) => evaluateRule(subject, rule));
+  const requirements = evaluateFinalYearRequirements(subject, options.now);
+  const otherResults = otherRules.map((rule) => evaluateRule(subject, rule));
+
+  for (const result of batchResults) if (!result.passed) fail(ruleCode(result), result.reason!);
+  for (const requirement of requirements) if (!requirement.passed) fail(requirement.code, requirement.reason!);
+  // Several academic rules fail for the same missing record; said once.
+  for (const result of otherResults) if (!result.passed) fail(ruleCode(result), result.reason!);
 
   return {
-    eligible: results.every((result) => result.passed),
+    eligible: codes.length === 0,
     blockedBy: null,
-    results,
+    codes,
+    requirements,
+    results: [...batchResults, ...otherResults],
     reasons,
   };
 }
-
 function evaluateRule(subject: EligibilitySubject, rule: EligibilityRuleInput): RuleResult {
   const description = describeRule(rule);
   const pass = (actual: string | null): RuleResult => ({

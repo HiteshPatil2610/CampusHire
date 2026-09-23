@@ -165,7 +165,12 @@ export function buildSubmissionSnapshot(input: SubmissionSnapshotInput): BuiltSn
         listValue: rule.listValue,
         source: rule.source,
       })),
-      results: input.eligibility.evaluation.results.map((result) => ({
+      // The drive's rules, then the final-year and marks requirements every
+      // drive has (Item 8) — each as the student met it when they applied.
+      results: [
+        ...input.eligibility.evaluation.results,
+        ...(input.eligibility.evaluation.requirements ?? []),
+      ].map((result) => ({
         description: result.description,
         actual: result.actual,
         passed: result.passed,

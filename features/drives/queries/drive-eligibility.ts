@@ -16,12 +16,12 @@ import type { EligibilityRuleInput } from "../domain/eligibility-rules";
  *
  * These are the functions every read and write path calls — the student's
  * drive list, the detail page, the dashboard, `applyToDrive`, the
- * notification fan-out and the department admin's eligible-student list. They
- * add the drive-level checks (academic record present, deadline open) and
- * delegate everything about the student — standing (approved, placed, opted
- * in), department, and every rule — to the single pure evaluator in
- * `domain/eligibility-evaluator.ts`. There is no other place eligibility is
- * computed.
+ * notification fan-outs (a drive published, a profile saved) and the
+ * department admin's eligible-student list. They pass the drive's
+ * application window and department to the single pure evaluator in
+ * `domain/eligibility-evaluator.ts`, which decides everything — standing,
+ * department, window, batch, final year, required marks and every rule.
+ * There is no other place eligibility is computed.
  *
  * The student and the rules are both typed as *required* inputs: a caller that
  * forgot to load the student's skills or the drive's rule set does not compile,
@@ -30,12 +30,14 @@ import type { EligibilityRuleInput } from "../domain/eligibility-rules";
 
 /**
  * A student as the eligibility check needs them — server-loaded rows only.
- * `placements` are their active placements (`ACTIVE_PLACEMENTS_SELECT`).
+ * `placements` are their active placements (`ACTIVE_PLACEMENTS_SELECT`);
+ * `semesterMarks` the semesters they have marks for (`SEMESTER_MARKS_SELECT`).
  */
 export type StudentWithEligibilityInfo = Student & {
   academic: StudentAcademic | null;
   skills: { skillName: string }[];
   placements: { revokedAt: Date | null }[];
+  semesterMarks: { semester: number }[];
 };
 
 /**
@@ -49,45 +51,51 @@ export type DriveWithEligibility = {
   eligibilityRules: EligibilityRuleInput[];
 } & HasEligibleDepartmentLinks;
 
-/** The rule-by-rule result, for checklists that show every criterion. */
+/**
+ * The full evaluation, for checklists that show every criterion. With
+ * `window: true` the application window is judged too (not open yet, or
+ * closed, is then a failure).
+ */
 export function evaluateStudentForDrive(
   student: StudentWithEligibilityInfo,
-  drive: DriveWithEligibility
+  drive: DriveWithEligibility,
+  options: { window?: boolean; now?: Date } = {}
 ): EligibilityEvaluation {
+  const now = options.now ?? new Date();
   return evaluateEligibility(toEligibilitySubject(student), drive.eligibilityRules, {
     departmentEligible: eligibleDepartmentIdsOf(drive).includes(student.departmentId),
+    window: options.window ? getDriveStatus(drive, now) : undefined,
+    now,
   });
 }
 
 /**
- * Eligible on everything except the deadline — for listings that also show
- * drives whose window has closed.
+ * Eligible on everything except the application window — for listings that
+ * also show drives whose window has closed, and for announcing a drive.
  */
 export function isStudentAcademicallyEligibleForDrive(
   student: StudentWithEligibilityInfo,
-  drive: DriveWithEligibility
+  drive: DriveWithEligibility,
+  now: Date = new Date()
 ): boolean {
   if (!student.academic) {
     return false;
   }
 
-  // Standing (approved → placed → opted in → department), then every rule.
-  return evaluateStudentForDrive(student, drive).eligible;
+  return evaluateStudentForDrive(student, drive, { now }).eligible;
 }
 
+/** Eligible, and the drive is taking applications now. */
 export function isStudentEligibleForDrive(
   student: StudentWithEligibilityInfo,
-  drive: DriveWithEligibility
+  drive: DriveWithEligibility,
+  now: Date = new Date()
 ): boolean {
   if (!student.academic) {
     return false;
   }
 
-  if (getDriveStatus(drive) !== "open") {
-    return false;
-  }
-
-  return isStudentAcademicallyEligibleForDrive(student, drive);
+  return evaluateStudentForDrive(student, drive, { window: true, now }).eligible;
 }
 
 /**
@@ -97,7 +105,7 @@ export function getIneligibilityReasons(
   student: StudentWithEligibilityInfo,
   drive: DriveWithEligibility
 ): string[] {
-  const evaluation = evaluateStudentForDrive(student, drive);
+  const evaluation = evaluateStudentForDrive(student, drive, { window: true });
 
   // A standing block is the whole answer. A placed student is ineligible
   // because they are placed — nothing else is evaluated or reported.
@@ -119,13 +127,7 @@ export function getIneligibilityReasons(
     return reasons; // Every academic rule would repeat this; say it once.
   }
 
-  const window = getDriveStatus(drive);
-  if (window === "upcoming") {
-    reasons.push("Applications have not opened yet");
-  } else if (window === "closed") {
-    reasons.push("Drive is closed");
-  }
-
+  // Window, batch, final year, marks, then the drive's rules — in that order.
   reasons.push(...evaluation.reasons);
 
   return reasons;

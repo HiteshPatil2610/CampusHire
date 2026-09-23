@@ -147,6 +147,8 @@ export default async function StudentDashboardPage() {
     academic: profile.academic,
     skills: profile.skills,
     placements,
+    // Which semesters have marks: the final-year marks gate reads them.
+    semesterMarks: profile.semesterMarks,
   };
   // The same evaluator `applyToDrive` uses — standing (approved, placed,
   // opted in) first — so the card never offers an Apply the server refuses.

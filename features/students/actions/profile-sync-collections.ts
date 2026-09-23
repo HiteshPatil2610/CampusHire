@@ -1,5 +1,6 @@
 "use server";
 
+import { afterStudentProfileSave } from "../domain/after-profile-save";
 import { z } from "zod";
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -89,6 +90,10 @@ export async function syncProjects(
       }),
     ]);
 
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
+
     return { success: true };
   } catch (error) {
     console.error("Sync projects error:", error);
@@ -138,6 +143,10 @@ export async function syncExperiences(
             });
       }),
     ]);
+
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
 
     return { success: true };
   } catch (error) {
@@ -190,6 +199,10 @@ export async function syncCertifications(
             });
       }),
     ]);
+
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
 
     return { success: true };
   } catch (error) {

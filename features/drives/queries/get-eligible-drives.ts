@@ -1,5 +1,6 @@
 "use server";
 
+import { SEMESTER_MARKS_SELECT } from "@/features/drives/domain/eligibility-evaluator";
 import { cache } from "react";
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -8,19 +9,13 @@ import {
   isStudentAcademicallyEligibleForDrive,
   isStudentEligibleForDrive,
 } from "./drive-eligibility";
-import {
-  resolveDepartmentApplicationForm,
-  resolveDepartmentDriveWithRules,
-} from "../domain/resolve-department-drive";
+import { loadStudentDriveCandidates } from "../domain/student-drive-candidates";
 import type { ApplicationFieldConfig } from "../domain/application-form";
 import type { DriveForStudent } from "../domain/resolve-department-drive";
 import type { EffectiveEligibilityRule } from "../domain/eligibility-rules";
-import {
-  eligibleDepartmentLinksInclude,
-  type HasEligibleDepartmentLinks,
-} from "../utils/eligible-departments";
+import type { HasEligibleDepartmentLinks } from "../utils/eligible-departments";
 import { serializePackageOffered, type WithSerializedPackage } from "../utils/serialize-drive";
-import type { Drive, Prisma } from "@prisma/client";
+import type { Drive } from "@prisma/client";
 import { isDriveOpen } from "../utils/drive-status";
 
 export interface StudentDrivesParams {
@@ -60,12 +55,15 @@ const getEligibilityRecords = cache(async (studentId: string) => {
       skills: { select: { skillName: true } },
       // Placement decides first: a placed student sees no drive as eligible.
       placements: ACTIVE_PLACEMENTS_SELECT,
+      // Semesters with marks: the final-year marks gate reads them.
+      semesterMarks: SEMESTER_MARKS_SELECT,
     },
   });
   return {
     academic: row?.academic ?? null,
     skills: row?.skills ?? [],
     placements: row?.placements ?? [],
+    semesterMarks: row?.semesterMarks ?? [],
   };
 });
 
@@ -104,72 +102,11 @@ export async function getEligibleDrives(
 
   const departmentId = studentWithAcademic.departmentId;
 
-  // SQL narrows on *exact membership only*: the drive runs in this student's
-  // department, that department has published it, and the master is not
-  // archived. It deliberately does NOT filter on CGPA, backlogs, deadline or
-  // role name any more — those are now per-department overridable, and a
-  // prefilter on the master's values would under-match: a department that
-  // lowers the bar to 6.5 on a master set at 7.0 would have its 6.8 students
-  // silently excluded before the resolver ever saw the drive. A prefilter may
-  // over-match; it must never under-match (architecture.md, "Filter in SQL").
-  // The candidate set is one department's published drives, so the exact
-  // checks below run over tens of rows, not the whole table.
-  const where: Prisma.DriveWhereInput = {
-    // A real FK membership check via DriveEligibleDepartment, replacing the
-    // old JSON-text `contains` prefilter (which could over-match on an ID
-    // that was a substring of another, relying on the in-memory recheck below
-    // to reject those). Without some filter here every student's dashboard
-    // read every drive row in the system.
-    eligibleDepartmentLinks: {
-      some: { departmentId },
-    },
-    // A student sees their own department's instance, and only once that
-    // department has published it. An ASSIGNED or CONFIGURED instance is
-    // half-built — showing it would put partially configured data in front of
-    // students, which is exactly what the lifecycle exists to prevent.
-    // CLOSED, CANCELLED and ARCHIVED are administratively over and equally
-    // hidden.
-    departmentConfigs: {
-      some: { departmentId, status: "PUBLISHED" },
-    },
-    // Archiving or cancelling a master drive withdraws it everywhere,
-    // whatever state each department's instance was left in. DRAFT is
-    // deliberately *not* excluded: the Super Admin authors in DRAFT, and each
-    // department's own publish is what releases the drive to its students.
-    lifecycleStatus: { notIn: ["ARCHIVED", "CANCELLED"] },
-  };
-
-  // One query: the candidate masters with their default rules, plus this
-  // department's instance of each and *its* rules (and nobody else's — the
-  // include is scoped to the student's department).
-  const candidates = await prisma.drive.findMany({
-    where,
-    orderBy: [{ createdAt: "desc" }],
-    include: {
-      ...eligibleDepartmentLinksInclude,
-      eligibilityRules: true,
-      formFields: true,
-      departmentConfigs: {
-        where: { departmentId },
-        include: { eligibilityRules: true, formFields: true },
-      },
-    },
-  });
-
-  // Resolve first, then decide — every rule below is this department's: its
-  // rule set, its deadline, its role title. The application form is resolved
-  // alongside so the review card shows exactly what `applyToDrive` will check.
-  const resolved = candidates.map(({ departmentConfigs, formFields, ...master }) => {
-    const instance = departmentConfigs[0] ?? null;
-    return {
-      ...resolveDepartmentDriveWithRules(master, instance),
-      applicationForm: resolveDepartmentApplicationForm(
-        { formFields, applicationFields: master.applicationFields },
-        instance
-      ).fields,
-    };
-  });
-
+  // SQL narrows to this department's published drives (membership and
+  // lifecycle only — never a business rule); every rule is then decided per
+  // resolved drive by the evaluator. The same candidates the profile-save
+  // re-check uses (`domain/student-drive-candidates.ts`).
+  const resolved = await loadStudentDriveCandidates(departmentId);
   const now = new Date();
   const needle = search?.toLowerCase();
 

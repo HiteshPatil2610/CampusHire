@@ -110,6 +110,7 @@ import { getEligibleDrives } from "../queries/get-eligible-drives";
 import { applyToDrive } from "@/features/applications/actions/apply-to-drive";
 import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
 import { primeDeliveryMocks } from "@/features/notifications/__tests__/delivery-test-helpers";
+import { FINAL_YEAR_PASSOUT, REQUIRED_MARKS } from "./final-year-fixtures";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -134,7 +135,9 @@ function regular(overrides: Partial<NonNullable<EligibilitySubject["academic"]>>
     placed: false,
     optedIn: true,
     entryType: "REGULAR",
-    expectedPassoutYear: 2026,
+    // Final year, with semesters 1–6 on record: the final-year requirements
+    // pass, so each test below exercises what it names.
+    expectedPassoutYear: FINAL_YEAR_PASSOUT,
     academic: {
       currentCGPA: 8.0,
       activeBacklogs: 0,
@@ -145,6 +148,7 @@ function regular(overrides: Partial<NonNullable<EligibilitySubject["academic"]>>
       currentSemester: 7,
       ...overrides,
     },
+    semestersWithMarks: [1, 2, 3, 4, 5, 6],
     skills: ["Java", "SQL"],
   };
 }
@@ -153,6 +157,8 @@ function diploma(overrides: Partial<NonNullable<EligibilitySubject["academic"]>>
   return {
     ...regular(),
     entryType: "DIPLOMA",
+    // Lateral entry: no semester 1 or 2.
+    semestersWithMarks: [3, 4, 5, 6],
     academic: {
       ...regular().academic!,
       twelfthPercentage: null,
@@ -298,10 +304,10 @@ describe("evaluateEligibility", () => {
     });
 
     it("matches batch years and fails a student with none on record", () => {
-      const rules = [rule("BATCH_YEAR", "IN", ["2026", "2027"])];
+      const rules = [rule("BATCH_YEAR", "IN", [String(FINAL_YEAR_PASSOUT), String(FINAL_YEAR_PASSOUT + 1)])];
 
       expect(evaluateEligibility(regular(), rules).eligible).toBe(true);
-      expect(evaluateEligibility({ ...regular(), expectedPassoutYear: 2025 }, rules).eligible).toBe(false);
+      expect(evaluateEligibility({ ...regular(), expectedPassoutYear: FINAL_YEAR_PASSOUT - 1 }, rules).eligible).toBe(false);
 
       const unknown = evaluateEligibility({ ...regular(), expectedPassoutYear: null }, rules);
       expect(unknown.eligible).toBe(false);
@@ -335,6 +341,7 @@ describe("evaluateEligibility", () => {
       entryType: "REGULAR",
       expectedPassoutYear: 2026,
       academic: regular().academic,
+      semesterMarks: [{ semester: 2 }, { semester: 1 }, { semester: 2 }],
       skills: [{ skillName: "Java" }],
     });
 
@@ -348,8 +355,11 @@ describe("evaluateEligibility", () => {
       "expectedPassoutYear",
       "optedIn",
       "placed",
+      "semestersWithMarks",
       "skills",
     ]);
+    // Only which semesters have marks — never the marks themselves.
+    expect(subject.semestersWithMarks).toEqual([2, 1]);
   });
 });
 
@@ -624,7 +634,8 @@ function student(departmentId: string, skills: string[], cgpa = 8) {
     optedIn: true,
     placements: [] as { revokedAt: Date | null }[],
     entryType: "REGULAR" as const,
-    expectedPassoutYear: 2026,
+    expectedPassoutYear: FINAL_YEAR_PASSOUT,
+    semesterMarks: REQUIRED_MARKS,
     academic: {
       currentCGPA: cgpa,
       activeBacklogs: 0,

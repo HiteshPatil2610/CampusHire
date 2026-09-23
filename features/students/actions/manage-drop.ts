@@ -9,6 +9,7 @@ import {
   requireAnyRole,
 } from "@/lib/auth";
 import { createAuditLogInTransaction, AuditAction, AuditEntityType } from "@/lib/audit";
+import { notifyNewlyEligibleDrives } from "@/features/notifications/domain/newly-eligible-drives";
 import {
   MIN_DROP_REASON_LENGTH,
   academicCycle,
@@ -235,6 +236,16 @@ export async function undoStudentDrop(input: z.input<typeof undoSchema>): Promis
     });
 
     revalidateStudentViews();
+
+    // Undoing a drop can put the student back in final year: tell them about
+    // the drives they can apply to again — once each (owner's decision). A
+    // failure here never undoes the undo.
+    try {
+      await notifyNewlyEligibleDrives(drop.student.id);
+    } catch (notifyError) {
+      console.error("Newly eligible drives after undo failed:", notifyError);
+    }
+
     return { success: true, dropId: drop.id, newPassoutYear: drop.previousPassoutYear };
   } catch (error) {
     if (error instanceof AuthorizationError) return { success: false, error: error.message };

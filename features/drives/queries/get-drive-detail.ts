@@ -1,5 +1,6 @@
 "use server";
 
+import { SEMESTER_MARKS_SELECT } from "@/features/drives/domain/eligibility-evaluator";
 import { getOrCreateUser, requireStudent, requireDepartmentAdmin, AuthorizationError, getActiveDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ACTIVE_PLACEMENTS_SELECT } from "@/features/students/utils/placement-status";
@@ -104,6 +105,8 @@ export async function getDriveDetail(driveId: string): Promise<DriveWithDepartme
         academic: true,
         skills: { select: { skillName: true } },
         placements: ACTIVE_PLACEMENTS_SELECT,
+        // Semesters with marks: the final-year marks gate reads them.
+        semesterMarks: SEMESTER_MARKS_SELECT,
       },
     });
 

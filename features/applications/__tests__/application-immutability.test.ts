@@ -90,6 +90,7 @@ import { applyToDrive } from "../actions/apply-to-drive";
 import { updateApplicationStage } from "../actions/update-application-stage";
 import { updateApplicationStageSchema } from "../schemas/application";
 import { validateStageTransition } from "../utils/application-progress";
+import { FINAL_YEAR_PASSOUT, REQUIRED_MARKS } from "@/features/drives/__tests__/final-year-fixtures";
 
 const DRIVE_ID = "clzzzzzzzzzzzzzzzzzzzzzzz";
 const APPLICATION_ID = "claaaaaaaaaaaaaaaaaaaaaaa";
@@ -112,6 +113,10 @@ const studentWithAcademic = {
   isPending: false,
   optedIn: true,
   placements: [],
+  // Final year, semesters 1–6 on record: the final-year requirements pass.
+  entryType: "REGULAR" as const,
+  expectedPassoutYear: FINAL_YEAR_PASSOUT,
+  semesterMarks: REQUIRED_MARKS,
   ...student,
   academic: { currentCGPA: 8.5, activeBacklogs: 0 },
 };

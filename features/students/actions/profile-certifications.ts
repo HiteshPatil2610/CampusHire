@@ -1,5 +1,6 @@
 "use server";
 
+import { afterStudentProfileSave } from "../domain/after-profile-save";
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { certificationSchema, type CertificationInput } from "../schemas/profile";
@@ -32,6 +33,10 @@ export async function addCertification(input: CertificationInput): Promise<Actio
         credentialUrl: validated.credentialUrl || null,
       },
     });
+
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
 
     return { success: true, certificationId: certification.id };
   } catch (error) {
@@ -90,6 +95,10 @@ export async function updateCertification(
       },
     });
 
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
+
     return { success: true, certificationId };
   } catch (error) {
     console.error("Update certification error:", error);
@@ -133,6 +142,10 @@ export async function removeCertification(certificationId: string): Promise<Acti
     await prisma.studentCertification.delete({
       where: { id: certificationId },
     });
+
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
 
     return { success: true };
   } catch (error) {

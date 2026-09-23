@@ -18,8 +18,12 @@ import { countActiveDrops } from "../utils/drop-count";
 import { prisma } from "@/lib/prisma";
 import { AuthorizationError, requireAnyRole, getActiveDepartmentAdmin } from "@/lib/auth";
 import { createAuditLogInTransaction } from "@/lib/audit";
+import { notifyNewlyEligibleDrives } from "@/features/notifications/domain/newly-eligible-drives";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/features/notifications/domain/newly-eligible-drives", () => ({
+  notifyNewlyEligibleDrives: vi.fn(),
+}));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -407,6 +411,37 @@ describe("dropStudent / undoStudentDrop", () => {
 
     expect(result).toEqual({ success: false, error: expect.stringContaining("48-hour undo window") });
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("a successful undo tells the student about drives they can apply to again", async () => {
+    vi.mocked(prisma.studentDrop.findUnique).mockResolvedValue(recordedDrop() as never);
+    vi.setSystemTime(new Date(SEPTEMBER.getTime() + 60 * 60 * 1000));
+
+    expect((await undoStudentDrop({ dropId: DROP_ID, reason: "Marked in error" })).success).toBe(true);
+    expect(notifyNewlyEligibleDrives).toHaveBeenCalledWith(STUDENT_ID);
+  });
+
+  it("a refused undo, or a drop, tells nobody anything", async () => {
+    vi.mocked(prisma.studentDrop.findUnique).mockResolvedValue(recordedDrop() as never);
+    vi.setSystemTime(new Date(SEPTEMBER.getTime() + DROP_UNDO_WINDOW_MS + 1));
+    await undoStudentDrop({ dropId: DROP_ID, reason: "Marked in error" });
+
+    vi.setSystemTime(SEPTEMBER);
+    await dropStudent({ studentId: STUDENT_ID, reason: "Year back after backlogs" });
+
+    expect(notifyNewlyEligibleDrives).not.toHaveBeenCalled();
+  });
+
+  it("a failed notification never undoes the undo", async () => {
+    vi.mocked(prisma.studentDrop.findUnique).mockResolvedValue(recordedDrop() as never);
+    vi.setSystemTime(new Date(SEPTEMBER.getTime() + 60 * 60 * 1000));
+    vi.mocked(notifyNewlyEligibleDrives).mockRejectedValueOnce(new Error("mail server down"));
+
+    expect(await undoStudentDrop({ dropId: DROP_ID, reason: "Marked in error" })).toEqual({
+      success: true,
+      dropId: DROP_ID,
+      newPassoutYear: 2026,
+    });
   });
 
   it("an undo raced by another undo rolls back", async () => {

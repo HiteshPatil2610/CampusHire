@@ -1,5 +1,6 @@
 "use server";
 
+import { afterStudentProfileSave } from "../domain/after-profile-save";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import {
@@ -78,6 +79,9 @@ export async function setMyPlacementOptIn(
     revalidatePath("/student-dashboard/settings");
     revalidatePath("/student-dashboard");
 
+    // Opting back in can make drives appear; re-check and tell them (Item 7).
+    await afterStudentProfileSave(student.id);
+
     return { success: true, optedIn: validated.data.optedIn };
   } catch (error) {
     console.error("setMyPlacementOptIn error:", error);
@@ -136,6 +140,9 @@ export async function setStudentPlacementOptIn(
     revalidatePath("/admin-dashboard/students");
     revalidatePath("/admin-dashboard");
     revalidatePath("/admin-dashboard/reports");
+
+    // The same re-check a student's own save runs (Item 7).
+    await afterStudentProfileSave(studentId);
 
     return { success: true, optedIn };
   } catch (error) {

@@ -1,5 +1,6 @@
 "use server";
 
+import { SEMESTER_MARKS_SELECT } from "@/features/drives/domain/eligibility-evaluator";
 import type { ApplicationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { AuthorizationError, requireDepartmentAdmin } from "@/lib/auth";
@@ -83,6 +84,8 @@ export async function getDriveStudents(driveId: string): Promise<DriveStudents> 
       academic: true,
       skills: { select: { skillName: true } },
       placements: ACTIVE_PLACEMENTS_SELECT,
+      // Semesters with marks: the final-year marks gate reads them.
+      semesterMarks: SEMESTER_MARKS_SELECT,
       applications: {
         where: { driveId: drive.id },
         select: { status: true, currentStage: { select: { name: true } } },

@@ -1,5 +1,6 @@
 "use server";
 
+import { afterStudentProfileSave } from "../domain/after-profile-save";
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { experienceSchema, type ExperienceInput } from "../schemas/profile";
@@ -32,6 +33,10 @@ export async function addExperience(input: ExperienceInput): Promise<ActionResul
         endDate: validated.endDate ? new Date(validated.endDate) : null,
       },
     });
+
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
 
     return { success: true, experienceId: experience.id };
   } catch (error) {
@@ -90,6 +95,10 @@ export async function updateExperience(
       },
     });
 
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
+
     return { success: true, experienceId };
   } catch (error) {
     console.error("Update experience error:", error);
@@ -133,6 +142,10 @@ export async function removeExperience(experienceId: string): Promise<ActionResu
     await prisma.studentExperience.delete({
       where: { id: experienceId },
     });
+
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
 
     return { success: true };
   } catch (error) {

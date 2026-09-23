@@ -2,7 +2,7 @@ import type { Drive } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deliverNotification } from "@/lib/notifications";
 import type { HasEligibleDepartmentLinks } from "@/features/drives/utils/eligible-departments";
-import { formatPackage } from "@/features/drives/utils/format-package";
+import { driveAvailableDedupeKey, driveAvailableNotification } from "../domain/newly-eligible-drives";
 import { runNotificationDispatch } from "../domain/dispatch";
 import { loadDriveForAudience, resolveDriveAudience } from "../domain/drive-recipients";
 
@@ -52,7 +52,7 @@ export async function fanOutDrivePublished(
   dispatchId: string
 ): Promise<number> {
   const audience = await resolveDriveAudience(drive, departmentIds);
-  const packageText = formatPackage(drive);
+
   let delivered = 0;
 
   // One delivery per department: each has its own role title and deadline,
@@ -67,12 +67,10 @@ export async function fanOutDrivePublished(
       event: "DRIVE_PUBLISHED",
       role: "STUDENT",
       recipients,
-      content: {
-        title: "New Drive Available",
-        message: `${drive.companyName} is hiring for ${resolved.roleName} · ${packageText}`,
-        actionUrl: `/student-dashboard/drives/${drive.id}`,
-      },
-      dedupeKey: `drive-published:${drive.id}`,
+      content: driveAvailableNotification(drive, resolved.roleName),
+      // Shared with the profile-save re-check: one notification per student
+      // per drive, whichever reaches them first.
+      dedupeKey: driveAvailableDedupeKey(drive.id),
       resourceType: "Drive",
       resourceId: drive.id,
       expiresAt: resolved.applicationDeadline,

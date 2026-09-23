@@ -1,5 +1,6 @@
 "use server";
 
+import { SEMESTER_MARKS_SELECT } from "@/features/drives/domain/eligibility-evaluator";
 import { prisma } from "@/lib/prisma";
 import { requireStudent } from "@/lib/auth";
 import { applyToDriveSchema } from "../schemas/application";
@@ -134,6 +135,8 @@ export async function applyToDrive(
         projects: { select: { title: true } },
         certifications: { select: { certificationName: true } },
         placements: ACTIVE_PLACEMENTS_SELECT,
+        // Semesters with marks: the final-year marks gate reads them.
+        semesterMarks: SEMESTER_MARKS_SELECT,
       },
     });
 

@@ -85,6 +85,7 @@ import {
   stableStringify,
 } from "../utils/application-snapshot";
 import type { EligibilityRuleInput } from "@/features/drives/domain/eligibility-rules";
+import { FINAL_YEAR_PASSOUT, REQUIRED_MARKS } from "@/features/drives/__tests__/final-year-fixtures";
 
 const DRIVE_ID = "clzzzzzzzzzzzzzzzzzzzzzzz";
 const CSE = "dept-cse";
@@ -129,8 +130,8 @@ function cseInstance(extra: Record<string, unknown> = {}) {
     maxActiveBacklogs: null,
     applicationFields: null,
     formFields: [...cseForm],
-    // CSE targets the 2026 batch only.
-    eligibilityRules: [rule("BATCH_YEAR", "IN", ["2026"])],
+    // CSE targets the final-year batch only.
+    eligibilityRules: [rule("BATCH_YEAR", "IN", [String(FINAL_YEAR_PASSOUT)])],
     venue: null,
     reportingTime: null,
     coordinatorName: null,
@@ -186,7 +187,9 @@ function student(extra: Record<string, unknown> = {}, academic: Record<string, u
     isPending: false,
     optedIn: true,
     entryType: "REGULAR",
-    expectedPassoutYear: 2026,
+    expectedPassoutYear: FINAL_YEAR_PASSOUT,
+    // Semesters 1–6 on record: the final-year marks requirement is met.
+    semesterMarks: REQUIRED_MARKS,
     dateOfBirth: new Date("2004-01-01"),
     address: "Should never reach a snapshot",
     department: { code: "CSE" },
@@ -285,7 +288,7 @@ describe("a valid application", () => {
     const snap = storedSnapshot();
 
     expect(snap.academic).toMatchObject({ currentCGPA: 8.2, activeBacklogs: 0 });
-    expect(snap.student).toMatchObject({ expectedPassoutYear: 2026, departmentCode: "CSE", rollNumber: "CS-001" });
+    expect(snap.student).toMatchObject({ expectedPassoutYear: FINAL_YEAR_PASSOUT, departmentCode: "CSE", rollNumber: "CS-001" });
     expect(snap.placement).toEqual({ activePlacementCount: 0, placed: false });
     expect(snap.eligibility.eligible).toBe(true);
     // The master's CGPA and backlog rules, and CSE's own batch rule.
@@ -451,7 +454,7 @@ describe("the server refuses", () => {
   });
 
   it("a student outside the targeted batch", async () => {
-    vi.mocked(prisma.student.findUnique).mockResolvedValue(student({ expectedPassoutYear: 2025 }) as never);
+    vi.mocked(prisma.student.findUnique).mockResolvedValue(student({ expectedPassoutYear: FINAL_YEAR_PASSOUT - 1 }) as never);
     const result = await refused();
     expect(result.error).toMatch(/not eligible/i);
   });

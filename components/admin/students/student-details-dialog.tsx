@@ -18,6 +18,8 @@ import {
 import { StudentPlacementPanel } from './student-placement-panel';
 import { StudentAcademicPanel } from './student-academic-panel';
 import { formatBatch } from '@/features/students/utils/batch';
+import { preCollegePercentage } from '@/features/students/utils/entry-type';
+import { StudentProfileSections } from './student-profile-sections';
 
 interface StudentDetailsDialogProps {
   studentId: string | null; // null = closed
@@ -80,6 +82,8 @@ export function StudentDetailsDialog({
   const student = profile?.student;
   const academic = profile?.academic;
   const skills = profile?.skills || [];
+  // 12th for a regular student, diploma for a lateral-entry one.
+  const preCollege = student ? preCollegePercentage(student.entryType, academic ?? null) : null;
 
   // Calculate profile completion
   const profileCompletion = profile
@@ -470,7 +474,10 @@ export function StudentDetailsDialog({
                     <span style={{ color: 'var(--text-secondary)' }}>
                       12th / Diploma %:
                     </span>
-                    <span>{academic?.twelfthPercentage ?? '—'}%</span>
+                    {/* Whichever the student's entry type has: 12th, or diploma for lateral entry. */}
+                    <span>
+                      {preCollege === null ? '—' : `${preCollege}%`}
+                    </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--text-secondary)' }}>
@@ -589,6 +596,9 @@ export function StudentDetailsDialog({
                 </div>
               </div>
             )}
+
+            {/* Everything else on the student's profile: results, records, projects… */}
+            {profile && <StudentProfileSections profile={profile} />}
           </div>
         )}
       </DialogContent>

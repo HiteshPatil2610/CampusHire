@@ -55,10 +55,61 @@ Update this file after every meaningful implementation change.
 - All V1 frontend integration units complete ✅
 - ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 1214 tests pass, 0 failures (after the once-a-year drop rule).
+- Current baseline: 1256 tests pass, 0 failures (after the July 1 / undo notifications).
 
 ## Completed
 
+- **PHASE 5 — One eligibility engine: final year, marks, profile-save
+  re-check (Items 7, 8) (CODE COMPLETE — no migration; not browser-verified,
+  not built):**
+  - **One engine, extended — not a second one.** `evaluateEligibility`
+    (`domain/eligibility-evaluator.ts`) is still the only decision, used by
+    the drive list, detail page, dashboard, `applyToDrive`, the publish
+    fan-out, the admin lists and now the profile-save re-check. Pipeline:
+    standing → department → window → batch → final year → required marks →
+    other rules. Returns `eligible`, `codes` (WRONG_DEPARTMENT, WRONG_BATCH,
+    WRONG_SEMESTER, MISSING_REQUIRED_MARKS, BELOW_CGPA, ACTIVE_BACKLOG_LIMIT,
+    APPLICATION_NOT_OPEN, APPLICATION_CLOSED, MISSING_ACADEMIC_RECORD,
+    CRITERIA_NOT_MET, standing codes), `reasons` (the student's own record
+    only), `requirements`, `results`.
+  - **Item 8:** final year = `yearLevelFor(expectedPassoutYear, now)` is
+    FOURTH_YEAR (semester 7 or 8) — from the admin-imported batch and the
+    July 1 cycle, so promotion and drops change it with no write; the
+    self-typed `currentSemester` is not used for this. Required marks:
+    `SemesterMark` rows for semesters 1–6 (3–6 for lateral entry). Applies to
+    every drive. Shown on the student's checklist and kept in the
+    application snapshot.
+  - **Item 7:** every student profile action (personal, academic, semester
+    marks, skills, projects, experience, certifications, preferences, photo,
+    the three list syncs) and both opt-in changes call
+    `afterStudentProfileSave` → `notifyNewlyEligibleDrives`: SQL candidates
+    (`domain/student-drive-candidates.ts`, shared with `getEligibleDrives`) →
+    exact evaluation → "New Drive Available". Idempotent by the existing
+    unique (userId, dedupeKey) with key `drive-published:<driveId>`, shared
+    with the publish fan-out: one notification per student per drive, ever.
+    Best-effort; never fails the save.
+  - **Tests:** 1240 pass. New matrix (26: all 15 requested cases plus
+    diploma, graduated, typed-semester, ordering, SQL shape, no account,
+    failure isolation); every eligibility fixture moved to a final-year
+    batch with marks (`__tests__/final-year-fixtures.ts`, relative to the
+    real cycle). 12/12 mutations caught. `tsc`, lint clean.
+  - **Decided by the owner (2026-09-24):** (1) Semester 8 — no automatic
+    semester-7 requirement; admins remind students when results are due, so
+    1–6 stays the rule. (2) Uploaded marks count without verification; the
+    department admin's student dialog now shows the whole profile
+    (`StudentProfileSections`: semester results with grade cards and
+    Verified/Uploaded, missing semesters, academic record with the right
+    12th/diploma branch, personal details, projects, experience,
+    certifications, preferences; non-web links never rendered). (3) Yes: the July 1 changeover and an undone drop also send "New Drive
+    Available" — `notifyNewlyEligibleDrivesForBatch` for the new final-year
+    batch, run by `ensureAcademicCutoverRecorded` on the visit that records
+    the cycle (and by `scripts/record-academic-cutover.ts`, which re-runs it
+    safely), and `notifyNewlyEligibleDrives` after `undoStudentDrop`. Same
+    dedupe key, so still once per student per drive; best-effort. Note: it
+    fires when the cycle is recorded — the first Super Admin dashboard visit
+    after July 1, or the cron — not at midnight. **Still open:** (4) Production impact: the 3 existing students have no batch or
+    marks, so they see no drives until imported with a batch and they upload
+    semesters 1–6.
 - **Drop is the department admin's only; roster Drop button and year filter
   (owner request):** `dropStudent`, `undoStudentDrop` and
   `getStudentAcademicRecord` now accept DEPT_ADMIN only (own department) — the

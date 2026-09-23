@@ -1,5 +1,6 @@
 "use server";
 
+import { afterStudentProfileSave } from "../domain/after-profile-save";
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { personalInfoSchema, type PersonalInfoInput } from "../schemas/profile";
@@ -66,6 +67,10 @@ export async function updatePersonalInfo(input: PersonalInfoInput): Promise<Acti
         portfolioUrl: validated.portfolioUrl || null,
       },
     });
+
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
 
     return { success: true };
   } catch (error) {

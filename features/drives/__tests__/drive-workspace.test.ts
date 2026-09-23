@@ -33,6 +33,7 @@ import { getApplicationStageHistory } from "@/features/applications/queries/get-
 import { getDrivePlacements } from "@/features/students/queries/get-drive-placements";
 import { getDriveOperationsActivity } from "../queries/get-drive-operations-activity";
 import { getGlobalPlacements } from "@/features/students/queries/get-global-placements";
+import { FINAL_YEAR_PASSOUT, REQUIRED_MARKS } from "./final-year-fixtures";
 
 const DRIVE_ID = "drive-1";
 const CSE = "dept-cse";
@@ -64,7 +65,7 @@ const drive = (extra: object = {}) => ({
   lifecycleStatus: "PUBLISHED",
   eligibleDepartmentLinks: [{ departmentId: CSE }],
   eligibilityRules: [
-    { ruleType: "BATCH_YEAR", operator: "IN", numberValue: null, listValue: ["2027"] },
+    { ruleType: "BATCH_YEAR", operator: "IN", numberValue: null, listValue: [String(FINAL_YEAR_PASSOUT)] },
   ],
   departmentConfigs: [{ roleName: null, eligibilityRules: [] }],
   ...extra,
@@ -74,7 +75,8 @@ const student = (id: string, over: object = {}) => ({
   id,
   name: `Student ${id}`,
   rollNumber: `R${id}`,
-  expectedPassoutYear: 2027,
+  // Final year, semesters 1–6 on record: the final-year requirements pass.
+  expectedPassoutYear: FINAL_YEAR_PASSOUT,
   userId: `user-${id}`,
   departmentId: CSE,
   isPending: false,
@@ -92,6 +94,7 @@ const student = (id: string, over: object = {}) => ({
   },
   skills: [],
   placements: [],
+  semesterMarks: REQUIRED_MARKS,
   applications: [],
   ...over,
 });
@@ -108,7 +111,7 @@ describe("getDriveStudents", () => {
     vi.mocked(prisma.student.findMany).mockResolvedValue([
       student("1"),
       student("2", { placements: [{ id: "p1", revokedAt: null }] }),
-      student("3", { expectedPassoutYear: 2026 }),
+      student("3", { expectedPassoutYear: FINAL_YEAR_PASSOUT - 1 }),
       student("4", { academic: null }),
     ] as never);
 
@@ -120,7 +123,7 @@ describe("getDriveStudents", () => {
     expect(byId["3"].eligibility).toBe("INELIGIBLE");
     expect(byId["3"].reason).toBeTruthy();
     expect(byId["4"]).toMatchObject({ eligibility: "INELIGIBLE", reason: "Academic information not completed" });
-    expect(result.batchYears).toEqual([2027, 2026]);
+    expect(result.batchYears).toEqual([FINAL_YEAR_PASSOUT, FINAL_YEAR_PASSOUT - 1]);
   });
 
   it("carries the application's status and stage", async () => {

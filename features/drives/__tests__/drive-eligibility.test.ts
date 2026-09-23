@@ -4,6 +4,7 @@ import type { HasEligibleDepartmentLinks } from "../utils/eligible-departments";
 import { legacyMasterRules, type EligibilityRuleInput } from "../domain/eligibility-rules";
 import { Prisma } from "@prisma/client";
 import type { Drive, Student, StudentAcademic } from "@prisma/client";
+import { FINAL_YEAR_PASSOUT, REQUIRED_MARKS } from "./final-year-fixtures";
 
 // Helper to create mock student
 function createMockStudent(
@@ -12,6 +13,7 @@ function createMockStudent(
   academic: StudentAcademic;
   skills: { skillName: string }[];
   placements: { revokedAt: Date | null }[];
+  semesterMarks: { semester: number }[];
 } {
   const baseStudent: Student = {
     id: "student-1",
@@ -35,7 +37,8 @@ function createMockStudent(
     dateOfBirth: null,
     address: null,
     personalEmail: null,
-    expectedPassoutYear: 2025,
+    // Final year: the final-year requirement passes.
+    expectedPassoutYear: FINAL_YEAR_PASSOUT,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -70,6 +73,8 @@ function createMockStudent(
     skills: [],
     // Not placed: standing passes and the rules are evaluated.
     placements: [],
+    // Semesters 1–6 on record: the marks requirement passes.
+    semesterMarks: REQUIRED_MARKS,
   };
 }
 

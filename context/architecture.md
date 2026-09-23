@@ -447,9 +447,38 @@ DriveEligibilityRule { driveId? | driveDepartmentConfigId?, ruleType, operator,
   server-loaded rows; nothing in a request is ever evaluated. The facade types
   *require* the student's skills and the drive's resolved rule set, so a caller
   that forgot to load either does not compile.
+- **The pipeline (Phase 5, Items 7–8)** — `evaluateEligibility` decides, in
+  order: standing (approved, not placed, opted in; stops) → department
+  (stops) → application window (when the caller asks; `getDriveStatus`) →
+  batch (the BATCH_YEAR rule, on `expectedPassoutYear`) → **final year**:
+  semester 7 or 8, i.e. `yearLevelFor(expectedPassoutYear, now)` is
+  FOURTH_YEAR — derived from the batch and the July 1 cycle, never from the
+  semester a student types, so a promotion or a drop moves it with no write →
+  **required marks**: `SemesterMark` rows for semesters 1–6 (3–6 for lateral
+  entry; `FINAL_YEAR_REQUIRED_MARKS_THROUGH`) → every other rule. It returns
+  `eligible`, stable `codes` (WRONG_DEPARTMENT, WRONG_BATCH, WRONG_SEMESTER,
+  MISSING_REQUIRED_MARKS, BELOW_CGPA, ACTIVE_BACKLOG_LIMIT,
+  APPLICATION_NOT_OPEN / _CLOSED, …), the student-facing `reasons`, the
+  `requirements` and the rule `results`. The checklist and the application
+  snapshot show the requirements beside the rules. Semester 8's extra marks
+  requirement (semester 7) is not confirmed and not enforced.
+- **Profile save re-checks (Item 7).** Every student profile action (and
+  either opt-in change) calls `afterStudentProfileSave` after it commits:
+  `notifyNewlyEligibleDrives` loads the student's department's published
+  drives (`domain/student-drive-candidates.ts`, shared with the drive list),
+  decides each exactly, and delivers "New Drive Available" with dedupe key
+  `drive-published:<driveId>` — the publish fan-out's key — so the
+  (userId, dedupeKey) unique index makes it one notification per student per
+  drive, however many saves or publishes. Visibility needs no write: the list
+  evaluates on every read. Best-effort: a failure never fails the save.
+  The same notification goes out when eligibility changes without a save:
+  the new final-year batch when the July 1 cycle is recorded
+  (`notifyNewlyEligibleDrivesForBatch`, from `ensureAcademicCutoverRecorded`
+  and the cutover script), and a student whose drop is undone.
 - **SQL narrows on membership and lifecycle only** — assigned to the student's
-  department, instance PUBLISHED, master not ARCHIVED — and loads both rule
-  sets in the same query. Every rule is decided in JS on the resolved set.
+  department, instance PUBLISHED, master not ARCHIVED or CANCELLED
+  (`studentDriveCandidateWhere`) — and loads both rule sets in the same query.
+  Every rule is decided in JS on the resolved set.
 - **Locked with the instance.** A published instance's rule set cannot change
   (compared as a set, order and list-case insensitive); the master's extra
   default rules freeze once any department has published.

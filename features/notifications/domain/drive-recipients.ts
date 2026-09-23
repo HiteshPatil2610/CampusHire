@@ -1,3 +1,4 @@
+import { SEMESTER_MARKS_SELECT } from "@/features/drives/domain/eligibility-evaluator";
 import type { Drive } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -83,6 +84,8 @@ export async function resolveDriveAudience(
       academic: true,
       skills: { select: { skillName: true } },
       placements: ACTIVE_PLACEMENTS_SELECT,
+      // Semesters with marks: the final-year marks gate reads them.
+      semesterMarks: SEMESTER_MARKS_SELECT,
     },
   });
 

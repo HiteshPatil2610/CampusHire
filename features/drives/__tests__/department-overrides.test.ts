@@ -111,6 +111,7 @@ import { getEligibleDrives } from "../queries/get-eligible-drives";
 import { applyToDrive } from "@/features/applications/actions/apply-to-drive";
 import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/notify-eligible-students-of-drive";
 import { primeDeliveryMocks } from "@/features/notifications/__tests__/delivery-test-helpers";
+import { FINAL_YEAR_PASSOUT, REQUIRED_MARKS } from "./final-year-fixtures";
 
 const CSE = "dept-cse";
 const IT = "dept-it";
@@ -238,6 +239,10 @@ function student(departmentId: string, currentCGPA: number) {
     isPending: false,
     optedIn: true,
     placements: [] as { revokedAt: Date | null }[],
+    // Final year, semesters 1–6 on record: the final-year requirements pass.
+    entryType: "REGULAR" as const,
+    expectedPassoutYear: FINAL_YEAR_PASSOUT,
+    semesterMarks: REQUIRED_MARKS,
     academic: { currentCGPA, activeBacklogs: 0 },
     skills: [] as { skillName: string }[],
     // What the application form's profile fields read.
@@ -694,6 +699,7 @@ describe("getEligibleDrives — the department's bar, not the master's", () => {
     vi.mocked(prisma.student.findUnique).mockResolvedValue({
       academic: s.academic,
       skills: s.skills,
+      semesterMarks: s.semesterMarks,
     } as never);
     vi.mocked(prisma.drive.findMany).mockResolvedValue([
       { ...master, departmentConfigs: [inst] },

@@ -70,6 +70,7 @@ import { withActivePipeline } from "@/features/recruitment/__tests__/pipeline-fi
 beforeEach(() => withActivePipeline(prisma));
 import { requireStudent } from "@/lib/auth";
 import { checkApplicationExists } from "../queries/check-application-exists";
+import { FINAL_YEAR_PASSOUT, REQUIRED_MARKS } from "@/features/drives/__tests__/final-year-fixtures";
 
 /** A published department instance that overrides nothing. */
 const publishedInstance = {
@@ -135,7 +136,9 @@ describe("applyToDrive", () => {
     dateOfBirth: null,
     address: null,
     personalEmail: null,
-    expectedPassoutYear: 2025,
+    // Final year, semesters 1–6 on record: the final-year requirements pass.
+    expectedPassoutYear: FINAL_YEAR_PASSOUT,
+    semesterMarks: REQUIRED_MARKS,
     // Not placed: the evaluator's standing check passes.
     placements: [] as { revokedAt: Date | null }[],
     createdAt: new Date(),

@@ -1,5 +1,6 @@
 "use server";
 
+import { afterStudentProfileSave } from "../domain/after-profile-save";
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { skillSchema, type SkillInput } from "../schemas/profile";
@@ -48,6 +49,10 @@ export async function addSkill(input: SkillInput): Promise<ActionResult> {
       },
     });
 
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
+
     return { success: true };
   } catch (error) {
     console.error("Add skill error:", error);
@@ -91,6 +96,10 @@ export async function removeSkill(skillId: string): Promise<ActionResult> {
     await prisma.studentSkill.delete({
       where: { id: skillId },
     });
+
+    // Item 7: re-check drive eligibility now; tell the student about new ones.
+
+    await afterStudentProfileSave(student.id);
 
     return { success: true };
   } catch (error) {

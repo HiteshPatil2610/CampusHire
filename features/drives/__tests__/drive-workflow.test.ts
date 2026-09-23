@@ -98,6 +98,7 @@ import {
   cancelMasterDrive,
 } from "../actions/cancel-drive";
 import { getDepartmentDrivePreview } from "../queries/get-department-drive-preview";
+import { studentDriveCandidateWhere } from "../domain/student-drive-candidates";
 
 const DRIVE_ID = "drive-1";
 const CSE = "dept-cse";
@@ -719,9 +720,11 @@ describe("cancellation", () => {
     const apply = readFileSync(join(__dirname, "../../applications/actions/apply-to-drive.ts"), "utf8");
     expect(apply).toMatch(/instance\.status !== "PUBLISHED"/);
     expect(apply).toMatch(/lifecycleStatus === "CANCELLED"/);
-    const listing = readFileSync(join(__dirname, "../queries/get-eligible-drives.ts"), "utf8");
-    expect(listing).toMatch(/status: "PUBLISHED"/);
-    expect(listing).toMatch(/notIn: \["ARCHIVED", "CANCELLED"\]/);
+    // The student's drive list and the profile-save re-check share one filter.
+    expect(studentDriveCandidateWhere(CSE)).toMatchObject({
+      departmentConfigs: { some: { departmentId: CSE, status: "PUBLISHED" } },
+      lifecycleStatus: { notIn: ["ARCHIVED", "CANCELLED"] },
+    });
   });
 });
 

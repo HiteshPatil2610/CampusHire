@@ -1,3 +1,4 @@
+import { SEMESTER_MARKS_SELECT } from '@/features/drives/domain/eligibility-evaluator';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireStudent, AuthorizationError } from '@/lib/auth';
@@ -47,6 +48,8 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
       certifications: { select: { certificationName: true } },
       // Active placements — what the evaluator checks first.
       placements: ACTIVE_PLACEMENTS_SELECT,
+      // Semesters with marks: the final-year marks gate reads them.
+      semesterMarks: SEMESTER_MARKS_SELECT,
     },
   });
 
@@ -143,7 +146,17 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
   // Every rule this department applies, each evaluated by the same engine that
   // decided whether this page was visible at all. This replaced two inline
   // CGPA/backlog comparisons that could have disagreed with the real decision.
-  const ruleResults = evaluateStudentForDrive(studentWithAcademic, drive).results;
+  // The final-year and marks requirements (Item 8) sit between the batch and
+  // the drive's other rules — the order the evaluator decides in.
+  const evaluation = evaluateStudentForDrive(studentWithAcademic, drive);
+  const toRow = (key: string, row: { passed: boolean; description: string; actual: string | null; reason: string | null }) => ({ key, ...row });
+  const ruleRows = evaluation.results.map((result) => toRow(`${result.rule.ruleType}:${result.rule.operator}`, result));
+  const batchRows = ruleRows.filter((row) => row.key.startsWith('BATCH_YEAR:'));
+  const checklistRows = [
+    ...batchRows,
+    ...evaluation.requirements.map((requirement) => toRow(requirement.code, requirement)),
+    ...ruleRows.filter((row) => !row.key.startsWith('BATCH_YEAR:')),
+  ];
 
   // Eligible departments, from the DriveEligibleDepartment relation
   const eligibleDeptIds = drive.eligibleDepartmentLinks.map((link) => link.departmentId);
@@ -335,10 +348,10 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
         </h2>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* One row per rule this department applies */}
-          {ruleResults.map((result) => (
+          {/* Batch, final year, marks, then every other rule this department applies */}
+          {checklistRows.map((result) => (
             <div
-              key={`${result.rule.ruleType}:${result.rule.operator}`}
+              key={result.key}
               style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}
             >
               <span
