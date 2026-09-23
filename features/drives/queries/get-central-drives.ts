@@ -66,7 +66,7 @@ export async function getCentralDrives(
     prisma.drive.count({ where }),
     prisma.drive.findMany({
       where,
-      orderBy: [{ driveDate: "asc" }],
+      orderBy: [{ nextStageDate: "asc" }],
       skip,
       take: pageSize,
       include: {
@@ -77,17 +77,17 @@ export async function getCentralDrives(
     }),
   ]);
 
-  // Open drives first, then by soonest drive date — status is always computed,
+  // Open drives first, then by soonest next stage date — status is always computed,
   // never stored.
   const sorted = [...drives].sort((a, b) => {
-    const aOpen = getDriveStatus(a.applicationDeadline) === "open";
-    const bOpen = getDriveStatus(b.applicationDeadline) === "open";
+    const aOpen = getDriveStatus(a) === "open";
+    const bOpen = getDriveStatus(b) === "open";
 
     if (aOpen !== bOpen) {
       return aOpen ? -1 : 1;
     }
 
-    return a.driveDate.getTime() - b.driveDate.getTime();
+    return a.nextStageDate.getTime() - b.nextStageDate.getTime();
   });
 
   return {
@@ -99,4 +99,18 @@ export async function getCentralDrives(
     pageSize,
     totalCount,
   };
+}
+
+/**
+ * The Super Admin dashboard's "Central drives" card: drives the Super Admin
+ * posted, newest first. Filtered by origin (`isCentralDrive`), so a drive a
+ * department posted for itself never appears here (Item 16).
+ */
+export async function getRecentCentralDrives() {
+  await requireSuperAdmin();
+  return prisma.drive.findMany({
+    where: { isCentralDrive: true },
+    orderBy: { createdAt: "desc" },
+    include: { department: true, ...eligibleDepartmentLinksInclude },
+  });
 }

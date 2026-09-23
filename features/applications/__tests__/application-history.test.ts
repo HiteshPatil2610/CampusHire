@@ -23,7 +23,7 @@ describe("getMyApplications", () => {
     jobDescriptionUrl: null,
     packageOffered: new Prisma.Decimal("12.00"),
     selectionRounds: JSON.stringify(["Aptitude", "Technical", "HR"]),
-    driveDate: new Date("2026-12-01"),
+    nextStageDate: new Date("2026-12-01"),
     applicationDeadline: new Date("2026-11-15"),
     applyMethod: "IN_APP" as const,
     externalApplyUrl: null,

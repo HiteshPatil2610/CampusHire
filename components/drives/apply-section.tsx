@@ -9,7 +9,8 @@ import type { WithSerializedPackage } from '@/features/drives/utils/serialize-dr
 interface ApplySectionProps {
   /** This department's resolved drive, package serialised for the client. */
   drive: WithSerializedPackage<Drive>;
-  driveStatus: 'open' | 'closed';
+  /** From getDriveStatus: not open yet, taking applications, or ended. */
+  driveStatus: 'upcoming' | 'open' | 'closed';
   hasApplied: boolean;
   /**
    * This department's application form with the student's profile values —
@@ -85,6 +86,29 @@ export function ApplySection({
           <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
             You have successfully applied to this drive
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Applications not open yet
+  if (driveStatus === 'upcoming') {
+    return (
+      <div
+        style={{
+          padding: 16,
+          borderRadius: 8,
+          border: '1px solid var(--border)',
+          background: 'var(--surface-1)',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+          Applications Not Open Yet
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+          Applications open on{' '}
+          {new Date(drive.applicationStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
         </div>
       </div>
     );

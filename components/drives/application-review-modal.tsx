@@ -19,7 +19,7 @@ import type {
   ApplicationReviewData,
   ReviewField,
 } from '@/features/applications/utils/application-review-fields';
-import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
+import { formatDeadline, formatNextStageDate } from '@/lib/drive-date-helpers';
 import { useToast } from '@/hooks/use-toast';
 
 import { formatPackage } from '@/features/drives/utils/format-package';
@@ -266,7 +266,7 @@ export default function ApplicationReviewModal({
               {packageText})
             </div>
             <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-              Drive Date: {formatDriveDate(drive.driveDate)} · Deadline:{' '}
+              Next Stage Date: {formatNextStageDate(drive.nextStageDate)} · Deadline:{' '}
               {formatDeadline(drive.applicationDeadline)}
             </div>
           </div>

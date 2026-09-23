@@ -1,70 +1,91 @@
-/**
- * Drive status types
- * A drive is either "open" (accepting applications) or "closed" (deadline passed)
- */
-export type DriveStatus = "open" | "closed";
+import type { Prisma } from "@prisma/client";
 
 /**
- * Calculate drive status based on application deadline
- * 
- * IMPORTANT: Drive status is NEVER stored in the database.
- * It is always calculated dynamically from the applicationDeadline.
- * 
- * @param applicationDeadline - The deadline for applications
- * @returns "open" if deadline hasn't passed, "closed" if it has
+ * Whether a drive is taking applications — the ONE place this is decided.
+ *
+ * A drive's application window runs from its Application Start Date to its
+ * Application End Date (`applicationDeadline`), both inclusive:
+ *
+ *   open  ⇔  applicationStartDate <= now <= applicationDeadline
+ *
+ * Never stored (invariant 7) and never computed inline elsewhere: screens,
+ * actions, queries and notifications call these functions, and a database
+ * query uses `openApplicationWhere`, which states the same rule for SQL. The
+ * Next Stage Date (formerly "Drive Date") plays no part in it — it only says
+ * when the next round is held.
+ *
+ * Accepts `Date` or the string a Date becomes on its way into a client
+ * component, so one helper serves both sides.
  */
-export function getDriveStatus(applicationDeadline: Date): DriveStatus {
-  const now = new Date();
-  return now < applicationDeadline ? "open" : "closed";
+
+type DateLike = Date | string;
+
+export interface ApplicationWindow {
+  applicationStartDate: DateLike;
+  applicationDeadline: DateLike;
 }
 
-/**
- * Check if a drive is currently open for applications
- *
- * @param applicationDeadline - The deadline for applications
- * @returns true if drive is open, false if closed
- */
-export function isDriveOpen(applicationDeadline: Date): boolean {
-  return getDriveStatus(applicationDeadline) === "open";
-}
+/** upcoming: not open yet · open: taking applications · closed: ended. */
+export type DriveStatus = "upcoming" | "open" | "closed";
 
-/**
- * Display status shown on drive cards, which distinguishes a drive whose
- * application window has closed but which has not been held yet ("upcoming")
- * from one that is fully over ("closed").
- *
- * Like getDriveStatus, this is always computed and never stored.
- */
-export type DriveDisplayStatus = "open" | "upcoming" | "closed";
+const toTime = (value: DateLike): number => new Date(value).getTime();
 
-export function getDriveDisplayStatus(
-  applicationDeadline: Date,
-  driveDate: Date
-): DriveDisplayStatus {
-  const now = new Date();
+/** Where `now` falls against a drive's application window. */
+export function getDriveStatus(window: ApplicationWindow, now: Date = new Date()): DriveStatus {
+  const start = toTime(window.applicationStartDate);
+  const end = toTime(window.applicationDeadline);
+  const at = now.getTime();
 
-  if (now < applicationDeadline) {
-    return "open";
-  }
-
-  // Applications have closed, but the drive itself is still ahead
-  if (now < driveDate) {
-    return "upcoming";
-  }
-
+  // An unreadable window is never open.
+  if (Number.isNaN(start) || Number.isNaN(end)) return "closed";
+  if (at < start) return "upcoming";
+  if (at <= end) return "open";
   return "closed";
 }
 
+export function isDriveOpen(window: ApplicationWindow, now: Date = new Date()): boolean {
+  return getDriveStatus(window, now) === "open";
+}
+
 /**
- * Get days remaining until application deadline
- * 
- * @param applicationDeadline - The deadline for applications
- * @returns number of days remaining (0 if deadline passed, can be decimal)
+ * The same rule as a Prisma filter on the master `Drive` row: start has
+ * passed, end has not. A department's overridden deadline lives on its
+ * instance, so a query that must honour overrides narrows with this and
+ * decides exactly with `getDriveStatus` on the resolved drive.
  */
-export function getDaysUntilDeadline(applicationDeadline: Date): number {
-  const now = new Date();
-  const deadline = new Date(applicationDeadline);
-  const diffMs = deadline.getTime() - now.getTime();
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-  return Math.max(0, diffDays);
+export function openApplicationWhere(now: Date = new Date()): Prisma.DriveWhereInput {
+  return { applicationStartDate: { lte: now }, applicationDeadline: { gte: now } };
+}
+
+/**
+ * The same rule as raw SQL, for the reports that aggregate in Postgres.
+ * `alias` is the Drive table's alias in the query ("" for none).
+ */
+export function openApplicationSql(alias = ""): string {
+  const column = (name: string) => (alias ? `${alias}."${name}"` : `"${name}"`);
+  return `${column("applicationStartDate")} <= NOW() AND ${column("applicationDeadline")} >= NOW()`;
+}
+
+/**
+ * A drive's status as a student reads it on a card:
+ *   upcoming     applications have not opened yet
+ *   open         taking applications
+ *   in-progress  applications closed; the next stage is still ahead
+ *   closed       applications closed and the next stage has passed
+ */
+export type DriveDisplayStatus = "upcoming" | "open" | "in-progress" | "closed";
+
+export function getDriveDisplayStatus(
+  drive: ApplicationWindow & { nextStageDate: DateLike },
+  now: Date = new Date()
+): DriveDisplayStatus {
+  const status = getDriveStatus(drive, now);
+  if (status !== "closed") return status;
+  return now.getTime() < toTime(drive.nextStageDate) ? "in-progress" : "closed";
+}
+
+/** Days until applications close (0 once they have; can be fractional). */
+export function getDaysUntilDeadline(applicationDeadline: DateLike, now: Date = new Date()): number {
+  const diffMs = toTime(applicationDeadline) - now.getTime();
+  return Math.max(0, diffMs / (1000 * 60 * 60 * 24));
 }

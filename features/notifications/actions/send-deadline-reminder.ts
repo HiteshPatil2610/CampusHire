@@ -12,6 +12,7 @@ import {
   resolveDriveAudience,
 } from "../domain/drive-recipients";
 import { startOfIndianDay } from "../domain/application-event";
+import { isDriveOpen } from "@/features/drives/utils/drive-status";
 
 /**
  * Remind the students who can still apply.
@@ -45,7 +46,8 @@ export async function fanOutDeadlineReminder(
 
   const audience = await resolveDriveAudience(drive, [payload.departmentId]);
   const resolved = audience.resolvedByDepartment.get(payload.departmentId);
-  if (!resolved || resolved.applicationDeadline <= new Date()) return 0;
+  // Only a drive taking applications now: not one that has closed or not opened.
+  if (!resolved || !isDriveOpen(resolved)) return 0;
 
   const applied = new Set(
     (await applicantRecipients(payload.driveId, [payload.departmentId])).map((row) => row.userId)

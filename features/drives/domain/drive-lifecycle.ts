@@ -128,7 +128,7 @@ export const LOCKED_DEPARTMENT_DRIVE_FIELDS = [
   "jobDescriptionText",
   "requirements",
   "skills",
-  "driveDate",
+  "nextStageDate",
   "applicationDeadline",
   "selectionRounds",
   "minCGPA",
@@ -168,7 +168,7 @@ export const DEPARTMENT_EDITABLE_FIELDS = [
   "jobDescriptionText",
   "requirements",
   "skills",
-  "driveDate",
+  "nextStageDate",
   "applicationDeadline",
 ] as const;
 
@@ -179,8 +179,8 @@ export const DEPARTMENT_EDITABLE_FIELD_LABELS: Record<DepartmentEditableField, s
   jobDescriptionText: "Job description",
   requirements: "Requirements",
   skills: "Skills",
-  driveDate: "Drive date",
-  applicationDeadline: "Application deadline",
+  nextStageDate: "Next stage date",
+  applicationDeadline: "Application end date",
 };
 
 /** Only known keys, each once, in the canonical order. */
@@ -255,8 +255,9 @@ export const LOCKED_MASTER_FIELDS = [
   "skills",
   "minCGPA",
   "maxActiveBacklogs",
+  "applicationStartDate",
   "applicationDeadline",
-  "driveDate",
+  "nextStageDate",
   "applyMethod",
   "externalApplyUrl",
   "packageOffered",

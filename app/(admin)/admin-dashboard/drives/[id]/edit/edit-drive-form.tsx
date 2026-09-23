@@ -9,7 +9,12 @@ import {
   type ApplicationFieldConfig,
 } from "@/components/admin/drives/admin-application-fields-panel";
 import { AdminDrivePreviewCard } from "@/components/admin/drives/admin-drive-preview-card";
-import DatePicker from "@/components/ui/date-picker";
+import {
+  DriveDateFields,
+  dayOf,
+  driveDateIssues,
+  type DriveDateValues,
+} from "@/features/drives/components/drive-date-fields";
 import UrlField from "@/components/ui/url-field";
 import { useToast } from "@/hooks/use-toast";
 import { BatchTargetingPicker } from "@/features/drives/components/batch-targeting-picker";
@@ -50,6 +55,8 @@ export function EditDriveForm({
   const [selectedBatches, setSelectedBatches] = useState<string[]>(initialBatches);
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  // Stored instants shown as the India days they fall on.
+  const originalStart = dayOf(new Date(drive.applicationStartDate));
 
   // Parse JSON fields
   const parsedRounds = JSON.parse(drive.selectionRounds);
@@ -67,8 +74,9 @@ export function EditDriveForm({
     minCGPA: String(drive.minCGPA),
     maxActiveBacklogs: String(drive.maxActiveBacklogs),
     eligibleDepartments: parsedEligibleDepts,
-    driveDate: drive.driveDate.toISOString().split("T")[0],
-    applicationDeadline: drive.applicationDeadline.toISOString().split("T")[0],
+    applicationStartDate: originalStart,
+    applicationDeadline: dayOf(new Date(drive.applicationDeadline)),
+    nextStageDate: dayOf(new Date(drive.nextStageDate)),
     applyMethod: drive.applyMethod as "IN_APP" | "EXTERNAL",
     externalApplyUrl: drive.externalApplyUrl || "",
     selectionRounds: parsedRounds,
@@ -78,6 +86,8 @@ export function EditDriveForm({
     contactPhone: drive.contactPhone || "",
     pptLink: drive.pptLink || "",
   });
+  // A start left as it was is not re-judged against today; a moved one is.
+  const startMoved = form.applicationStartDate !== originalStart;
 
   const [applicationFields, setApplicationFields] = useState<ApplicationFieldConfig[]>(
     parsedApplicationFields
@@ -126,15 +136,12 @@ export function EditDriveForm({
       return;
     }
 
-    const deadline = new Date(form.applicationDeadline);
-    const driveDate = new Date(form.driveDate);
-
-    if (deadline >= driveDate) {
-      toast({
-        title: "Error",
-        description: "Application deadline must be before drive date",
-        variant: "destructive",
-      });
+    // The same date rules the server applies; it re-checks them on submit.
+    const dateProblems = Object.values(
+      driveDateIssues(form, { startNotBeforeToday: startMoved, requireAll: true })
+    );
+    if (dateProblems.length > 0) {
+      toast({ title: "Check the dates", description: dateProblems.join(". "), variant: "destructive" });
       return;
     }
 
@@ -158,8 +165,9 @@ export function EditDriveForm({
         maxActiveBacklogs: parseInt(form.maxActiveBacklogs, 10),
         batchYears: selectedBatches,
         eligibleDepartments: form.eligibleDepartments,
-        driveDate: form.driveDate,
+        applicationStartDate: form.applicationStartDate,
         applicationDeadline: form.applicationDeadline,
+        nextStageDate: form.nextStageDate,
         applyMethod: form.applyMethod,
         externalApplyUrl: form.externalApplyUrl.trim() || undefined,
         selectionRounds: form.selectionRounds,
@@ -306,22 +314,12 @@ export function EditDriveForm({
       <div className="card" style={{ marginBottom: 20 }}>
         <h3 className="section-title">Dates & Application Method</h3>
 
-        <div className="field-row">
-          <div className="field">
-            <label>Drive Date *</label>
-            <DatePicker 
-              value={form.driveDate ? new Date(form.driveDate) : null} 
-              onChange={(date: Date | null) => setForm({ ...form, driveDate: date ? date.toISOString().split("T")[0] : "" })} 
-            />
-          </div>
-          <div className="field">
-            <label>Application Deadline *</label>
-            <DatePicker 
-              value={form.applicationDeadline ? new Date(form.applicationDeadline) : null} 
-              onChange={(date: Date | null) => setForm({ ...form, applicationDeadline: date ? date.toISOString().split("T")[0] : "" })} 
-            />
-          </div>
-        </div>
+        <DriveDateFields
+          values={form}
+          onChange={(dates: DriveDateValues) => setForm({ ...form, ...dates })}
+          startNotBeforeToday={startMoved}
+          disabled={isPending}
+        />
 
         <div className="field">
           <label>Application Method *</label>
@@ -380,8 +378,9 @@ export function EditDriveForm({
           packageOffered: parseFloat(form.packageOffered),
           packageDisplay: form.packageDisplay,
           minCGPA: parseFloat(form.minCGPA),
-          driveDate: new Date(form.driveDate),
-          applicationDeadline: new Date(form.applicationDeadline),
+          applicationStartDate: form.applicationStartDate || null,
+          nextStageDate: form.nextStageDate || null,
+          applicationDeadline: form.applicationDeadline || null,
         }}
         venue={form.venue}
         reportingTime={form.reportingTime}

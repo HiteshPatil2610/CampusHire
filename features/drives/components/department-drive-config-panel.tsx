@@ -277,8 +277,8 @@ export function DepartmentDriveConfigPanel({
   const [skillsOverride, setSkillsOverride] = useState(
     parseJsonArray(config?.skills ?? null).join(", ")
   );
-  const [driveDateOverride, setDriveDateOverride] = useState(
-    toDateInput(config?.driveDate ?? null)
+  const [nextStageDateOverride, setNextStageDateOverride] = useState(
+    toDateInput(config?.nextStageDate ?? null)
   );
   const [deadlineOverride, setDeadlineOverride] = useState(
     toDateInput(config?.applicationDeadline ?? null)
@@ -336,7 +336,7 @@ export function DepartmentDriveConfigPanel({
     jobDescriptionText: jdOverride.trim() || null,
     requirements: requirementsOverride.trim() || null,
     skills: listToJson(skillsOverride),
-    driveDate: driveDateOverride ? new Date(driveDateOverride) : null,
+    nextStageDate: nextStageDateOverride ? new Date(nextStageDateOverride) : null,
     applicationDeadline: deadlineOverride ? new Date(deadlineOverride) : null,
     selectionRounds: listToJson(roundsOverride),
     minCGPA: ruleMirrors.minCGPA,
@@ -349,7 +349,7 @@ export function DepartmentDriveConfigPanel({
   const preview = resolveDepartmentDrive(
     {
       ...drive,
-      driveDate: new Date(drive.driveDate),
+      nextStageDate: new Date(drive.nextStageDate),
       applicationDeadline: new Date(drive.applicationDeadline),
     },
     {
@@ -364,7 +364,7 @@ export function DepartmentDriveConfigPanel({
   );
   const overridden = new Set(overriddenFields(draftOverrides));
 
-  const status = getDriveStatus(preview.applicationDeadline);
+  const status = getDriveStatus(preview);
   const eligibleCodes = useMemo(
     () =>
       eligibleDepartmentIdsOf(drive)
@@ -423,7 +423,7 @@ export function DepartmentDriveConfigPanel({
                 jobDescriptionText: draftOverrides.jobDescriptionText,
                 requirements: draftOverrides.requirements,
                 skills: splitList(skillsOverride),
-                driveDate: driveDateOverride || null,
+                nextStageDate: nextStageDateOverride || null,
                 applicationDeadline: deadlineOverride || null,
               }).filter(([field]) => editable.has(field as DepartmentEditableField))
             ),
@@ -531,8 +531,8 @@ export function DepartmentDriveConfigPanel({
             value={eligibleCodes.join(", ") || "—"}
           />
           <MetaCell
-            label="Drive Date"
-            value={toDateInput(preview.driveDate) || "—"}
+            label="Next Stage Date"
+            value={toDateInput(preview.nextStageDate) || "—"}
           />
           <MetaCell
             label="App Deadline"
@@ -708,24 +708,24 @@ export function DepartmentDriveConfigPanel({
                 }}
               >
                 <OverrideRow
-                  label="Drive date"
-                  masterValue={toDateInput(drive.driveDate)}
-                  isOverridden={overridden.has("driveDate")}
-                lockedByMaster={!editable.has("driveDate")}
+                  label="Next stage date"
+                  masterValue={toDateInput(drive.nextStageDate)}
+                  isOverridden={overridden.has("nextStageDate")}
+                lockedByMaster={!editable.has("nextStageDate")}
                   locked={locked}
-                  onReset={() => touch(setDriveDateOverride)("")}
+                  onReset={() => touch(setNextStageDateOverride)("")}
                 >
                   <input
                     type="date"
                     style={inputStyle}
-                    value={driveDateOverride}
+                    value={nextStageDateOverride}
                     disabled={locked}
-                    onChange={(e) => touch(setDriveDateOverride)(e.target.value)}
+                    onChange={(e) => touch(setNextStageDateOverride)(e.target.value)}
                   />
                 </OverrideRow>
 
                 <OverrideRow
-                  label="Application deadline"
+                  label="Application end date"
                   masterValue={toDateInput(drive.applicationDeadline)}
                   isOverridden={overridden.has("applicationDeadline")}
                 lockedByMaster={!editable.has("applicationDeadline")}
@@ -916,7 +916,7 @@ export function DepartmentDriveConfigPanel({
             companyName={drive.companyName}
             roleName={preview.roleName}
             packageText={packageText}
-            driveDate={preview.driveDate}
+            nextStageDate={preview.nextStageDate}
             applicationDeadline={preview.applicationDeadline}
             departmentCode={departmentCode}
             logistics={previewLogistics}

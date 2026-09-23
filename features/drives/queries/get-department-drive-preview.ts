@@ -22,7 +22,7 @@ export interface DepartmentDrivePreview {
   jobDescriptionUrl: string | null;
   requirements: string | null;
   skills: string[];
-  driveDate: Date;
+  nextStageDate: Date;
   applicationDeadline: Date;
   applyMethod: "IN_APP" | "EXTERNAL";
   externalApplyUrl: string | null;
@@ -99,7 +99,7 @@ export async function getDepartmentDrivePreview(
     jobDescriptionUrl: resolved.jobDescriptionUrl,
     requirements: resolved.requirements,
     skills: parseJsonArray(resolved.skills),
-    driveDate: resolved.driveDate,
+    nextStageDate: resolved.nextStageDate,
     applicationDeadline: resolved.applicationDeadline,
     applyMethod: resolved.applyMethod,
     externalApplyUrl: resolved.externalApplyUrl,

@@ -41,7 +41,7 @@ export interface DriveAudience {
   /** Candidates with no academic record — eligible for nothing until they add it. */
   missingAcademic: { userId: string }[];
   /** Each published department drive as its students see it. */
-  resolvedByDepartment: Map<string, { roleName: string; applicationDeadline: Date }>;
+  resolvedByDepartment: Map<string, { roleName: string; applicationStartDate: Date; applicationDeadline: Date }>;
 }
 
 export async function resolveDriveAudience(

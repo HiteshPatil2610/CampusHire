@@ -18,7 +18,7 @@ import type { ApplicationStage, ApplicationStatus, Drive } from '@prisma/client'
 import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
 import ApplicationReviewModal from '@/components/drives/application-review-modal';
 import type { ApplicationReviewData } from '@/features/applications/utils/application-review-fields';
-import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
+import { formatDeadline, formatNextStageDate } from '@/lib/drive-date-helpers';
 import { parseJsonArray } from '@/lib/parse-json-array';
 import StatusBadge from '@/components/ui/status-badge';
 import StageTrack from './stage-track';
@@ -56,10 +56,7 @@ export default function DashboardDriveCard({
   const [expanded, setExpanded] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
 
-  const status = getDriveDisplayStatus(
-    drive.applicationDeadline,
-    drive.driveDate
-  );
+  const status = getDriveDisplayStatus(drive);
   const isApplied = stage !== null;
   const isOpen = status === 'open';
 
@@ -153,7 +150,7 @@ export default function DashboardDriveCard({
       {/* Eligibility meta */}
       <div className="drive-meta-row">
         <span>
-          <Calendar size={12} aria-hidden /> {formatDriveDate(drive.driveDate)}
+          <Calendar size={12} aria-hidden /> {formatNextStageDate(drive.nextStageDate)}
         </span>
         <span>
           <GraduationCap size={12} aria-hidden /> Min CGPA: {drive.minCGPA}

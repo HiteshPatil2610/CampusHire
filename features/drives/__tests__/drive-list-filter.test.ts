@@ -5,7 +5,7 @@ const drive = (overrides: object = {}) => ({
   companyName: "Acme Corp",
   roleName: "Software Engineer",
   lifecycleStatus: "PUBLISHED" as const,
-  driveDate: new Date("2026-10-10T00:00:00Z"),
+  nextStageDate: new Date("2026-10-10T00:00:00Z"),
   eligibleDepartmentLinks: [{ departmentId: "cse" }],
   ...overrides,
 });
@@ -13,7 +13,7 @@ const drive = (overrides: object = {}) => ({
 const drives = [
   drive(),
   drive({ companyName: "Beta Ltd", roleName: "Data Analyst", lifecycleStatus: "CANCELLED", eligibleDepartmentLinks: [{ departmentId: "it" }] }),
-  drive({ companyName: "Gamma", roleName: "SDE", lifecycleStatus: "ARCHIVED", driveDate: new Date("2026-12-01T00:00:00Z"), eligibleDepartmentLinks: [{ departmentId: "cse" }, { departmentId: "it" }] }),
+  drive({ companyName: "Gamma", roleName: "SDE", lifecycleStatus: "ARCHIVED", nextStageDate: new Date("2026-12-01T00:00:00Z"), eligibleDepartmentLinks: [{ departmentId: "cse" }, { departmentId: "it" }] }),
 ];
 
 const names = (list: typeof drives) => list.map((d) => d.companyName);

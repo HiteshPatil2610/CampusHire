@@ -42,7 +42,7 @@ const date = (value: Date | null) =>
  * What they own — their department's drive defaults, its student defaults and
  * their own notifications — is editable. What the placement office owns is
  * shown as read-only with a line saying who sets it, rather than hidden: an
- * admin who cannot see the season window cannot understand why a drive date
+ * admin who cannot see the season window cannot understand why a next stage date
  * was refused. Identity and password live with the sign-in provider.
  */
 export function DepartmentSettingsClient({

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatDeadline, formatDriveDate } from "@/lib/drive-date-helpers";
+import { formatDeadline, formatNextStageDate } from "@/lib/drive-date-helpers";
 import type { DepartmentDrivePreview } from "../queries/get-department-drive-preview";
 import type { DriveRecruitment } from "@/features/recruitment/queries/get-drive-recruitment";
 
@@ -64,11 +64,11 @@ export function DriveOverviewTab({
             {preview.packageText}
           </div>
           <div>
-            <div className="text-muted" style={{ fontSize: 11 }}>Drive date</div>
-            {formatDriveDate(new Date(preview.driveDate))}
+            <div className="text-muted" style={{ fontSize: 11 }}>Next stage date</div>
+            {formatNextStageDate(new Date(preview.nextStageDate))}
           </div>
           <div>
-            <div className="text-muted" style={{ fontSize: 11 }}>Application deadline</div>
+            <div className="text-muted" style={{ fontSize: 11 }}>Application end date</div>
             {formatDeadline(new Date(preview.applicationDeadline))}
           </div>
         </div>

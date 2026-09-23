@@ -140,7 +140,7 @@ export async function getDriveOperationsActivity(
     } else if (row.action === "CANCEL") {
       summary = `Drive cancelled${metadata?.reason ? ` — ${String(metadata.reason)}` : ""}`;
     } else if (row.action === "EXTEND_DEADLINE") {
-      summary = "Application deadline extended";
+      summary = "Application end date extended";
     } else if (metadata?.scope === "department-config") {
       summary = "Configuration saved";
     } else {

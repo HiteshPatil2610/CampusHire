@@ -37,7 +37,7 @@ function bucketOf(drive: DepartmentCentralDrive): DepartmentDriveBucket {
   return departmentDriveBucket({
     status: drive.config?.status ?? null,
     ready: drive.readiness.ready,
-    deadlineOpen: getDriveStatus(new Date(drive.resolved.applicationDeadline)) === "open",
+    deadlineOpen: getDriveStatus(drive.resolved) === "open",
   });
 }
 
@@ -349,9 +349,7 @@ export function DepartmentCentralDrivesView({
                 {visibleDrives.map((drive) => {
                   // This department's own deadline, which may override the
                   // master's.
-                  const status = getDriveStatus(
-                    new Date(drive.resolved.applicationDeadline)
-                  );
+                  const status = getDriveStatus(drive.resolved);
                   const selected = drive.id === selectedId;
                   const ready = isConfigured(drive);
                   const fieldCount = drive.applicationForm.filter(

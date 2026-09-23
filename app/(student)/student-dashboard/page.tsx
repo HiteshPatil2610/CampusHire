@@ -28,8 +28,8 @@ import AwaitingApproval from '@/components/students/AwaitingApproval';
 import { getMyAccessRequest } from '@/features/students/queries/get-my-access-request';
 import DashboardDriveCard from '@/components/students/dashboard/dashboard-drive-card';
 import StatusBadge from '@/components/ui/status-badge';
-import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
-import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
+import { getDriveDisplayStatus, isDriveOpen } from '@/features/drives/utils/drive-status';
+import { formatDeadline, formatNextStageDate } from '@/lib/drive-date-helpers';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 
 import { formatPackage } from '@/features/drives/utils/format-package';
@@ -131,7 +131,8 @@ export default async function StudentDashboardPage() {
 
   const now = new Date();
   const upcomingDeadlines = dashboard.all
-    .filter((item) => item.drive.applicationDeadline > now)
+    // Drives taking applications now, nearest end date first.
+    .filter((item) => isDriveOpen(item.drive, now))
     .sort(
       (a, b) =>
         a.drive.applicationDeadline.getTime() -
@@ -165,6 +166,7 @@ export default async function StudentDashboardPage() {
         driveId: item.drive.id,
         companyName: item.drive.companyName,
         roleName: item.drive.roleName,
+        applicationStartDate: item.drive.applicationStartDate,
         deadline: item.drive.applicationDeadline,
         applied: item.application !== null,
       })),
@@ -243,7 +245,7 @@ export default async function StudentDashboardPage() {
               <strong>{placement.companyName}</strong> — {placement.roleName}
               {placement.packageDisplay ? ` · ${placement.packageDisplay}` : ''}
               <span className="text-muted" style={{ fontSize: 11 }}>
-                {' '}· {formatDriveDate(placement.placedAt)}
+                {' '}· {formatNextStageDate(placement.placedAt)}
               </span>
             </div>
           ))}
@@ -480,17 +482,14 @@ export default async function StudentDashboardPage() {
                   <th>Role</th>
                   <th>Package</th>
                   <th>Min CGPA</th>
-                  <th>Drive date</th>
+                  <th>Next stage date</th>
                   <th>Deadline</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {dashboard.all.map(({ drive }) => {
-                  const status = getDriveDisplayStatus(
-                    drive.applicationDeadline,
-                    drive.driveDate
-                  );
+                  const status = getDriveDisplayStatus(drive);
 
                   return (
                     <tr key={drive.id}>
@@ -500,7 +499,7 @@ export default async function StudentDashboardPage() {
                         {formatPackage(drive)}
                       </td>
                       <td>{drive.minCGPA}</td>
-                      <td>{formatDriveDate(drive.driveDate)}</td>
+                      <td>{formatNextStageDate(drive.nextStageDate)}</td>
                       <td>{formatDeadline(drive.applicationDeadline)}</td>
                       <td>
                         {status === 'open' && (

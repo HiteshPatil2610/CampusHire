@@ -21,6 +21,7 @@ import {
 } from "../utils/eligible-departments";
 import { serializePackageOffered, type WithSerializedPackage } from "../utils/serialize-drive";
 import type { Drive, Prisma } from "@prisma/client";
+import { isDriveOpen } from "../utils/drive-status";
 
 export interface StudentDrivesParams {
   page?: number;
@@ -186,8 +187,8 @@ export async function getEligibleDrives(
     )
     // Closest (resolved) deadline first, still-open drives ahead of past ones.
     .sort((a, b) => {
-      const aOpen = a.applicationDeadline > now;
-      const bOpen = b.applicationDeadline > now;
+      const aOpen = isDriveOpen(a, now);
+      const bOpen = isDriveOpen(b, now);
       if (aOpen !== bOpen) return aOpen ? -1 : 1;
       return a.applicationDeadline.getTime() - b.applicationDeadline.getTime();
     });

@@ -5,6 +5,7 @@ import {
   eligibleDepartmentIdsOf,
   type HasEligibleDepartmentLinks,
 } from "@/features/drives/utils/eligible-departments";
+import { isDriveOpen } from "@/features/drives/utils/drive-status";
 
 /**
  * The `Drive` shape this module needs, with `packageOffered` widened to
@@ -84,9 +85,7 @@ export async function getStudentDashboardData<TDrive extends DriveLike & HasElig
   }));
 
   const now = new Date();
-  const openDriveCount = all.filter(
-    (item) => item.drive.applicationDeadline > now
-  ).length;
+  const openDriveCount = all.filter((item) => isDriveOpen(item.drive, now)).length;
 
   // Applied drives lead the card row, then still-open drives by nearest
   // deadline, so the student sees what needs action first.
@@ -107,10 +106,7 @@ export async function getStudentDashboardData<TDrive extends DriveLike & HasElig
 
 function featureRank(item: DashboardDrive<DriveLike>, now: Date): number {
   if (item.application) return 0;
-  const status = getDriveDisplayStatus(
-    item.drive.applicationDeadline,
-    item.drive.driveDate
-  );
+  const status = getDriveDisplayStatus(item.drive);
   if (status === "open") return 1;
   if (status === "upcoming") return 2;
   return 3;

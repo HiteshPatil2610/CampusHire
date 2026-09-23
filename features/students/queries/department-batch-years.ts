@@ -17,9 +17,22 @@ export interface DepartmentBatchYear {
 export async function getDepartmentBatchYears(
   departmentId: string
 ): Promise<DepartmentBatchYear[]> {
+  return batchYearsWhere({ departmentId });
+}
+
+/**
+ * The batch years students hold across the whole institution — what the Super
+ * Admin's central drive offers. Same shape and ordering as the department
+ * version.
+ */
+export async function getInstitutionBatchYears(): Promise<DepartmentBatchYear[]> {
+  return batchYearsWhere({});
+}
+
+async function batchYearsWhere(scope: { departmentId?: string }): Promise<DepartmentBatchYear[]> {
   const rows = await prisma.student.groupBy({
     by: ["expectedPassoutYear"],
-    where: { departmentId, expectedPassoutYear: { not: null } },
+    where: { ...scope, expectedPassoutYear: { not: null } },
     _count: { _all: true },
     orderBy: { expectedPassoutYear: "asc" },
   });

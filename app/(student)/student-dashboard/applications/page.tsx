@@ -1,7 +1,7 @@
 import { requireStudent } from '@/lib/auth';
 import { getMyApplications } from '@/features/applications/queries/get-my-applications';
 import { getDriveStatus } from '@/features/drives/utils/drive-status';
-import { formatDriveDate } from '@/lib/drive-date-helpers';
+import { formatNextStageDate } from '@/lib/drive-date-helpers';
 import StatusBadge from '@/components/ui/status-badge';
 import Pagination from '@/components/ui/pagination';
 import Link from 'next/link';
@@ -212,7 +212,7 @@ export default async function ApplicationsPage({ searchParams }: ApplicationsPag
                     letterSpacing: '0.5px',
                   }}
                 >
-                  Drive Date
+                  Next Stage Date
                 </th>
                 <th
                   style={{
@@ -244,7 +244,7 @@ export default async function ApplicationsPage({ searchParams }: ApplicationsPag
             </thead>
             <tbody>
               {applicationsResult.data.map((application) => {
-                const driveStatus = getDriveStatus(application.drive.applicationDeadline);
+                const driveStatus = getDriveStatus(application.drive);
                 const packageText = formatPackage(application.drive);
                 const appliedDate = new Date(application.appliedAt).toLocaleDateString('en-IN', {
                   day: 'numeric',
@@ -315,7 +315,7 @@ export default async function ApplicationsPage({ searchParams }: ApplicationsPag
                         color: 'var(--text-secondary)',
                       }}
                     >
-                      {formatDriveDate(application.drive.driveDate)}
+                      {formatNextStageDate(application.drive.nextStageDate)}
                     </td>
                     <td style={{ padding: '14px 16px' }}>
                       {application.driveCancelled ? (
@@ -414,7 +414,7 @@ export default async function ApplicationsPage({ searchParams }: ApplicationsPag
               Active Drives
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--success)' }}>
-              {applicationsResult.data.filter((a) => getDriveStatus(a.drive.applicationDeadline) === 'open').length}
+              {applicationsResult.data.filter((a) => getDriveStatus(a.drive) === 'open').length}
             </div>
           </div>
           <div>
@@ -422,7 +422,7 @@ export default async function ApplicationsPage({ searchParams }: ApplicationsPag
               Closed Drives
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-secondary)' }}>
-              {applicationsResult.data.filter((a) => getDriveStatus(a.drive.applicationDeadline) === 'closed').length}
+              {applicationsResult.data.filter((a) => getDriveStatus(a.drive) === 'closed').length}
             </div>
           </div>
         </div>

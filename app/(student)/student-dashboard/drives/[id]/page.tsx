@@ -8,7 +8,7 @@ import {
 } from '@/features/drives/queries/drive-eligibility';
 import { getDriveStatus } from '@/features/drives/utils/drive-status';
 import { checkApplicationExists } from '@/features/applications/queries/check-application-exists';
-import { formatDriveDate, formatDeadline } from '@/lib/drive-date-helpers';
+import { formatNextStageDate, formatDeadline } from '@/lib/drive-date-helpers';
 import { ApplySection } from '@/components/drives/apply-section';
 import { prisma } from '@/lib/prisma';
 import { buildApplicationReviewData } from '@/features/applications/utils/application-review-fields';
@@ -124,7 +124,7 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
   }
 
   // Get drive status (from this department's deadline — `drive` is resolved)
-  const driveStatus = getDriveStatus(drive.applicationDeadline);
+  const driveStatus = getDriveStatus(drive);
   const skills = parseJsonArray(drive.skills);
   // The department's pipeline stages students may see, else the legacy list.
   const selectionRounds = drive.recruitmentStages?.length
@@ -251,6 +251,8 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
                 <StatusBadge variant="red">Cancelled</StatusBadge>
               ) : driveStatus === 'open' ? (
                 <StatusBadge variant="green">Open</StatusBadge>
+              ) : driveStatus === 'upcoming' ? (
+                <StatusBadge variant="amber">Opens soon</StatusBadge>
               ) : (
                 <StatusBadge variant="red">Closed</StatusBadge>
               )}
@@ -273,15 +275,23 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
         >
           <div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>
-              Drive Date
+              Application Start Date
             </div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>
-              {formatDriveDate(drive.driveDate)}
+              {formatNextStageDate(drive.applicationStartDate)}
             </div>
           </div>
           <div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>
-              Application Deadline
+              Next Stage Date
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>
+              {formatNextStageDate(drive.nextStageDate)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>
+              Application End Date
             </div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>
               {formatDeadline(drive.applicationDeadline)}

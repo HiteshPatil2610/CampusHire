@@ -9,8 +9,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import DatePicker from "@/components/ui/date-picker";
 import UrlField from "@/components/ui/url-field";
+import { DriveDateFields, driveDateIssues } from "./drive-date-fields";
+import { BatchTargetingPicker } from "./batch-targeting-picker";
+import { parseDay } from "../domain/drive-window";
+import type { DepartmentBatchYear } from "@/features/students/queries/department-batch-years";
+import { batchLabel } from "@/features/students/utils/batch";
 import CompanyLogoField from "@/components/shared/company-logo-field";
 import { createCentralDrive } from "../actions/create-central-drive";
 import {
@@ -35,6 +39,8 @@ interface PostCentralDriveModalProps {
   onCreated: (driveId: string) => void;
   /** The institution's saved defaults, prefilled into a drive that does not exist yet. */
   defaults?: { minCGPA: number | null; stages: StageDraft[] };
+  /** Batches (passout years) students across the institution are in. */
+  batchYears: DepartmentBatchYear[];
 }
 
 /**
@@ -65,14 +71,14 @@ const STEPS = [
 const DRAFT_KEY = "campushire:master-drive-draft:v1";
 
 interface StoredDraft {
-  form: Omit<typeof EMPTY_FORM, "driveDate" | "applicationDeadline"> & {
-    driveDate: string | null;
-    applicationDeadline: string | null;
-  };
+  // Dates are calendar days. A draft saved before that held ISO timestamps
+  // (and a "driveDate"); both are read back through `parseDay` on restore.
+  form: Partial<typeof EMPTY_FORM> & Record<string, unknown>;
   step: number;
   editable: DepartmentEditableField[];
   stages: ReturnType<typeof fromStageDrafts>;
   selectedDepartments: string[];
+  selectedBatches?: string[];
   savedAt: string;
 }
 
@@ -106,8 +112,10 @@ const EMPTY_FORM = {
   roleName: "",
   packageDisplay: "",
   minCGPA: "",
-  driveDate: null as Date | null,
-  applicationDeadline: null as Date | null,
+  // Calendar days ("YYYY-MM-DD"); see DriveDateFields.
+  applicationStartDate: "",
+  applicationDeadline: "",
+  nextStageDate: "",
   externalApplyUrl: "",
   pptLink: "",
   jobDescriptionText: "",
@@ -121,6 +129,7 @@ export function PostCentralDriveModal({
   departments,
   onCreated,
   defaults,
+  batchYears,
 }: PostCentralDriveModalProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -138,6 +147,9 @@ export function PostCentralDriveModal({
     () => defaults?.stages ?? DEFAULT_STAGES()
   );
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  // Optional here: each department may set its own before publishing.
+  const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
+  const [datesTouched, setDatesTouched] = useState(false);
 
   const pipelineCheck = validatePipelineStages(fromStageDrafts(stages));
 
@@ -154,6 +166,8 @@ export function PostCentralDriveModal({
     setEditable([]);
     setStages(DEFAULT_STAGES());
     setSelectedDepartments([]);
+    setSelectedBatches([]);
+    setDatesTouched(false);
     setDraftSavedAt(null);
   }
 
@@ -163,12 +177,17 @@ export function PostCentralDriveModal({
     restored.current = true;
     const draft = readDraft();
     if (!draft) return;
+    const day = (value: unknown) =>
+      typeof value === "string" ? parseDay(value) ?? "" : "";
     setForm({
       ...EMPTY_FORM,
       ...draft.form,
-      driveDate: draft.form.driveDate ? new Date(draft.form.driveDate) : null,
-      applicationDeadline: draft.form.applicationDeadline ? new Date(draft.form.applicationDeadline) : null,
+      applicationStartDate: day(draft.form.applicationStartDate),
+      applicationDeadline: day(draft.form.applicationDeadline),
+      // Drafts from before the rename called it "driveDate".
+      nextStageDate: day(draft.form.nextStageDate ?? draft.form.driveDate),
     });
+    setSelectedBatches(Array.isArray(draft.selectedBatches) ? draft.selectedBatches : []);
     setStep(Math.min(Math.max(draft.step ?? 0, 0), STEPS.length - 1));
     setEditable(normalizeEditableFields(draft.editable));
     // Rebuilt through the draft factory so every stage gets a fresh key.
@@ -192,19 +211,16 @@ export function PostCentralDriveModal({
     if (!hasContent) return;
     const savedAt = new Date();
     writeDraft({
-      form: {
-        ...form,
-        driveDate: form.driveDate ? form.driveDate.toISOString() : null,
-        applicationDeadline: form.applicationDeadline ? form.applicationDeadline.toISOString() : null,
-      },
+      form,
       step,
       editable,
       stages: fromStageDrafts(stages),
       selectedDepartments,
+      selectedBatches,
       savedAt: savedAt.toISOString(),
     });
     setDraftSavedAt(savedAt);
-  }, [open, form, step, editable, stages, selectedDepartments]);
+  }, [open, form, step, editable, stages, selectedDepartments, selectedBatches]);
 
   /** Closing keeps the draft: the Super Admin can continue later. */
   function handleClose() {
@@ -229,12 +245,11 @@ export function PostCentralDriveModal({
         return "Company, role and package are required";
       }
       if (Number.isNaN(Number.parseFloat(form.minCGPA))) return "Enter a valid minimum CGPA cutoff";
-      if (!form.driveDate || !form.applicationDeadline) {
-        return "Drive date and application deadline are required";
-      }
-      if (form.applicationDeadline >= form.driveDate) {
-        return "Application deadline must be before the drive date";
-      }
+      // The same date rules the server applies; it re-checks them on submit.
+      const dateProblems = Object.values(
+        driveDateIssues(form, { startNotBeforeToday: true, requireAll: true })
+      );
+      if (dateProblems.length > 0) return dateProblems.join(". ");
     }
     if (index === 2 && !pipelineCheck.ok) {
       return pipelineCheck.errors.join(" ");
@@ -246,6 +261,7 @@ export function PostCentralDriveModal({
   }
 
   function goNext() {
+    if (step === 0) setDatesTouched(true);
     const problem = stepProblem(step);
     if (problem) {
       toast({ title: "Not yet", description: problem, variant: "destructive" });
@@ -271,8 +287,10 @@ export function PostCentralDriveModal({
         packageDisplay: form.packageDisplay.trim(),
         minCGPA,
         maxActiveBacklogs: 0,
-        driveDate: form.driveDate!.toISOString(),
-        applicationDeadline: form.applicationDeadline!.toISOString(),
+        applicationStartDate: form.applicationStartDate,
+        applicationDeadline: form.applicationDeadline,
+        nextStageDate: form.nextStageDate,
+        batchYears: selectedBatches,
         externalApplyUrl: form.externalApplyUrl.trim(),
         pptLink: form.pptLink.trim(),
         jobDescriptionText: form.jobDescriptionText.trim(),
@@ -403,24 +421,28 @@ export function PostCentralDriveModal({
                 />
               </div>
 
-              <div className="field">
-                <label>Drive Date *</label>
-                <DatePicker
-                  value={form.driveDate}
-                  onChange={(date) => setField("driveDate", date)}
-                  placeholder="Select drive date"
+              <div style={{ gridColumn: "1 / -1" }}>
+                <DriveDateFields
+                  values={form}
+                  onChange={(dates) => setForm((current) => ({ ...current, ...dates }))}
+                  startNotBeforeToday
+                  showMissing={datesTouched}
                   disabled={isPending}
                 />
               </div>
 
-              <div className="field">
-                <label>Application Deadline *</label>
-                <DatePicker
-                  value={form.applicationDeadline}
-                  onChange={(date) => setField("applicationDeadline", date)}
-                  placeholder="Select application deadline"
-                  disabled={isPending}
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>Eligible Batches (optional)</label>
+                <BatchTargetingPicker
+                  available={batchYears}
+                  selected={selectedBatches}
+                  onChange={setSelectedBatches}
+                  locked={isPending}
                 />
+                <p className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
+                  Every assigned department inherits these batches unless it sets its own. A
+                  department must have batches before it can publish.
+                </p>
               </div>
 
               <CompanyLogoField
@@ -554,9 +576,14 @@ export function PostCentralDriveModal({
                 <strong>{form.companyName || "—"}</strong> · {form.roleName || "—"} · {form.packageDisplay || "—"}
               </div>
               <div>
-                Drive date: {form.driveDate ? form.driveDate.toLocaleDateString("en-IN") : "—"} · Apply by:{" "}
-                {form.applicationDeadline ? form.applicationDeadline.toLocaleDateString("en-IN") : "—"} · Min CGPA:{" "}
-                {form.minCGPA || "—"}
+                Applications: {form.applicationStartDate || "—"} to {form.applicationDeadline || "—"} · Next stage:{" "}
+                {form.nextStageDate || "—"} · Min CGPA: {form.minCGPA || "—"}
+              </div>
+              <div>
+                Eligible batches:{" "}
+                {selectedBatches.length > 0
+                  ? selectedBatches.map((year) => batchLabel(Number(year))).join(", ")
+                  : "set by each department"}
               </div>
               {form.jobDescriptionText && (
                 <div style={{ whiteSpace: "pre-wrap", color: "var(--text-secondary)" }}>{form.jobDescriptionText}</div>

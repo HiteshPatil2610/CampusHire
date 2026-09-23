@@ -22,7 +22,7 @@ export interface StudentApplicationPreviewProps {
   companyName: string;
   roleName: string;
   packageText: string;
-  driveDate: Date;
+  nextStageDate: Date;
   applicationDeadline: Date;
   departmentCode: string;
   logistics: PreviewLogistics;
@@ -488,7 +488,7 @@ export function StudentApplicationPreviewModal({
   companyName,
   roleName,
   packageText,
-  driveDate,
+  nextStageDate,
   applicationDeadline,
   departmentCode,
   logistics,
@@ -562,7 +562,7 @@ export function StudentApplicationPreviewModal({
                 </span>
               </div>
               <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                Drive Date: {isoDate(driveDate)} · Deadline:{" "}
+                Next Stage Date: {isoDate(nextStageDate)} · Deadline:{" "}
                 {isoDate(applicationDeadline)}
               </div>
             </div>

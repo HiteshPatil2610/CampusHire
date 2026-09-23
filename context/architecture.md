@@ -27,7 +27,8 @@
 ## Storage Model
 
 - **Database (Postgres via Prisma)**: all structured data — users, roles, departments, student profiles (personal/academic/skills/projects/experience/certifications/preferences), drives, eligibility rules, drive applications, admin accounts, audit log entries. This is the single source of truth for anything queried, filtered, or joined.
-- A drive has no stored `status` column. Whether it's "open" or "closed" is computed at read time by comparing the current timestamp to its `applicationDeadline` — every query that lists or filters drives (student-facing or admin-facing) runs through the same shared `getDriveStatus()` helper in `lib/`, so the rule can never drift between screens.
+- A drive has no stored `status` column. Whether it is taking applications is computed at read time from its **application window**: open ⇔ `applicationStartDate` ≤ now ≤ `applicationDeadline` (the Application End Date), both inclusive; before the start it is "upcoming", after the end "closed". Every screen, action and query decides through `getDriveStatus()` in `features/drives/utils/drive-status.ts` — `openApplicationWhere()` and `openApplicationSql()` state the same rule for Prisma and raw SQL — so the rule can never drift between screens. The **Next Stage Date** (`nextStageDate`, formerly "Drive Date": the date of the round after applications) never decides whether applications are open.
+- **Drive dates are India days.** Forms submit calendar days; `features/drives/domain/drive-window.ts` turns them into instants (start at 00:00 IST, end at 23:59:59.999 IST, next stage at 00:00 IST) and holds the rules every form and every action share (`validateDriveDates`): start ≥ today (same day valid; applied to a new drive and to an edit that moves the start), end > start, next stage > end — judged on India calendar days. The same order is a CHECK on the master row; a department's resolved dates are checked in code (`checkStoredWindow`).
 - A `DriveApplication` has a unique constraint on `(studentId, driveId)` at the database level — this is what makes "apply once" a guarantee rather than a convention. The row's *content* is never edited by the student; its `stage` and `status` are owned by the department admin running the drive and advanced through the single server action `updateApplicationStage`. A student has **no write path at all after submission**: `applyToDrive` only ever inserts, and there is no action that edits or deletes an application. Withdrawal was removed — it used to delete the row, which contradicted the "applications are final" rule in `project-overview.md` and let a student silently vacate a drive's applicant count. `ApplicationStatus.WITHDRAWN` is retained on the Prisma enum so historical rows still read, but nothing writes it: it is absent from `updateApplicationStageSchema` and refused by `validateStageTransition`.
 - **Placement is derived, never stored.** A student counts as placed when they hold a `DriveApplication` with `status = SELECTED`. There is no placement column on `Student` — the former `placementStatus` text column was written by nothing and read with three different casings, so every "Placed" count built on it was structurally always zero. Every screen resolves placement through `features/students/utils/placement-status.ts` (`PLACED_STUDENT_FILTER` for queries, `resolvePlacementState` for a row), so the definition cannot drift between the dept-admin and super-admin panels again.
 - `Student.optedIn` records whether a student is participating in campus placement at all; `Student.optedInLocked` lets a department admin freeze that choice so the student can no longer change it. Both the student (settings) and the department admin (student roster) can write `optedIn`; only the admin can write the lock, and the server re-reads the lock before accepting a student's change.
@@ -112,13 +113,24 @@ code does not require remembering that "config" means "instance".
   what made `getDriveDetail` reject every central drive for a department admin.
   `driveKindColumns()` is the only place those two columns are set, so a
   central drive can never be given an owning department.
+- **Origin is `isCentralDrive`** (Item 16): true for a drive the Super Admin
+  posted, false for one a department posted for itself. Set once, server-side,
+  from the caller's role — `createDrive` always writes a department drive in the
+  caller's own department with the caller as `createdByUserId`,
+  `createCentralDrive` always a central one — and never by an edit. A CHECK ties
+  it to `departmentId` (central ⇔ no owning department). Every central view
+  filters on it (`getCentralDrives`, `getRecentCentralDrives` for the Super
+  Admin dashboard); every department view on the department and
+  `isCentralDrive: false`.
 - **`resolveDepartmentDrive(master, instance)`** is the single abstraction for
   department-facing drives. It returns a flat object: the master row with the
   instance's values overlaid field by field (`??`, so an instance's deliberate
   empty string is kept rather than inherited), plus the three instance-only
   fields `seatingAllocation`, `specialInstructions`, `coordinatorEmail`. **That
   resolved shape is a contract** — six components read it directly, so fields
-  may be added but not removed or renamed.
+  may be added but not removed or renamed. (One deliberate exception, Phase 3:
+  `driveDate` became `nextStageDate` everywhere at once, with every reader
+  updated and type-checked, per the tracker's Item 11.)
 - **Validation is shared, not duplicated.** `schemas/drive-core.ts` holds every
   constraint both drive forms use; `drive.ts` and `central-drive.ts` compose it
   and declare only what genuinely differs (a department drive has a numeric
@@ -154,7 +166,7 @@ STUDENT       Published + eligible department drive → details → application
   `DriveApplicationField` system.
 - **Admin edit permissions are data, enforced on the server.**
   `Drive.departmentEditableFields` lists the content fields a department may
-  override (`DEPARTMENT_EDITABLE_FIELDS`: role, JD, requirements, skills, drive
+  override (`DEPARTMENT_EDITABLE_FIELDS`: role, JD, requirements, skills, next stage
   date, deadline); anything else is LOCKED to the master's value.
   `saveDriveDepartmentConfig` refuses an override of a locked field
   (`findLockedOverrideAttempts`) whatever the form sent; clearing an override
@@ -181,7 +193,7 @@ STUDENT       Published + eligible department drive → details → application
   wizard opens at the first incomplete one — and whether it may be published.
 - **Publish validation is that same function, on the server.**
   `publishDepartmentDrive` refuses unless `readiness.ready`: role and JD, valid
-  dates, deadline in the future and before the drive date, venue and reporting
+  dates, deadline in the future and before the next stage date, venue and reporting
   time, a valid form with at least one field, a valid rule set, batch
   targeting, a valid pipeline, the assignment, the lifecycle state, and a
   master that is not cancelled or archived. Every issue is listed at once.
@@ -259,7 +271,7 @@ notified; the cancellation is audited.
 
 **Deadline extension is controlled.** Only the Super Admin extends a published
 department drive's deadline (`extendDepartmentDriveDeadline`): later only,
-into the future, before the drive date. It writes that department's deadline
+into the future, before the next stage date. It writes that department's deadline
 override, audits old and new with a reason, notifies its applicants and
 eligible students, and never touches application snapshots — each records the
 deadline that applied when it was submitted.
@@ -311,7 +323,7 @@ contract, all in `domain/drive-lifecycle.ts`:
   a coordinator swaps. Freezing them would force a department to un-publish for
   a room change, which is exactly what the lock exists to prevent.
 - **Master, frozen once *any* department has published:** role, JD (text and
-  URL), min CGPA, max backlogs, deadline, drive date, apply method, external
+  URL), min CGPA, max backlogs, deadline, next stage date, apply method, external
   URL, package, selection rounds. Changing one now would alter an experience
   students already acted on — an applicant could become retroactively
   ineligible. Compared value by value, so a Super Admin can still fix a logo.
@@ -337,7 +349,7 @@ put partially configured data in front of students.
 
 The master holds the institution/company-level defaults. Each department
 instance may override, for its own students only: role title, job
-description, requirements, skills, drive date, application deadline, selection
+description, requirements, skills, next stage date, application deadline, selection
 rounds, min CGPA, max backlogs, the application form, and logistics.
 
 ```
@@ -584,8 +596,14 @@ StudentPlacement { studentId, source: APPLICATION | MANUAL, applicationId?,
 Which batches a drive is open to is the drive's `BATCH_YEAR IN (…)` eligibility
 rule on `Student.expectedPassoutYear` — not a second store — evaluated like every other
 rule (`domain/batch-targeting.ts` only reads and writes that rule). The
-picker offers the batches (passout years, shown by their label) the department's students actually have, with
-counts (`getDepartmentBatchYears`); nothing is hard-coded.
+picker offers the batches (passout years, shown by their label) students actually have, with
+counts — a department's (`getDepartmentBatchYears`) for its own drives and
+configuration, the institution's (`getInstitutionBatchYears`) for the Super
+Admin's central drive, where batches are optional and become the master's
+BATCH_YEAR rule every assigned department inherits. Nothing is hard-coded or
+typed in: the server refuses any year no student holds unless the drive
+already targeted it (`unavailableBatchYears`), and a central drive's extra rules
+may not carry BATCH_YEAR themselves — batches have one entry point.
 
 - **Required before publishing.** `publishDepartmentDrive` refuses a drive
   whose effective rule set (the department's, else the master's) targets no
@@ -1021,7 +1039,7 @@ is worth more than any query-level optimisation in this file.
 4. Excel bulk import is all-or-nothing **per row**: a valid row is inserted, an invalid one is held back and reported with every problem it has (tagged: Missing Field, Invalid Email, Invalid Phone, Duplicate MIS/PRN/Roll No./Email — within the file or already registered — and so on), and a partial/malformed student record is never written. One bad row does not block the rest of the file. `evaluateImport` (`features/excel-import/validator/validate-rows.ts`, pure) performs the split and `judgeImportFile` runs it for both the preview and the commit, so the list an admin approves is computed by the same code that decides what is written. Every row sharing a duplicated value within the file is held, not just the later ones.
 5. Session and identity always come from Clerk. The app does not implement its own password storage, session cookies, or OTP logic. The one exception is the one-time seed script, which creates the Super Admin directly via Clerk's backend API — it does not bypass Clerk.
 6. Large or binary content (photos, JD PDFs) never gets written into the Postgres database — it goes to Vercel Blob, with only the reference URL stored in Postgres.
-7. A drive's open/closed status is never stored — it is always derived from `applicationDeadline` via the shared `getDriveStatus()` helper. No code path is allowed to introduce a stored status field or compute the comparison inline elsewhere.
+7. A drive's open/closed status is never stored — it is always derived from its application window (`applicationStartDate` ≤ now ≤ `applicationDeadline`) via the shared `getDriveStatus()` helper, or `openApplicationWhere` / `openApplicationSql` in a query. No code path is allowed to introduce a stored status field or compute the comparison inline elsewhere, and the next stage date never decides it.
 8. A `DriveApplication`'s recruitment stage (`currentStageId`, with the legacy `stage` dual-written) and `status` are written by exactly one server action (`updateApplicationStage`), only to a stage of that department drive's active pipeline, with every move recorded in `ApplicationStageEvent`, callable only by a department admin, scoped both to a drive they run and to an applicant from their own department. No student-facing path writes either column. Every other column on the row is immutable after creation — enforced by a database trigger, not only by the absence of a write path — and the student has no mutation at all; an application is final once submitted. Each application has exactly one `DriveApplicationSnapshot`, written in the same transaction, and never updated. The `(studentId, driveId)` unique constraint is what enforces that: re-applying is the only vector a student has, and it is refused both in `applyToDrive` and at the database.
 10. No flag stores whether a student is placed. A student is placed while they hold a `StudentPlacement` with `revokedAt IS NULL` — an explicit record (company, role, package, date, who) created when an application is marked SELECTED (same transaction) or recorded by a department admin for an off-campus offer. Every reader resolves it through `features/students/utils/placement-status.ts` (`PLACED_STUDENT_FILTER`, `ACTIVE_PLACEMENTS_SELECT`, `placedStudentSql`); a `placed` boolean column, or testing `status = 'SELECTED'` to mean placed anywhere else, is not allowed. Placement is permanent exclusion from new drives, and a placement is never edited or deleted — a mistake is corrected by revoking it with a reason.
 11. When a student's entry type makes a field meaningless — a diploma student's 12th percentage, a regular student's diploma percentage — that column is `NULL`. No code path substitutes `0` for a record the student does not have.
@@ -1032,7 +1050,7 @@ is worth more than any query-level optimisation in this file.
 22. Authorization belongs to the function: an exported action or a query a client component can reach checks the caller itself, typed `where` clauses keep the scope from being lost to a typo, refusals are recognised by error type, and not-found and not-yours read alike.
 21. An export is a dataset name the server resolves, never a query the client shapes: the actor, the drive, the department and the columns are all decided server-side, an allowlist bounds every column, and every export is audited. Action-required items are computed from current state and never stored.
 19. Department admin authorization is a live `DepartmentAdmin` row with status ACTIVE in an active department, asked through `requireDepartmentAdmin` or `getActiveDepartmentAdmin` and nowhere else. Disabling an admin takes access away and keeps everything they did. Admins are invited through Clerk — CampusHire never creates, emails or stores a password — and an invitation is accepted only when one was actually issued for that address and department.
-20. A setting exists only if something reads it, and it applies to what happens next: enforcing a placement season refuses new drive dates, it never re-judges drives or applications that already exist. A department's settings are written for the department in the caller's session; the action takes no department from the request.
+20. A setting exists only if something reads it, and it applies to what happens next: enforcing a placement season refuses new next stage dates, it never re-judges drives or applications that already exist. A department's settings are written for the department in the caller's session; the action takes no department from the request.
 18. A notification is written by exactly one function, for a recipient whose role the event is defined for, under a dedupe key that makes the same event a no-op the second time. Students are told about a drive only where it is published and only if the shared evaluator finds them eligible; a department admin's announcement reaches their own department's students and nobody else, with the scope taken from their session. An announcement is the record and its notifications only point at it.
 17. Eligibility is decided in one place (the evaluator). Screens that list students for a drive show what `getDriveStudents` returns and never re-derive it. An application moves only through `moveApplication`, and a placement is confirmed by a person before it is created; a bulk move never selects.
 16. A department admin may override a master content field only if the Super Admin opened it (`Drive.departmentEditableFields`), checked in `saveDriveDepartmentConfig` against the stored list — never against what the form shows. A department drive is published only when `departmentDriveReadiness` says it is ready, computed on the server from the stored configuration. A drive is never deleted to stop it: it is CANCELLED, with who, when and why recorded, and its applications and snapshots are kept.

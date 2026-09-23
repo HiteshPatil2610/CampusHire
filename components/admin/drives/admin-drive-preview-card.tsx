@@ -14,7 +14,8 @@ interface DrivePreviewDraft {
   packageOffered?: number | null;
   packageDisplay?: string | null;
   minCGPA?: number | null;
-  driveDate?: Date | string | null;
+  applicationStartDate?: Date | string | null;
+  nextStageDate?: Date | string | null;
   applicationDeadline?: Date | string | null;
 }
 
@@ -34,7 +35,10 @@ export function AdminDrivePreviewCard({
   if (!drive) return null;
 
   const deadline = drive.applicationDeadline ? new Date(drive.applicationDeadline) : null;
-  const driveStatus = deadline ? getDriveStatus(deadline) : "open";
+  // A draft without a start date previews as if it opened today.
+  const driveStatus = deadline
+    ? getDriveStatus({ applicationStartDate: drive.applicationStartDate ?? new Date(), applicationDeadline: deadline })
+    : "open";
   const daysLeft = deadline ? Math.floor(getDaysUntilDeadline(deadline)) : null;
   const isDlPassed = driveStatus === "closed";
 
@@ -161,8 +165,8 @@ export function AdminDrivePreviewCard({
             >
               <span>
                 📅{" "}
-                {drive.driveDate
-                  ? new Date(drive.driveDate).toLocaleDateString("en-US", {
+                {drive.nextStageDate
+                  ? new Date(drive.nextStageDate).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
                       year: "numeric",

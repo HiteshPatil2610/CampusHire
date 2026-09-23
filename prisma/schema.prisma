@@ -601,6 +601,12 @@ model Drive {
   // owned by a single department.
   departmentId             String?
   createdByUserId          String?
+  // The drive's ORIGIN: true for a drive the Super Admin posted centrally,
+  // false for one a department posted for itself. Set once, server-side, by
+  // `driveKindColumns` from the caller's role — never from a request — and
+  // never changed by an edit. A CHECK ties it to departmentId (central ⇔ no
+  // owning department), so the two cannot disagree. Every central-drive and
+  // department-drive listing filters on it.
   isCentralDrive           Boolean           @default(false)
   companyName              String
   roleName                 String
@@ -616,8 +622,16 @@ model Drive {
   // see features/drives/utils/format-package.ts before reading it.
   packageOffered           Decimal           @db.Decimal(10, 2)
   selectionRounds          String            @db.Text // JSON array of round names
-  driveDate                DateTime
+  // The application window: open while applicationStartDate <= now <=
+  // applicationDeadline (the Application End Date), decided only by
+  // getDriveStatus in features/drives/utils/drive-status.ts. Stored as
+  // instants: a start day begins at 00:00 India time, an end day finishes at
+  // 23:59:59.999 (features/drives/domain/drive-window.ts).
+  applicationStartDate     DateTime
   applicationDeadline      DateTime
+  // The date of the next stage after applications (e.g. the aptitude test).
+  // Formerly "driveDate"; it never decides whether applications are open.
+  nextStageDate            DateTime
   applyMethod              ApplyMethod
   externalApplyUrl         String?
   minCGPA                  Float
@@ -730,7 +744,7 @@ model DriveDepartmentConfig {
   jobDescriptionText  String?   @db.Text
   requirements        String?   @db.Text
   skills              String?   @db.Text // JSON array of tags
-  driveDate           DateTime?
+  nextStageDate       DateTime?
   applicationDeadline DateTime?
   selectionRounds     String?   @db.Text // JSON array of round names
   minCGPA             Float?

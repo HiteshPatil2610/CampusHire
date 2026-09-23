@@ -8,8 +8,15 @@ import { resolveDeptAdminEligibleDepartments } from "../utils/department-scope";
 import { isCentralDrive } from "../domain/drive-kind";
 import { toDepartmentDriveUpdateData } from "../domain/drive-write-data";
 import { updateDriveWithEligibility } from "../domain/persist-drive";
+import { startDayChanged, validateDriveDates } from "../domain/drive-window";
 import { legacyMasterRules } from "../domain/eligibility-rules";
-import { withTargetedBatchYears } from "../domain/batch-targeting";
+import {
+  targetedBatchYears,
+  unavailableBatchMessage,
+  unavailableBatchYears,
+  withTargetedBatchYears,
+} from "../domain/batch-targeting";
+import { getDepartmentBatchYears } from "@/features/students/queries/department-batch-years";
 import { parseSubmittedFormJson } from "../domain/application-form-schema";
 import { applicationFormKey } from "../domain/application-form";
 import { resolveDepartmentApplicationForm } from "../domain/resolve-department-drive";
@@ -34,7 +41,7 @@ export async function updateDrive(
 
     const existingDrive = await prisma.drive.findUnique({
       where: { id: driveId },
-      include: { formFields: true, _count: { select: { applications: true } } },
+      include: { formFields: true, eligibilityRules: true, _count: { select: { applications: true } } },
     });
 
     if (!existingDrive) {
@@ -94,6 +101,27 @@ export async function updateDrive(
       return { success: false, error: form.error };
     }
 
+    // Eligible batches: batches this department's students are in, or ones
+    // the drive already targeted.
+    const present = (await getDepartmentBatchYears(department.id)).map((row) => row.year);
+    const unknownBatches = unavailableBatchYears(
+      validated.batchYears,
+      present,
+      targetedBatchYears(existingDrive.eligibilityRules)
+    );
+    if (unknownBatches.length > 0) {
+      return { success: false, error: unavailableBatchMessage(unknownBatches) };
+    }
+
+    // The start may not be moved into the past; a start left as it was is
+    // not re-judged, so a drive that opened last week can still be edited.
+    const window = validateDriveDates(validated, {
+      startNotBeforeToday: startDayChanged(validated.applicationStartDate, existingDrive.applicationStartDate),
+    });
+    if (!window.ok) {
+      return { success: false, error: window.issues.map((issue) => issue.message).join(". ") };
+    }
+
     // A department-owned drive is published the moment it is posted, so its
     // form freezes on the first application rather than on publish: students
     // have answered it. Resubmitting the same form with other edits is fine —
@@ -113,7 +141,7 @@ export async function updateDrive(
 
     const outcome = await updateDriveWithEligibility(
       driveId,
-      toDepartmentDriveUpdateData(validated),
+      toDepartmentDriveUpdateData(validated, window.dates),
       scope.eligibleDepartments,
       {
         legacy: legacyMasterRules(validated.minCGPA, validated.maxActiveBacklogs),

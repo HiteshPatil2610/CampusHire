@@ -34,6 +34,8 @@ const drive = (id: string, hours: number, applied = false) => ({
   driveId: id,
   companyName: `Company ${id}`,
   roleName: "SDE",
+  // Applications opened a week ago.
+  applicationStartDate: inHours(-24 * 7),
   deadline: inHours(hours),
   applied,
 });

@@ -24,9 +24,9 @@ export interface DepartmentAssignmentRow {
   departmentDriveId: string | null;
   status: DepartmentDriveStatus | null;
   assignedAt: Date | null;
-  /** This department's deadline and drive date (its override, else the master's). */
+  /** This department's deadline and next stage date (its override, else the master's). */
   applicationDeadline: Date | null;
-  driveDate: Date | null;
+  nextStageDate: Date | null;
   cancellationReason: string | null;
   isAssigned: boolean;
   /** Applications to this drive from this department's students. */
@@ -60,7 +60,7 @@ export async function getDriveAssignments(
       roleName: true,
       isCentralDrive: true,
       applicationDeadline: true,
-      driveDate: true,
+      nextStageDate: true,
     },
   });
 
@@ -80,7 +80,7 @@ export async function getDriveAssignments(
         status: true,
         assignedAt: true,
         applicationDeadline: true,
-        driveDate: true,
+        nextStageDate: true,
         cancellationReason: true,
       },
     }),
@@ -115,7 +115,7 @@ export async function getDriveAssignments(
       applicationDeadline: instance
         ? instance.applicationDeadline ?? drive.applicationDeadline
         : null,
-      driveDate: instance ? instance.driveDate ?? drive.driveDate : null,
+      nextStageDate: instance ? instance.nextStageDate ?? drive.nextStageDate : null,
       cancellationReason: instance?.cancellationReason ?? null,
       isAssigned: instance !== null,
       applicationCount,

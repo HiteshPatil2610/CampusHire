@@ -16,7 +16,7 @@ import {
   toDepartmentDriveUpdateData,
   toCentralDriveUpdateData,
 } from "../domain/drive-write-data";
-import { assertDeadlineInFuture } from "../domain/drive-window";
+import { validateDriveDates, type DriveDates } from "../domain/drive-window";
 import { driveSchema } from "../schemas/drive";
 import { createCentralDriveSchema } from "../schemas/central-drive";
 
@@ -46,7 +46,7 @@ const masterDrive = {
   jobDescriptionText: "Build things.",
   packageOffered: new Prisma.Decimal("12.00"),
   selectionRounds: "[]",
-  driveDate: new Date("2026-12-01"),
+  nextStageDate: new Date("2026-12-01"),
   applicationDeadline: new Date("2026-11-01"),
   applyMethod: "IN_APP" as const,
   externalApplyUrl: null,
@@ -81,7 +81,7 @@ const departmentInstance = {
   jobDescriptionText: null,
   requirements: null,
   skills: null,
-  driveDate: null,
+  nextStageDate: null,
   applicationDeadline: null,
   selectionRounds: null,
   minCGPA: null,
@@ -266,8 +266,9 @@ const departmentInput = {
   packageOffered: 12,
   selectionRounds: ["Aptitude", "Technical"],
   batchYears: ["2026"],
-  driveDate: "2026-12-01",
+  applicationStartDate: "2026-10-01",
   applicationDeadline: "2026-11-01",
+  nextStageDate: "2026-12-01",
   applyMethod: "IN_APP" as const,
   minCGPA: 7,
   maxActiveBacklogs: 0,
@@ -281,20 +282,33 @@ const centralInput = {
   packageDisplay: "14 - 22 LPA",
   minCGPA: 6,
   maxActiveBacklogs: 0,
-  driveDate: "2026-12-01",
+  applicationStartDate: "2026-10-01",
   applicationDeadline: "2026-11-01",
+  nextStageDate: "2026-12-01",
   eligibleDepartments: [DEPT_A],
 };
+
+/** The instants the actions pass to the builders, from validateDriveDates. */
+const DATES: DriveDates = (() => {
+  const decision = validateDriveDates(centralInput, { startNotBeforeToday: false });
+  if (!decision.ok) throw new Error("fixture dates invalid");
+  return decision.dates;
+})();
 
 describe("drive write payloads", () => {
   it("stamps a department drive with its owner and non-central kind", () => {
     const data = buildDepartmentDriveData(
       driveSchema.parse(departmentInput),
-      DEPT_A
+      DEPT_A,
+      DATES
     );
 
     expect(data.isCentralDrive).toBe(false);
     expect(data.departmentId).toBe(DEPT_A);
+    // The window is written as the validated instants, never the raw input.
+    expect(data.applicationStartDate).toEqual(DATES.applicationStartDate);
+    expect(data.applicationDeadline).toEqual(DATES.applicationDeadline);
+    expect(data.nextStageDate).toEqual(DATES.nextStageDate);
     expect(data.selectionRounds).toBe(JSON.stringify(["Aptitude", "Technical"]));
     // The form is not part of the column payload: it is validated and written
     // to `DriveApplicationField` rows (with the JSON mirrored) by
@@ -304,7 +318,8 @@ describe("drive write payloads", () => {
 
   it("stamps a central drive as central and department-less", () => {
     const data = buildCentralDriveData(
-      createCentralDriveSchema.parse(centralInput)
+      createCentralDriveSchema.parse(centralInput),
+      DATES
     );
 
     expect(data.isCentralDrive).toBe(true);
@@ -318,10 +333,12 @@ describe("drive write payloads", () => {
       createCentralDriveSchema.parse({
         ...centralInput,
         externalApplyUrl: "careers.globex.com/apply",
-      })
+      }),
+      DATES
     );
     const withoutPortal = buildCentralDriveData(
-      createCentralDriveSchema.parse(centralInput)
+      createCentralDriveSchema.parse(centralInput),
+      DATES
     );
 
     expect(withPortal.applyMethod).toBe("EXTERNAL");
@@ -332,7 +349,8 @@ describe("drive write payloads", () => {
 
   it("parses a central drive's numeric package from its free-text CTC", () => {
     const data = buildCentralDriveData(
-      createCentralDriveSchema.parse(centralInput)
+      createCentralDriveSchema.parse(centralInput),
+      DATES
     );
 
     expect(data.packageOffered).toBe(14);
@@ -341,7 +359,7 @@ describe("drive write payloads", () => {
   });
 
   it("never rewrites ownership or kind on a department edit", () => {
-    const data = toDepartmentDriveUpdateData(driveSchema.parse(departmentInput));
+    const data = toDepartmentDriveUpdateData(driveSchema.parse(departmentInput), DATES);
 
     expect(data).not.toHaveProperty("isCentralDrive");
     expect(data).not.toHaveProperty("departmentId");
@@ -350,7 +368,8 @@ describe("drive write payloads", () => {
 
   it("never rewrites ownership, kind or rounds on a central edit", () => {
     const data = toCentralDriveUpdateData(
-      createCentralDriveSchema.parse(centralInput)
+      createCentralDriveSchema.parse(centralInput),
+      DATES
     );
 
     expect(data).not.toHaveProperty("isCentralDrive");
@@ -386,7 +405,7 @@ describe("shared validation rules", () => {
     ).toBe(false);
   });
 
-  it("requires the deadline to precede the drive date on both kinds", () => {
+  it("requires the application end to precede the next stage date on both kinds", () => {
     const deptResult = driveSchema.safeParse({
       ...departmentInput,
       applicationDeadline: "2026-12-15",
@@ -407,7 +426,7 @@ describe("shared validation rules", () => {
 
   it("rejects an unparseable date rather than letting it through", () => {
     expect(
-      driveSchema.safeParse({ ...departmentInput, driveDate: "not-a-date" })
+      driveSchema.safeParse({ ...departmentInput, nextStageDate: "not-a-date" })
         .success
     ).toBe(false);
   });
@@ -441,21 +460,5 @@ describe("shared validation rules", () => {
         applyMethod: "EXTERNAL",
       }).success
     ).toBe(false);
-  });
-});
-
-describe("assertDeadlineInFuture", () => {
-  const now = new Date("2026-06-01T00:00:00Z");
-
-  it("accepts a future deadline", () => {
-    expect(assertDeadlineInFuture(new Date("2026-07-01"), now).ok).toBe(true);
-  });
-
-  it("rejects a past deadline", () => {
-    expect(assertDeadlineInFuture(new Date("2026-05-01"), now).ok).toBe(false);
-  });
-
-  it("rejects an invalid date instead of silently passing", () => {
-    expect(assertDeadlineInFuture(new Date("nonsense"), now).ok).toBe(false);
   });
 });

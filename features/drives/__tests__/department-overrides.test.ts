@@ -133,7 +133,7 @@ const master = {
     "jobDescriptionText",
     "requirements",
     "skills",
-    "driveDate",
+    "nextStageDate",
     "applicationDeadline",
   ],
   masterPipeline: null,
@@ -146,7 +146,8 @@ const master = {
   packageOffered: "8.00",
   packageDisplay: "8 LPA",
   selectionRounds: JSON.stringify(["Aptitude", "Technical", "HR"]),
-  driveDate: inDays(14),
+  nextStageDate: inDays(14),
+  applicationStartDate: new Date("2026-01-01T00:00:00Z"),
   applicationDeadline: inDays(7),
   applyMethod: "IN_APP" as const,
   externalApplyUrl: null,
@@ -187,7 +188,7 @@ function instance(departmentId: string, overrides: Record<string, unknown> = {})
     jobDescriptionText: null,
     requirements: null,
     skills: null,
-    driveDate: null,
+    nextStageDate: null,
     applicationDeadline: null,
     selectionRounds: null,
     minCGPA: null,
@@ -286,7 +287,7 @@ describe("resolution — one master, three departments", () => {
     expect(cse.requirements).toBe(master.requirements);
     expect(cse.skills).toBe(master.skills);
     expect(cse.selectionRounds).toBe(master.selectionRounds);
-    expect(cse.driveDate).toEqual(master.driveDate);
+    expect(cse.nextStageDate).toEqual(master.nextStageDate);
     expect(cse.applicationDeadline).toEqual(master.applicationDeadline);
     // Company and package are never overridable.
     expect(cse.companyName).toBe("ABC");
@@ -305,13 +306,14 @@ describe("resolution — one master, three departments", () => {
 
   it("overrides every content field when the department sets them all", () => {
     const deadline = inDays(3);
-    const driveDate = inDays(10);
+    const nextStageDate = inDays(10);
     const full = instance(IT, {
       roleName: "Backend Developer",
       jobDescriptionText: "IT JD",
       requirements: "IT requirements",
       skills: JSON.stringify(["Go", "Postgres"]),
-      driveDate,
+      nextStageDate,
+      applicationStartDate: new Date("2026-01-01T00:00:00Z"),
       applicationDeadline: deadline,
       selectionRounds: JSON.stringify(["Coding", "System design"]),
       minCGPA: 6.0,
@@ -322,7 +324,7 @@ describe("resolution — one master, three departments", () => {
 
     expect(resolved.requirements).toBe("IT requirements");
     expect(resolved.skills).toBe(JSON.stringify(["Go", "Postgres"]));
-    expect(resolved.driveDate).toEqual(driveDate);
+    expect(resolved.nextStageDate).toEqual(nextStageDate);
     expect(resolved.applicationDeadline).toEqual(deadline);
     expect(resolved.selectionRounds).toBe(
       JSON.stringify(["Coding", "System design"])
@@ -440,14 +442,14 @@ describe("override input — absent, null and value are three different things",
       roleName: "   ",
       jobDescriptionText: "",
       skills: [],
-      driveDate: "",
+      nextStageDate: "",
     });
 
     expect(parsed).toEqual({
       roleName: null,
       jobDescriptionText: null,
       skills: null,
-      driveDate: null,
+      nextStageDate: null,
     });
   });
 });
@@ -628,7 +630,7 @@ describe("saveDriveDepartmentConfig — isolation and master protection", () => 
     // Moving the drive date earlier than the inherited (+7 day) deadline.
     const result = await saveDriveDepartmentConfig({
       ...baseInput,
-      overrides: { driveDate: inDays(5).toISOString().slice(0, 10) },
+      overrides: { nextStageDate: inDays(5).toISOString().slice(0, 10) },
     });
 
     expect(result.success).toBe(false);

@@ -6,9 +6,9 @@ import { getSuperAdminActionItems } from "@/features/dashboard/queries/get-actio
 import { ActionRequiredPanel } from "@/features/dashboard/components/action-required-panel";
 import KpiCard from "@/components/shared/kpi-card";
 import StatusBadge from "@/components/ui/status-badge";
-import { prisma } from "@/lib/prisma";
+import { getRecentCentralDrives } from "@/features/drives/queries/get-central-drives";
 import { ensureAcademicCutoverRecorded } from "@/features/students/actions/academic-cutover";
-import { eligibleDepartmentIdsOf, eligibleDepartmentLinksInclude } from "@/features/drives/utils/eligible-departments";
+import { eligibleDepartmentIdsOf } from "@/features/drives/utils/eligible-departments";
 
 export default async function SuperAdminDashboardPage() {
   await requireSuperAdmin();
@@ -18,10 +18,8 @@ export default async function SuperAdminDashboardPage() {
   const [stats, deptMatrix, centralDrives, actionItems] = await Promise.all([
     getSystemStats(),
     getDepartmentMatrix(),
-    prisma.drive.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: { department: true, ...eligibleDepartmentLinksInclude },
-    }),
+    // The "Central drives" card: Super Admin drives only, by origin.
+    getRecentCentralDrives(),
     getSuperAdminActionItems(),
     ensureAcademicCutoverRecorded(),
   ]);

@@ -107,12 +107,12 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
     filteredTotalCount = filteredDrives.length;
   } else if (filter === 'upcoming') {
     filteredDrives = drivesResult.data.filter(
-      (d) => getDriveDisplayStatus(d.applicationDeadline, d.driveDate) === 'upcoming'
+      (d) => getDriveDisplayStatus(d) === 'upcoming'
     );
     filteredTotalCount = filteredDrives.length;
   } else if (filter === 'closed') {
     filteredDrives = drivesResult.data.filter(
-      (d) => getDriveDisplayStatus(d.applicationDeadline, d.driveDate) === 'closed'
+      (d) => getDriveDisplayStatus(d) === 'closed'
     );
     filteredTotalCount = filteredDrives.length;
   }

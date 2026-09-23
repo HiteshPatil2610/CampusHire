@@ -295,7 +295,7 @@ export function DriveAssignmentPanel({
           </strong>
           {action.kind === "extend" && (
             <label style={{ fontSize: 12, display: "grid", gap: 4 }}>
-              New deadline (later than the current one, before the drive date)
+              New deadline (later than the current one, before the next stage date)
               <input
                 type="datetime-local"
                 value={newDeadline}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import StatusBadge from "@/components/ui/status-badge";
-import { formatDriveDate, formatDeadline } from "@/lib/drive-date-helpers";
+import { formatNextStageDate, formatDeadline } from "@/lib/drive-date-helpers";
 import { getDriveStatus } from "../utils/drive-status";
 import { CentralDriveDetailPanel } from "./central-drive-detail-panel";
 import { PostCentralDriveModal } from "./post-central-drive-modal";
@@ -15,6 +15,7 @@ import {
 import type { StageDraft } from "@/features/recruitment/components/pipeline-editor";
 import type { CentralDriveListItem, DriveDeptStatusSummary } from "../queries/get-central-drives";
 import { formatPackage } from "../utils/format-package";
+import type { DepartmentBatchYear } from "@/features/students/queries/department-batch-years";
 
 interface DepartmentOption {
   id: string;
@@ -27,6 +28,8 @@ interface CentralDrivesViewProps {
   departments: DepartmentOption[];
   /** The institution's defaults for a new drive (Settings → Institution). */
   driveDefaults?: { minCGPA: number | null; stages: StageDraft[] };
+  /** Batches (passout years) students across the institution are in. */
+  batchYears: DepartmentBatchYear[];
 }
 
 /** Color class for each dept instance status. */
@@ -75,6 +78,7 @@ export function CentralDrivesView({
   drives,
   departments,
   driveDefaults,
+  batchYears,
 }: CentralDrivesViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -214,7 +218,7 @@ export function CentralDrivesView({
               />
             </div>
 
-            {/* Status, department and drive date narrow the list further. */}
+            {/* Status, department and next stage date narrow the list further. */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
               <select
                 aria-label="Drive status"
@@ -245,14 +249,14 @@ export function CentralDrivesView({
               </select>
               <input
                 type="date"
-                aria-label="Drive date from"
+                aria-label="Next stage date from"
                 value={filters.from}
                 onChange={(e) => setFilters({ ...filters, from: e.target.value })}
                 style={{ padding: "4px 6px", fontSize: 12, borderRadius: 8, border: "0.5px solid var(--border-strong)" }}
               />
               <input
                 type="date"
-                aria-label="Drive date to"
+                aria-label="Next stage date to"
                 value={filters.to}
                 onChange={(e) => setFilters({ ...filters, to: e.target.value })}
                 style={{ padding: "4px 6px", fontSize: 12, borderRadius: 8, border: "0.5px solid var(--border-strong)" }}
@@ -278,7 +282,7 @@ export function CentralDrivesView({
             ) : (
               <div style={{ display: "grid", gap: 8, maxHeight: "calc(100vh - 300px)", overflowY: "auto" }}>
                 {visibleDrives.map((drive) => {
-                  const status = getDriveStatus(new Date(drive.applicationDeadline));
+                  const status = getDriveStatus(drive);
                   const isSelected = drive.id === selectedId;
                   const packageText = formatPackage(drive);
 
@@ -322,7 +326,7 @@ export function CentralDrivesView({
                           {drive._count.applications} application{drive._count.applications !== 1 ? "s" : ""}
                         </span>
                         <span className="text-muted" style={{ fontSize: 11 }}>
-                          {formatDriveDate(new Date(drive.driveDate))}
+                          {formatNextStageDate(new Date(drive.nextStageDate))}
                         </span>
                       </div>
 
@@ -375,6 +379,7 @@ export function CentralDrivesView({
         departments={departments}
         onCreated={(driveId) => setSelectedId(driveId)}
         defaults={driveDefaults}
+        batchYears={batchYears}
       />
     </div>
   );

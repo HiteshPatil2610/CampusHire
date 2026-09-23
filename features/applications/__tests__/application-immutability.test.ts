@@ -122,6 +122,7 @@ const openDrive = {
   roleName: "Software Engineer",
   minCGPA: 7,
   maxActiveBacklogs: 0,
+  applicationStartDate: new Date("2026-01-01T00:00:00Z"),
   applicationDeadline: new Date(Date.now() + 7 * 864e5),
   lifecycleStatus: "PUBLISHED" as const,
   eligibleDepartmentLinks: [{ departmentId: "dept-a" }],

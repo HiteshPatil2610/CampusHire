@@ -36,7 +36,7 @@ function summarize(action: string, entityType: string, metadata: Record<string, 
       ? `Drive cancelled in every department${reason}`
       : `Drive cancelled${of}${reason}`;
   }
-  if (action === "EXTEND_DEADLINE") return `Application deadline extended${of}${reason}`;
+  if (action === "EXTEND_DEADLINE") return `Application end date extended${of}${reason}`;
   if (action === "ASSIGN") return "Assigned to departments";
   if (action === "UNASSIGN") return `Department unassigned${of}`;
   if (action === "CREATE") return "Master drive created";

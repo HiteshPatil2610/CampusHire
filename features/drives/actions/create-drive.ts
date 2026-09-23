@@ -6,12 +6,17 @@ import { notifyEligibleStudentsOfDrive } from "@/features/notifications/actions/
 import { withEligibleDepartmentLinks } from "../utils/eligible-departments";
 import { resolveDeptAdminEligibleDepartments } from "../utils/department-scope";
 import { buildDepartmentDriveData } from "../domain/drive-write-data";
-import { assertDeadlineInFuture } from "../domain/drive-window";
-import { checkDriveDateInSeason } from "@/features/settings/domain/season-window";
+import { validateDriveDates } from "../domain/drive-window";
+import { checkNextStageDateInSeason } from "@/features/settings/domain/season-window";
 import { getInstitutionSettings } from "@/features/settings/queries/get-settings";
 import { createDriveWithEligibility } from "../domain/persist-drive";
 import { legacyMasterRules } from "../domain/eligibility-rules";
-import { withTargetedBatchYears } from "../domain/batch-targeting";
+import {
+  unavailableBatchMessage,
+  unavailableBatchYears,
+  withTargetedBatchYears,
+} from "../domain/batch-targeting";
+import { getDepartmentBatchYears } from "@/features/students/queries/department-batch-years";
 import { parseSubmittedFormJson } from "../domain/application-form-schema";
 
 export interface CreateDriveResult {
@@ -51,17 +56,24 @@ export async function createDrive(input: DriveInput): Promise<CreateDriveResult>
       return { success: false, error: form.error };
     }
 
-    const deadline = assertDeadlineInFuture(
-      new Date(validated.applicationDeadline)
-    );
-    if (!deadline.ok) {
-      return { success: false, error: deadline.error };
+    // Eligible batches: only batches this department's students are in.
+    const present = (await getDepartmentBatchYears(department.id)).map((row) => row.year);
+    const unknownBatches = unavailableBatchYears(validated.batchYears, present);
+    if (unknownBatches.length > 0) {
+      return { success: false, error: unavailableBatchMessage(unknownBatches) };
+    }
+
+    // The application window, decided here on the server: a new drive may
+    // start today but not before, and must end after it starts.
+    const window = validateDriveDates(validated, { startNotBeforeToday: true });
+    if (!window.ok) {
+      return { success: false, error: window.issues.map((issue) => issue.message).join(". ") };
     }
 
     // The placement season, when the institution enforces one. Checked as the
     // drive is written, never retroactively.
-    const season = checkDriveDateInSeason(
-      new Date(validated.driveDate),
+    const season = checkNextStageDateInSeason(
+      window.dates.nextStageDate,
       await getInstitutionSettings()
     );
     if (!season.ok) {
@@ -73,7 +85,8 @@ export async function createDrive(input: DriveInput): Promise<CreateDriveResult>
     // party to hand it to. Only the Super Admin's assignment flow produces
     // ASSIGNED instances.
     const drive = await createDriveWithEligibility(
-      buildDepartmentDriveData(validated, department.id),
+      // Origin, owner and author all come from the session.
+      { ...buildDepartmentDriveData(validated, department.id, window.dates), createdByUserId: user.id },
       scope.eligibleDepartments,
       // The form's CGPA and backlog fields become the drive's rules (the
       // legacy columns are written alongside as mirrors), and its batches the

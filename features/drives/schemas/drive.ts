@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   driveCoreShape,
-  deadlineBeforeDriveDate,
+  driveDatesRefinement,
   maxActiveBacklogsField,
 } from "./drive-core";
 
@@ -77,7 +77,7 @@ export const driveSchema = z
       path: ["externalApplyUrl"],
     }
   )
-  .refine(deadlineBeforeDriveDate.check, deadlineBeforeDriveDate.message);
+  .superRefine(driveDatesRefinement);
 
 export type DriveInput = z.infer<typeof driveSchema>;
 

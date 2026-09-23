@@ -52,7 +52,7 @@ const drive = {
   minCGPA: 7,
   maxActiveBacklogs: 0,
   applicationDeadline: new Date("2030-01-01T00:00:00Z"),
-  driveDate: new Date("2030-02-01T00:00:00Z"),
+  nextStageDate: new Date("2030-02-01T00:00:00Z"),
   eligibleDepartmentLinks: [{ departmentId: CSE }, { departmentId: IT }],
 };
 
@@ -64,7 +64,7 @@ const publishedIn = (departmentId: string, overrides: object = {}) => ({
   status: "PUBLISHED",
   roleName: null,
   applicationDeadline: null,
-  driveDate: null,
+  nextStageDate: null,
   minCGPA: null,
   maxActiveBacklogs: null,
   eligibilityRules: [],

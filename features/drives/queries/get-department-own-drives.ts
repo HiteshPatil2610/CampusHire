@@ -38,7 +38,7 @@ export async function getDepartmentOwnDrives(): Promise<DepartmentOwnDrivesResul
   return {
     drives: drives.map((drive) => ({
       ...serializePackageOffered(drive),
-      driveOpen: getDriveStatus(drive.applicationDeadline) === "open",
+      driveOpen: getDriveStatus(drive) === "open",
     })),
     totalCount,
   };

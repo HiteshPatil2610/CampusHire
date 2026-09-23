@@ -1,3 +1,4 @@
+import { isDriveOpen } from "@/features/drives/utils/drive-status";
 /**
  * "What needs me now" — the action-required items on each role's dashboard.
  *
@@ -77,6 +78,8 @@ export interface StudentActionInput {
     driveId: string;
     companyName: string;
     roleName: string;
+    /** When applications open; a drive not open yet asks nothing of anyone. */
+    applicationStartDate: Date;
     deadline: Date;
     applied: boolean;
   }[];
@@ -122,7 +125,11 @@ export function buildStudentActionItems(input: StudentActionInput): ActionItem[]
 
   // Open drives not applied to yet: those closing soon are their own items;
   // the rest are one group, so a long list does not bury the urgent ones.
-  const open = input.eligibleDrives.filter((drive) => !drive.applied && drive.deadline > now);
+  const open = input.eligibleDrives.filter(
+    (drive) =>
+      !drive.applied &&
+      isDriveOpen({ applicationStartDate: drive.applicationStartDate, applicationDeadline: drive.deadline }, now)
+  );
   const closing = open.filter((drive) => hoursUntil(drive.deadline, now) <= HIGH_WITHIN_HOURS);
   for (const drive of closing) {
     items.push({

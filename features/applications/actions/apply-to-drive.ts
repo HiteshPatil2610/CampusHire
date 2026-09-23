@@ -234,7 +234,7 @@ export async function applyToDrive(
     }
 
     // The resolved deadline, stated on its own so the refusal says why.
-    if (getDriveStatus(drive.applicationDeadline) !== "open") {
+    if (getDriveStatus(drive) !== "open") {
       return {
         success: false,
         error: "Applications for this drive are closed",
@@ -342,7 +342,7 @@ export async function applyToDrive(
           roleName: drive.roleName,
           packageDisplay: drive.packageDisplay ?? null,
           packageOffered: String(drive.packageOffered),
-          driveDate: drive.driveDate,
+          nextStageDate: drive.nextStageDate,
           applicationDeadline: drive.applicationDeadline,
           applyMethod: drive.applyMethod,
           jobDescriptionText: drive.jobDescriptionText ?? null,

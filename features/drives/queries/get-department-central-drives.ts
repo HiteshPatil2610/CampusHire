@@ -99,7 +99,7 @@ export async function getDepartmentCentralDrives(): Promise<DepartmentCentralDri
         isCentralDrive: true,
         eligibleDepartmentLinks: { some: { departmentId: department.id } },
       },
-      orderBy: [{ driveDate: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ nextStageDate: "desc" }, { createdAt: "desc" }],
       include: {
         // The master's default rules, and this department's instance with
         // its own rules — never another department's.

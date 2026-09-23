@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { UNPLACED_STUDENT_FILTER, placedStudentSql } from "../utils/placement-status";
 import { Prisma } from "@prisma/client";
+import { openApplicationSql } from "@/features/drives/utils/drive-status";
 
 export interface AdminDashboardStats {
   totalStudents: number;
@@ -59,7 +60,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
         COUNT(*) FILTER (WHERE s."isPending" = true)                   AS "pendingStudents",
         (SELECT COUNT(*) FROM "Drive" d
           WHERE d."departmentId" = ${deptId}
-            AND d."applicationDeadline" > NOW())                       AS "openDrivesCount"
+            AND ${Prisma.raw(openApplicationSql("d"))})              AS "openDrivesCount"
       FROM "Student" s
       WHERE s."departmentId" = ${deptId}
     `,

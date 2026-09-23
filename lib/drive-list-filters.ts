@@ -41,19 +41,16 @@ export function filterDriveCatalog(
   switch (filter) {
     case 'open':
       return drives.filter(
-        (drive) => getDriveStatus(drive.applicationDeadline) === 'open'
+        (drive) => getDriveStatus(drive) === 'open'
       );
     case 'applied':
       return drives.filter((drive) => appliedDriveIds.has(drive.id));
     case 'upcoming':
-      return drives.filter(
-        (drive) =>
-          getDriveStatus(drive.applicationDeadline) === 'open' &&
-          new Date(drive.driveDate) > now
-      );
+      // Applications have not opened yet.
+      return drives.filter((drive) => getDriveStatus(drive) === 'upcoming');
     case 'closed':
       return drives.filter(
-        (drive) => getDriveStatus(drive.applicationDeadline) === 'closed'
+        (drive) => getDriveStatus(drive) === 'closed'
       );
     default:
       return drives;

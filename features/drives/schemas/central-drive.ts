@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   driveCoreShape,
-  deadlineBeforeDriveDate,
+  driveDatesRefinement,
   maxActiveBacklogsField,
   optionalUrl,
 } from "./drive-core";
@@ -56,6 +56,20 @@ export const createCentralDriveSchema = z
           !rules.some((rule) => rule.ruleType === "CGPA" || rule.ruleType === "ACTIVE_BACKLOGS"),
         "Set CGPA and backlog limits with their own fields, not as extra rules"
       )
+      .refine(
+        (rules) => !rules.some((rule) => rule.ruleType === "BATCH_YEAR"),
+        "Choose eligible batches with the batch selector, not as an extra rule"
+      )
+      .optional(),
+    /**
+     * The eligible batches (expected passout years) every assigned department
+     * inherits, stored as the master's BATCH_YEAR rule. Optional: a department
+     * may set its own, and must have one before it publishes. Each year must be
+     * one students actually hold. Omit to leave the stored targeting untouched.
+     */
+    batchYears: z
+      .array(z.string().regex(/^\d{4}$/, "Invalid batch year"))
+      .max(10, "Too many batches")
       .optional(),
     /**
      * Which content fields each assigned department may override. Anything
@@ -73,7 +87,7 @@ export const createCentralDriveSchema = z
      */
     recruitmentStages: z.array(z.unknown()).max(15).optional(),
   })
-  .refine(deadlineBeforeDriveDate.check, deadlineBeforeDriveDate.message);
+  .superRefine(driveDatesRefinement);
 
 export type CreateCentralDriveInput = z.infer<typeof createCentralDriveSchema>;
 

@@ -3,6 +3,7 @@ import type { DriveInput } from "../schemas/drive";
 import type { CreateCentralDriveInput } from "../schemas/central-drive";
 import { parsePackageFromDisplay } from "../utils/parse-package-display";
 import { driveKindColumns } from "./drive-kind";
+import type { DriveDates } from "./drive-window";
 
 /**
  * Turning validated form input into the `Drive` column payload.
@@ -18,11 +19,15 @@ import { driveKindColumns } from "./drive-kind";
 
 /**
  * A department drive. `departmentId` is the caller's own department, resolved
- * server-side by the action — never taken from the request.
+ * server-side by the action — never taken from the request — and the origin
+ * columns come from `driveKindColumns`, so nothing a form sends can make a
+ * department drive central. `dates` are the instants `validateDriveDates`
+ * produced from the submitted days.
  */
 export function buildDepartmentDriveData(
   input: DriveInput,
-  departmentId: string
+  departmentId: string,
+  dates: DriveDates
 ): Prisma.DriveUncheckedCreateInput {
   return {
     ...driveKindColumns("DEPARTMENT", departmentId),
@@ -33,8 +38,9 @@ export function buildDepartmentDriveData(
     packageOffered: input.packageOffered,
     packageDisplay: input.packageDisplay ?? null,
     selectionRounds: JSON.stringify(input.selectionRounds),
-    driveDate: new Date(input.driveDate),
-    applicationDeadline: new Date(input.applicationDeadline),
+    applicationStartDate: dates.applicationStartDate,
+    applicationDeadline: dates.applicationDeadline,
+    nextStageDate: dates.nextStageDate,
     applyMethod: input.applyMethod,
     externalApplyUrl: input.externalApplyUrl || null,
     minCGPA: input.minCGPA,
@@ -62,7 +68,8 @@ export function buildDepartmentDriveData(
  * an edit does not reassign authorship.
  */
 export function buildCentralDriveData(
-  input: CreateCentralDriveInput
+  input: CreateCentralDriveInput,
+  dates: DriveDates
 ): Omit<Prisma.DriveUncheckedCreateInput, "createdByUserId"> {
   const portalUrl = input.externalApplyUrl || null;
 
@@ -84,8 +91,9 @@ export function buildCentralDriveData(
     skills: input.skills && input.skills.length > 0 ? JSON.stringify(input.skills) : null,
     packageOffered: parsePackageFromDisplay(input.packageDisplay),
     packageDisplay: input.packageDisplay,
-    driveDate: new Date(input.driveDate),
-    applicationDeadline: new Date(input.applicationDeadline),
+    applicationStartDate: dates.applicationStartDate,
+    applicationDeadline: dates.applicationDeadline,
+    nextStageDate: dates.nextStageDate,
     applyMethod: portalUrl ? "EXTERNAL" : "IN_APP",
     externalApplyUrl: portalUrl,
     minCGPA: input.minCGPA,
@@ -110,12 +118,14 @@ export function buildCentralDriveData(
  *   Re-sending the seeded `DRAFT` would silently pull a released drive back.
  */
 export function toDepartmentDriveUpdateData(
-  input: DriveInput
+  input: DriveInput,
+  dates: DriveDates
 ): Prisma.DriveUncheckedUpdateInput {
   const { isCentralDrive, departmentId, ...rest } = buildDepartmentDriveData(
     input,
     // Discarded immediately below — ownership is never rewritten by an edit.
-    ""
+    "",
+    dates
   );
   void isCentralDrive;
   void departmentId;
@@ -123,7 +133,8 @@ export function toDepartmentDriveUpdateData(
 }
 
 export function toCentralDriveUpdateData(
-  input: CreateCentralDriveInput
+  input: CreateCentralDriveInput,
+  dates: DriveDates
 ): Prisma.DriveUncheckedUpdateInput {
   const {
     isCentralDrive,
@@ -131,7 +142,7 @@ export function toCentralDriveUpdateData(
     selectionRounds,
     lifecycleStatus,
     ...rest
-  } = buildCentralDriveData(input);
+  } = buildCentralDriveData(input, dates);
   void isCentralDrive;
   void departmentId;
   void selectionRounds;

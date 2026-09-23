@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { placedStudentSql } from "@/features/students/utils/placement-status";
 import { requireSuperAdmin } from "@/lib/auth";
+import { openApplicationSql } from "@/features/drives/utils/drive-status";
 
 export interface SystemStats {
   totalStudents:     number;
@@ -13,7 +14,7 @@ export interface SystemStats {
   activeDepartments: number;
   totalAdmins:       number;
   totalDrives:       number;
-  openDrives:        number;  // applicationDeadline > now
+  openDrives:        number;  // taking applications now (openApplicationSql)
   placedStudents:    number;  // holds an active placement
   optedOutStudents:  number;  // registered but not participating in placement
   overallPlacementRate: number; // percentage 0–100
@@ -42,7 +43,7 @@ export async function getSystemStats(): Promise<SystemStats> {
       (SELECT COUNT(*) FROM "Department" WHERE "isActive" = true)         AS "activeDepartments",
       (SELECT COUNT(*) FROM "DepartmentAdmin")                            AS "totalAdmins",
       (SELECT COUNT(*) FROM "Drive")                                      AS "totalDrives",
-      (SELECT COUNT(*) FROM "Drive" WHERE "applicationDeadline" > NOW())  AS "openDrives",
+      (SELECT COUNT(*) FROM "Drive" WHERE ${Prisma.raw(openApplicationSql())}) AS "openDrives",
       (SELECT COUNT(*) FROM "Student" s WHERE ${Prisma.raw(placedStudentSql('s'))}) AS "placedStudents",
       (SELECT COUNT(*) FROM "Student"
         WHERE "isPending" = false AND "optedIn" = false)                  AS "optedOutStudents"

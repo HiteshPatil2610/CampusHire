@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getDriveStatus } from "../utils/drive-status";
 import { Prisma } from "@prisma/client";
 import type { Drive } from "@prisma/client";
+import { openApplicationWhere } from "../utils/drive-status";
 
 export interface AdminDrivesParams {
   page?: number;
@@ -48,9 +49,9 @@ export async function getAdminDrives(
   // the session, so no filter above can widen past it.
   const where: Prisma.DriveWhereInput = {
     ...(status === "open"
-      ? { applicationDeadline: { gt: new Date() } }
+      ? openApplicationWhere()
       : status === "closed"
-        ? { applicationDeadline: { lte: new Date() } }
+        ? { applicationDeadline: { lt: new Date() } }
         : {}),
     ...(search
       ? {

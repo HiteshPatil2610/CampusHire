@@ -92,7 +92,7 @@ export interface SubmissionSnapshotInput {
       roleName: string;
       packageDisplay: string | null;
       packageOffered: string;
-      driveDate: Date;
+      nextStageDate: Date;
       applicationDeadline: Date;
       applyMethod: string;
       jobDescriptionText: string | null;

@@ -135,6 +135,7 @@ describe("Super Admin applications drill-down", () => {
     vi.mocked(prisma.drive.findUnique).mockResolvedValue({
       companyName: "Acme",
       roleName: "SE",
+      applicationStartDate: new Date("2026-01-01T00:00:00Z"),
       applicationDeadline: new Date(),
       isCentralDrive: true,
       departmentConfigs: [
@@ -220,7 +221,7 @@ describe("drive activity", () => {
 
     expect(items.map((item) => item.summary)).toEqual([
       "Drive cancelled (CSE) — Company withdrew",
-      "Application deadline extended (IT) — Company asked",
+      "Application end date extended (IT) — Company asked",
       "Recruitment stage change proposed (ECE) — Add a GD round",
       "Published to students (ME)",
       "Master drive created",

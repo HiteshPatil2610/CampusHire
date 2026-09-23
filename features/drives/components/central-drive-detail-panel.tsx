@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import StatusBadge from "@/components/ui/status-badge";
-import { formatDriveDate, formatDeadline } from "@/lib/drive-date-helpers";
+import { formatNextStageDate, formatDeadline } from "@/lib/drive-date-helpers";
 import { eligibleDepartmentIdsOf } from "../utils/eligible-departments";
 import { getDriveStatus } from "../utils/drive-status";
 import { MasterDriveSettings } from "./master-drive-settings";
@@ -96,7 +96,7 @@ function LinkRow({ label, url }: { label: string; url: string | null }) {
 }
 
 function OverviewTab({ drive, eligibleCodes }: { drive: CentralDriveListItem; eligibleCodes: string[] }) {
-  const status = getDriveStatus(new Date(drive.applicationDeadline));
+  const status = getDriveStatus(drive);
   const packageText = formatPackage(drive);
   const skills = parseJsonArray(drive.skills);
 
@@ -159,8 +159,8 @@ function OverviewTab({ drive, eligibleCodes }: { drive: CentralDriveListItem; el
       <div className="card">
         <h3 className="section-title" style={{ marginBottom: 12 }}>Key Dates</h3>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <DetailRow label="Drive Date" value={formatDriveDate(new Date(drive.driveDate))} />
-          <DetailRow label="Application Deadline" value={formatDeadline(new Date(drive.applicationDeadline))} />
+          <DetailRow label="Next Stage Date" value={formatNextStageDate(new Date(drive.nextStageDate))} />
+          <DetailRow label="Application End Date" value={formatDeadline(new Date(drive.applicationDeadline))} />
           <DetailRow label="Min CGPA" value={String(drive.minCGPA)} />
           <DetailRow label="Max Active Backlogs" value={String(drive.maxActiveBacklogs)} />
         </div>

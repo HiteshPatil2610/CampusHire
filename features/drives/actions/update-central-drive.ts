@@ -17,6 +17,14 @@ import { findLockedMasterFieldChanges } from "../domain/drive-lifecycle";
 import { legacyMasterRules, ruleSetKey } from "../domain/eligibility-rules";
 import { masterExtraRules } from "../domain/persist-eligibility-rules";
 import { toCentralDriveUpdateData } from "../domain/drive-write-data";
+import { startDayChanged, validateDriveDates } from "../domain/drive-window";
+import {
+  targetedBatchYears,
+  unavailableBatchMessage,
+  unavailableBatchYears,
+  withTargetedBatchYears,
+} from "../domain/batch-targeting";
+import { getInstitutionBatchYears } from "@/features/students/queries/department-batch-years";
 import {
   auditDriveWrite,
   updateDriveWithEligibility,
@@ -63,6 +71,36 @@ export async function updateCentralDrive(
 
     const data = validated.data;
 
+    // The window: the start may not be moved into the past; a start left as
+    // it was is not re-judged.
+    const window = validateDriveDates(data, {
+      startNotBeforeToday: startDayChanged(data.applicationStartDate, existing.applicationStartDate),
+    });
+    if (!window.ok) {
+      return { success: false, error: window.issues.map((issue) => issue.message).join(". ") };
+    }
+    const updateData = toCentralDriveUpdateData(data, window.dates);
+
+    // The master's extra rules as they will be written. Eligible batches are
+    // its BATCH_YEAR rule: a year must be one students hold, or one the drive
+    // already targeted. Omitting both leaves the stored rules untouched.
+    const stored = await prisma.driveEligibilityRule.findMany({ where: { driveId } });
+    const storedExtras = masterExtraRules(stored);
+    if (data.batchYears && data.batchYears.length > 0) {
+      const present = (await getInstitutionBatchYears()).map((row) => row.year);
+      const unknownBatches = unavailableBatchYears(data.batchYears, present, targetedBatchYears(storedExtras));
+      if (unknownBatches.length > 0) {
+        return { success: false, error: unavailableBatchMessage(unknownBatches) };
+      }
+    }
+    const extras =
+      data.eligibilityRules === undefined && data.batchYears === undefined
+        ? undefined
+        : withTargetedBatchYears(
+            data.eligibilityRules ?? storedExtras,
+            data.batchYears ?? targetedBatchYears(storedExtras) ?? []
+          );
+
     // Once any department has released this drive, the fields describing the
     // opportunity are frozen. Changing the role, the eligibility bar or the
     // deadline now would silently alter an experience students have already
@@ -74,19 +112,14 @@ export async function updateCentralDrive(
     if (publishedCount > 0) {
       const changed: string[] = findLockedMasterFieldChanges(
         existing as unknown as Record<string, unknown>,
-        toCentralDriveUpdateData(data) as unknown as Record<string, unknown>
+        updateData as unknown as Record<string, unknown>
       );
 
-      // The master's extra default rules are frozen for the same reason as
-      // its CGPA bar: a department inheriting them has already judged
-      // applicants against them.
-      if (data.eligibilityRules !== undefined) {
-        const stored = await prisma.driveEligibilityRule.findMany({
-          where: { driveId },
-        });
-        if (ruleSetKey(masterExtraRules(stored)) !== ruleSetKey(data.eligibilityRules)) {
-          changed.push("eligibilityRules");
-        }
+      // The master's extra default rules — its batches included — are frozen
+      // for the same reason as its CGPA bar: a department inheriting them has
+      // already judged applicants against them.
+      if (extras !== undefined && ruleSetKey(storedExtras) !== ruleSetKey(extras)) {
+        changed.push("eligibilityRules");
       }
 
       if (changed.length > 0) {
@@ -114,11 +147,11 @@ export async function updateCentralDrive(
 
     const outcome = await updateDriveWithEligibility(
       driveId,
-      toCentralDriveUpdateData(data),
+      updateData,
       departments.map((d) => d.id),
       {
         legacy: legacyMasterRules(data.minCGPA, data.maxActiveBacklogs),
-        extras: data.eligibilityRules,
+        extras,
       }
     );
 

@@ -18,7 +18,7 @@ export interface DriveFilterInput {
   status: MasterDriveStatus | "";
   /** A department the drive is assigned to. */
   departmentId: string;
-  /** ISO dates (YYYY-MM-DD), inclusive, on the drive date. */
+  /** ISO dates (YYYY-MM-DD), inclusive, on the next stage date. */
   from: string;
   to: string;
 }
@@ -35,7 +35,7 @@ export interface FilterableDrive {
   companyName: string;
   roleName: string;
   lifecycleStatus: MasterDriveStatus;
-  driveDate: Date;
+  nextStageDate: Date;
   eligibleDepartmentLinks: { departmentId: string }[];
 }
 
@@ -72,7 +72,7 @@ export function filterDrives<T extends FilterableDrive>(drives: T[], filter: Dri
       return false;
     }
 
-    const driveTime = new Date(drive.driveDate).getTime();
+    const driveTime = new Date(drive.nextStageDate).getTime();
     if (from !== null && driveTime < from) return false;
     if (to !== null && driveTime > to) return false;
     return true;

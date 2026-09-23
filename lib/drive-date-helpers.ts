@@ -1,5 +1,5 @@
 /**
- * Drive date formatting utilities
+ * Next stage date formatting utilities
  * 
  * These functions provide consistent date formatting across the drives UI.
  * All use real Date objects - no DEMO_TODAY or hardcoded test dates.
@@ -8,11 +8,12 @@
 /**
  * Format application deadline for display
  * 
- * @param deadline - Application deadline date
+ * @param deadline - Application end date date
  * @returns Formatted date string (e.g., "15 Sep 2026")
  */
 export function formatDeadline(deadline: Date): string {
   return deadline.toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -20,13 +21,14 @@ export function formatDeadline(deadline: Date): string {
 }
 
 /**
- * Format drive date for display
+ * Format next stage date for display
  * 
- * @param date - Drive date
+ * @param date - Next stage date
  * @returns Formatted date string with weekday (e.g., "Mon, 20 Sep 2026")
  */
-export function formatDriveDate(date: Date): string {
+export function formatNextStageDate(date: Date): string {
   return date.toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -37,7 +39,7 @@ export function formatDriveDate(date: Date): string {
 /**
  * Format relative deadline (e.g., "3 days left" or "2 hours left")
  * 
- * @param deadline - Application deadline date
+ * @param deadline - Application end date date
  * @returns Relative time string
  */
 export function formatDeadlineRelative(deadline: Date): string {
@@ -69,6 +71,7 @@ export function formatDeadlineRelative(deadline: Date): string {
  */
 export function formatDateShort(date: Date): string {
   return date.toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     day: 'numeric',
     month: 'short',
   });

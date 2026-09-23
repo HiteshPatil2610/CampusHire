@@ -5,14 +5,17 @@ import { CentralDrivesView } from "@/features/drives/components/central-drives-v
 import { getInstitutionSettings } from "@/features/settings/queries/get-settings";
 import { institutionDefaultStages } from "@/features/settings/domain/default-pipeline";
 import { toStageDrafts } from "@/features/recruitment/domain/stage-drafts";
+import { getInstitutionBatchYears } from "@/features/students/queries/department-batch-years";
 
 export default async function CampusDrivesPage() {
   await requireSuperAdmin();
 
-  const [centralDrives, departments, settings] = await Promise.all([
+  const [centralDrives, departments, settings, batchYears] = await Promise.all([
     getCentralDrives({ page: 1, pageSize: 100 }),
     getDepartments({ page: 1, pageSize: 100, includeInactive: false }),
     getInstitutionSettings(),
+    // Eligible-batch options: the passout years students actually hold.
+    getInstitutionBatchYears(),
   ]);
 
   return (
@@ -27,6 +30,7 @@ export default async function CampusDrivesPage() {
         minCGPA: settings.defaultMinCGPA,
         stages: toStageDrafts(institutionDefaultStages(settings.defaultPipelineStages)),
       }}
+      batchYears={batchYears}
     />
   );
 }

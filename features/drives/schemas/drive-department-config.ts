@@ -48,7 +48,7 @@ export const departmentOverridesSchema = z.object({
   jobDescriptionText: overrideText(5000, "Job description too long"),
   requirements: overrideText(5000, "Requirements too long"),
   skills: overrideList(40, "Too many skills"),
-  driveDate: overrideDate("Invalid drive date"),
+  nextStageDate: overrideDate("Invalid next stage date"),
   applicationDeadline: overrideDate("Invalid application deadline"),
   selectionRounds: overrideList(20, "Too many selection rounds"),
   // Eligibility is deliberately not here. It is a rule set (`eligibilityRules`

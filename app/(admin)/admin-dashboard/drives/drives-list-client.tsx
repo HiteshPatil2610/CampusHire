@@ -134,7 +134,7 @@ export function DrivesListClient({
                   <th>Company & Role</th>
                   <th>Package</th>
                   <th>Eligibility</th>
-                  <th>Drive Date</th>
+                  <th>Next Stage Date</th>
                   <th>Deadline</th>
                   <th>Status</th>
                   <th>Applications</th>
@@ -145,7 +145,7 @@ export function DrivesListClient({
                 {drives.map((drive) => {
                   const packageDisplay = formatPackage(drive);
                   const deadline = new Date(drive.applicationDeadline);
-                  const driveDate = new Date(drive.driveDate);
+                  const nextStageDate = new Date(drive.nextStageDate);
 
                   return (
                     <tr key={drive.id}>
@@ -177,7 +177,7 @@ export function DrivesListClient({
                       </td>
                       <td>
                         <div style={{ fontSize: 12 }}>
-                          {driveDate.toLocaleDateString("en-US", {
+                          {nextStageDate.toLocaleDateString("en-US", {
                             month: "short",
                             day: "numeric",
                             year: "numeric",

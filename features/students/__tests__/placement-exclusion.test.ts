@@ -144,7 +144,7 @@ const cseInstance = {
   jobDescriptionText: null,
   requirements: null,
   skills: null,
-  driveDate: null,
+  nextStageDate: null,
   applicationDeadline: null,
   selectionRounds: null,
   minCGPA: null,
@@ -176,7 +176,8 @@ const master = {
   packageOffered: "8.00",
   packageDisplay: "8 LPA",
   selectionRounds: "[]",
-  driveDate: inDays(14),
+  nextStageDate: inDays(14),
+  applicationStartDate: new Date("2026-01-01T00:00:00Z"),
   applicationDeadline: inDays(7),
   applyMethod: "IN_APP",
   externalApplyUrl: null,
@@ -228,6 +229,7 @@ function student(extra: Record<string, unknown> = {}, cgpa = 8.2) {
 }
 
 const resolvedCse = {
+  applicationStartDate: new Date("2026-01-01T00:00:00Z"),
   applicationDeadline: inDays(7),
   eligibleDepartmentLinks: [{ departmentId: CSE }],
   eligibilityRules: [...master.eligibilityRules, ...cseInstance.eligibilityRules],

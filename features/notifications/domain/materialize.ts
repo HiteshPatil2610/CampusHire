@@ -73,7 +73,7 @@ async function remindStudentOfClosingDrives(userId: string): Promise<void> {
       driveId: true,
       applicationDeadline: true,
       roleName: true,
-      drive: { select: { companyName: true, roleName: true, applicationDeadline: true } },
+      drive: { select: { companyName: true, roleName: true, applicationStartDate: true, applicationDeadline: true } },
     },
     take: 10,
   });
@@ -97,7 +97,8 @@ async function remindStudentOfClosingDrives(userId: string): Promise<void> {
     if (!audience.eligible.some((row) => row.userId === userId)) continue;
 
     const deadline = config.applicationDeadline ?? config.drive.applicationDeadline;
-    if (getDriveStatus(deadline) !== "open") continue;
+    // Only a drive taking applications now: not one that has not opened.
+    if (getDriveStatus({ applicationStartDate: config.drive.applicationStartDate, applicationDeadline: deadline }) !== "open") continue;
 
     await deliverNotification(prisma, {
       event: "DRIVE_DEADLINE",
@@ -138,7 +139,7 @@ async function remindAdminOfClosingDrives(userId: string): Promise<void> {
       driveId: true,
       applicationDeadline: true,
       roleName: true,
-      drive: { select: { companyName: true, roleName: true, applicationDeadline: true } },
+      drive: { select: { companyName: true, roleName: true, applicationStartDate: true, applicationDeadline: true } },
     },
     take: 10,
   });

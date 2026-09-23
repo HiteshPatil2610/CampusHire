@@ -5,6 +5,7 @@ import { eligibilityRuleSetSchema } from "./eligibility-rule-schema";
 import type { EligibilityRuleInput } from "./eligibility-rules";
 import { BATCH_TARGETING_REQUIRED, targetedBatchYears } from "./batch-targeting";
 import { validatePipelineStages } from "@/features/recruitment/domain/pipeline";
+import { checkStoredWindow } from "./drive-window";
 
 /**
  * How far a department admin's configuration of a department drive has got,
@@ -50,7 +51,8 @@ export interface ReadinessInput {
   resolved: {
     roleName: string;
     jobDescriptionText: string | null;
-    driveDate: Date;
+    applicationStartDate: Date;
+    nextStageDate: Date;
     applicationDeadline: Date;
     eligibilityRules: EligibilityRuleInput[];
   };
@@ -96,15 +98,16 @@ export function departmentDriveReadiness(input: ReadinessInput): DepartmentDrive
   if (blank(resolved.jobDescriptionText) && blank(input.master.jobDescriptionUrl)) {
     issues.details.push("Add a job description.");
   }
-  if (!validDate(resolved.driveDate)) issues.details.push("Set a valid drive date.");
+  if (!validDate(resolved.nextStageDate)) issues.details.push("Set a valid next stage date.");
   if (!validDate(resolved.applicationDeadline)) {
-    issues.details.push("Set a valid application deadline.");
+    issues.details.push("Set a valid application end date.");
   } else {
     if (resolved.applicationDeadline <= now) {
-      issues.details.push("The application deadline has already passed. Set a later one.");
+      issues.details.push("The application end date has already passed. Set a later one.");
     }
-    if (validDate(resolved.driveDate) && resolved.applicationDeadline >= resolved.driveDate) {
-      issues.details.push("The application deadline must be before the drive date.");
+    // End after start, next stage after end — the rule every form uses.
+    if (validDate(resolved.nextStageDate) && validDate(resolved.applicationStartDate)) {
+      for (const issue of checkStoredWindow(resolved)) issues.details.push(`${issue.message}.`);
     }
   }
   if (blank(instance?.venue)) issues.details.push("Set the venue.");

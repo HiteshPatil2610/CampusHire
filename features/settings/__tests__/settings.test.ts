@@ -48,7 +48,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { prisma } from "@/lib/prisma";
 import { createAuditLogInTransaction } from "@/lib/audit";
 import { saveDepartmentSettings, saveInstitutionSettings } from "../actions/save-settings";
-import { checkDriveDateInSeason } from "../domain/season-window";
+import { checkNextStageDateInSeason } from "../domain/season-window";
 import { institutionDefaultStages, STANDARD_ROUNDS } from "../domain/default-pipeline";
 
 const tx = (prisma as unknown as { __tx: Record<string, Record<string, ReturnType<typeof vi.fn>>> })
@@ -196,18 +196,18 @@ describe("the placement season", () => {
   };
 
   it("allows a date inside the season", () => {
-    expect(checkDriveDateInSeason(new Date("2026-09-20T00:00:00Z"), window).ok).toBe(true);
+    expect(checkNextStageDateInSeason(new Date("2026-09-20T00:00:00Z"), window).ok).toBe(true);
   });
 
   it("refuses one before it, and says when the season starts", () => {
-    const check = checkDriveDateInSeason(new Date("2026-06-01T00:00:00Z"), window);
+    const check = checkNextStageDateInSeason(new Date("2026-06-01T00:00:00Z"), window);
 
     expect(check.ok).toBe(false);
     expect(check.error).toContain("starts");
   });
 
   it("refuses one after it", () => {
-    const check = checkDriveDateInSeason(new Date("2027-06-01T00:00:00Z"), window);
+    const check = checkNextStageDateInSeason(new Date("2027-06-01T00:00:00Z"), window);
 
     expect(check.ok).toBe(false);
     expect(check.error).toContain("ends");
@@ -215,7 +215,7 @@ describe("the placement season", () => {
 
   it("allows anything while the window is not enforced", () => {
     expect(
-      checkDriveDateInSeason(new Date("2020-01-01T00:00:00Z"), {
+      checkNextStageDateInSeason(new Date("2020-01-01T00:00:00Z"), {
         ...window,
         enforceSeasonWindow: false,
       }).ok
@@ -224,7 +224,7 @@ describe("the placement season", () => {
 
   it("allows anything when no season has been set", () => {
     expect(
-      checkDriveDateInSeason(new Date("2020-01-01T00:00:00Z"), {
+      checkNextStageDateInSeason(new Date("2020-01-01T00:00:00Z"), {
         seasonStart: null,
         seasonEnd: null,
         enforceSeasonWindow: true,
@@ -233,8 +233,8 @@ describe("the placement season", () => {
   });
 
   it("says nothing about a missing or unreadable date; other checks own that", () => {
-    expect(checkDriveDateInSeason(null, window).ok).toBe(true);
-    expect(checkDriveDateInSeason(new Date("nonsense"), window).ok).toBe(true);
+    expect(checkNextStageDateInSeason(null, window).ok).toBe(true);
+    expect(checkNextStageDateInSeason(new Date("nonsense"), window).ok).toBe(true);
   });
 });
 

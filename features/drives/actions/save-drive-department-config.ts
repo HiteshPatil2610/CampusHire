@@ -16,6 +16,13 @@ import {
   isDepartmentDriveInactive,
   isDepartmentDriveLocked,
 } from "../domain/drive-lifecycle";
+import { checkStoredWindow } from "../domain/drive-window";
+import {
+  targetedBatchYears,
+  unavailableBatchMessage,
+  unavailableBatchYears,
+} from "../domain/batch-targeting";
+import { getDepartmentBatchYears } from "@/features/students/queries/department-batch-years";
 import { toInstanceOverrideColumns } from "../domain/department-overrides";
 import {
   resolveDepartmentApplicationForm,
@@ -126,6 +133,27 @@ export async function saveDriveDepartmentConfig(
       }
     }
 
+    // Eligible batches (the department's BATCH_YEAR rule): only batches this
+    // department's students are in, or ones this drive already targeted here
+    // or on the master.
+    if (eligibilityRules !== undefined) {
+      const selected = targetedBatchYears(eligibilityRules) ?? [];
+      if (selected.length > 0) {
+        const masterRules = await prisma.driveEligibilityRule.findMany({
+          where: { driveId },
+          select: { ruleType: true, operator: true, numberValue: true, listValue: true },
+        });
+        const present = (await getDepartmentBatchYears(department.id)).map((row) => row.year);
+        const unknownBatches = unavailableBatchYears(selected, present, [
+          ...(targetedBatchYears(existing?.eligibilityRules ?? []) ?? []),
+          ...(targetedBatchYears(masterRules) ?? []),
+        ]);
+        if (unknownBatches.length > 0) {
+          return { success: false, error: unavailableBatchMessage(unknownBatches) };
+        }
+      }
+    }
+
     const overrideColumns = toInstanceOverrideColumns(overrides);
 
     // The Super Admin decides which master fields a department may override.
@@ -197,10 +225,11 @@ export async function saveDriveDepartmentConfig(
         ...overrideColumns,
       });
 
-      if (proposed.applicationDeadline >= proposed.driveDate) {
+      const windowIssues = checkStoredWindow(proposed);
+      if (windowIssues.length > 0) {
         return {
           success: false,
-          error: "Application deadline must be before the drive date",
+          error: windowIssues.map((issue) => issue.message).join(". "),
         };
       }
     }

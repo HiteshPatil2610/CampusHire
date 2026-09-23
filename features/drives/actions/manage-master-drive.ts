@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { endOfIndiaDay, parseDay } from "../domain/drive-window";
 import { z } from "zod";
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -283,7 +284,7 @@ const extendSchema = z.object({
  *
  * Only later, never earlier (an earlier deadline would shut out students who
  * planned around the published one), only into the future, and still before
- * the drive date. The department's deadline override is what changes; the
+ * the next stage date. The department's deadline override is what changes; the
  * master and every other department are untouched.
  *
  * Submitted applications and their snapshots are not touched: each snapshot
@@ -302,7 +303,10 @@ export async function extendDepartmentDriveDeadline(
       return { success: false, error: validated.error.errors[0]?.message ?? "Invalid input" };
     }
     const { driveId, departmentId, reason } = validated.data;
-    const newDeadline = new Date(validated.data.newDeadline);
+    // A day extends to the end of that India day, like every application end.
+    const newDay = parseDay(validated.data.newDeadline);
+    if (!newDay) return { success: false, error: "Enter a valid deadline." };
+    const newDeadline = endOfIndiaDay(newDay);
 
     const drive = await prisma.drive.findUnique({
       where: { id: driveId },
@@ -338,8 +342,8 @@ export async function extendDepartmentDriveDeadline(
     if (newDeadline <= now) {
       return { success: false, error: "The new deadline must be in the future." };
     }
-    if (newDeadline >= current.driveDate) {
-      return { success: false, error: "The new deadline must be before the drive date." };
+    if (newDeadline >= current.nextStageDate) {
+      return { success: false, error: "The new deadline must be before the next stage date." };
     }
 
     await prisma.$transaction(async (tx) => {

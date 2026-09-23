@@ -186,7 +186,7 @@ export default async function AdminDashboardPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {drivesResult.data.map((drive) => {
-                const status = getDriveStatus(drive.applicationDeadline);
+                const status = getDriveStatus(drive);
                 const packageDisplay =
                   formatPackage(drive);
 
@@ -224,7 +224,7 @@ export default async function AdminDashboardPage() {
                           marginTop: 2,
                         }}
                       >
-                        {new Date(drive.driveDate).toLocaleDateString()}
+                        {new Date(drive.nextStageDate).toLocaleDateString()}
                       </div>
                     </div>
                   </div>

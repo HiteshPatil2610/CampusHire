@@ -102,7 +102,8 @@ function createMockDrive(
     jobDescriptionText: null,
     packageOffered: new Prisma.Decimal("12.00"),
     selectionRounds: JSON.stringify(["Aptitude", "Technical", "HR"]),
-    driveDate: futureDate,
+    nextStageDate: futureDate,
+    applicationStartDate: new Date("2026-01-01T00:00:00Z"),
     applicationDeadline: new Date(futureDate.getTime() - 7 * 24 * 60 * 60 * 1000), // 7 days before drive
     applyMethod: "EXTERNAL",
     externalApplyUrl: "https://example.com/apply",
@@ -184,6 +185,7 @@ describe("Drive Eligibility", () => {
     pastDate.setDate(pastDate.getDate() - 1);
 
     const drive = createMockDrive({
+      applicationStartDate: new Date("2026-01-01T00:00:00Z"),
       applicationDeadline: pastDate,
     });
 

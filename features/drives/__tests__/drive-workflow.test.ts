@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { endOfIndiaDay, indiaDay } from "../domain/drive-window";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -133,7 +134,8 @@ const masterDrive = (extra: Record<string, unknown> = {}) => ({
   selectionRounds: JSON.stringify(["Aptitude", "Technical Interview"]),
   masterPipeline: JSON.stringify(TECH_STAGES),
   departmentEditableFields: ["roleName"],
-  driveDate: inDays(20),
+  nextStageDate: inDays(20),
+  applicationStartDate: new Date("2026-01-01T00:00:00Z"),
   applicationDeadline: inDays(10),
   applyMethod: "IN_APP",
   externalApplyUrl: null,
@@ -172,7 +174,7 @@ const instanceRow = (extra: Record<string, unknown> = {}) => ({
   jobDescriptionText: null,
   requirements: null,
   skills: null,
-  driveDate: null,
+  nextStageDate: null,
   applicationDeadline: null,
   selectionRounds: null,
   minCGPA: null,
@@ -386,8 +388,10 @@ describe("creating a master drive", () => {
     packageDisplay: "12 LPA",
     minCGPA: 7,
     maxActiveBacklogs: 0,
-    driveDate: inDays(20).toISOString(),
-    applicationDeadline: inDays(10).toISOString(),
+    // Form input: days. A new drive may open today.
+    applicationStartDate: indiaDay(new Date()),
+    applicationDeadline: indiaDay(inDays(10)),
+    nextStageDate: indiaDay(inDays(20)),
     eligibleDepartments: [CSE],
   };
 
@@ -448,7 +452,8 @@ describe("step completion and publish validation", () => {
     resolved: {
       roleName: "SE",
       jobDescriptionText: "JD",
-      driveDate: inDays(20),
+      nextStageDate: inDays(20),
+      applicationStartDate: new Date("2026-01-01T00:00:00Z"),
       applicationDeadline: inDays(10),
       eligibilityRules: [
         { ruleType: "BATCH_YEAR", operator: "IN", numberValue: null, listValue: ["2027"] },
@@ -484,6 +489,7 @@ describe("step completion and publish validation", () => {
     const input = ready();
     input.resolved = {
       ...input.resolved,
+      applicationStartDate: new Date("2026-01-01T00:00:00Z"),
       applicationDeadline: inDays(-1),
       eligibilityRules: [
         ...input.resolved.eligibilityRules,
@@ -494,7 +500,7 @@ describe("step completion and publish validation", () => {
     input.pipelineStages = [{ name: "Offer", stageType: "OFFER" }];
     const issues = departmentDriveReadiness(input).issues.join(" ");
 
-    expect(issues).toMatch(/deadline has already passed/);
+    expect(issues).toMatch(/application end date has already passed/);
     expect(issues).toMatch(/at least one application field/);
     expect(issues).toMatch(/CGPA/);
     expect(issues).toMatch(/Recruitment stages/);
@@ -757,9 +763,10 @@ describe("deadline extension", () => {
   it("writes the department's deadline, audits old and new, notifies, and leaves snapshots alone", async () => {
     const drive = published();
     vi.mocked(prisma.drive.findUnique).mockResolvedValue(drive as never);
-    const newDeadline = inDays(12);
+    // The new deadline closes at the end of its India day, like every application end.
+    const newDeadline = endOfIndiaDay(indiaDay(inDays(12)));
     const result = await extendDepartmentDriveDeadline({
-      driveId: DRIVE_ID, departmentId: CSE, newDeadline: newDeadline.toISOString(), reason: "Company asked for more time",
+      driveId: DRIVE_ID, departmentId: CSE, newDeadline: indiaDay(inDays(12)), reason: "Company asked for more time",
     });
 
     expect(result.success).toBe(true);

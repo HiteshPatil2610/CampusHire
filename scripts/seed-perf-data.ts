@@ -250,8 +250,10 @@ async function seed() {
             packageOffered: 4 + Math.round(rand() * 20),
             packageDisplay: null,
             selectionRounds: JSON.stringify(['Aptitude', 'Technical', 'HR']),
-            driveDate: new Date(deadline.getTime() + 7 * day),
+            // Open for the two weeks before the deadline.
+            applicationStartDate: new Date(deadline.getTime() - 14 * day),
             applicationDeadline: deadline,
+            nextStageDate: new Date(deadline.getTime() + 7 * day),
             applyMethod: 'IN_APP',
             minCGPA: Number((6 + rand() * 2.5).toFixed(1)),
             maxActiveBacklogs: Math.floor(rand() * 3),

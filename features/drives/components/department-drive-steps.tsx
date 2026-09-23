@@ -234,7 +234,7 @@ export function StudentPreviewStep({ driveId, dirty }: { driveId: string; dirty:
           </div>
 
           <PreviewSection title="Dates">
-            Drive: {formatDate(preview.driveDate)} · Apply by: {formatDate(preview.applicationDeadline)}
+            Drive: {formatDate(preview.nextStageDate)} · Apply by: {formatDate(preview.applicationDeadline)}
           </PreviewSection>
 
           <PreviewSection title="Job description">

@@ -55,7 +55,7 @@ const drive = (extra: object = {}) => ({
   packageOffered: "12.00",
   selectionRounds: "[]",
   masterPipeline: null,
-  driveDate: inDays(20),
+  nextStageDate: inDays(20),
   applicationDeadline: inDays(10),
   applyMethod: "IN_APP",
   externalApplyUrl: null,

@@ -1,4 +1,5 @@
 import type { DepartmentOverridesInput } from "../schemas/drive-department-config";
+import { endOfIndiaDay, parseDay, startOfIndiaDay } from "./drive-window";
 
 /**
  * Turning a department's validated overrides into instance column values.
@@ -15,7 +16,7 @@ export interface InstanceOverrideColumns {
   jobDescriptionText?: string | null;
   requirements?: string | null;
   skills?: string | null;
-  driveDate?: Date | null;
+  nextStageDate?: Date | null;
   applicationDeadline?: Date | null;
   selectionRounds?: string | null;
 }
@@ -33,14 +34,23 @@ export function toInstanceOverrideColumns(
   if (input.requirements !== undefined) columns.requirements = input.requirements;
   if (input.skills !== undefined)
     columns.skills = input.skills === null ? null : JSON.stringify(input.skills);
-  if (input.driveDate !== undefined)
-    columns.driveDate = input.driveDate === null ? null : new Date(input.driveDate);
+  // Days become instants the same way the master's do: the next stage at the
+  // start of its India day, the application end at the end of its day.
+  if (input.nextStageDate !== undefined)
+    columns.nextStageDate = input.nextStageDate === null ? null : dayInstant(input.nextStageDate, "start");
   if (input.applicationDeadline !== undefined)
     columns.applicationDeadline =
-      input.applicationDeadline === null ? null : new Date(input.applicationDeadline);
+      input.applicationDeadline === null ? null : dayInstant(input.applicationDeadline, "end");
   if (input.selectionRounds !== undefined)
     columns.selectionRounds =
       input.selectionRounds === null ? null : JSON.stringify(input.selectionRounds);
 
   return columns;
+}
+
+/** A submitted day (or older full timestamp) as the stored instant. */
+function dayInstant(value: string | Date, edge: "start" | "end"): Date {
+  const day = parseDay(value);
+  if (!day) return new Date(value);
+  return edge === "start" ? startOfIndiaDay(day) : endOfIndiaDay(day);
 }

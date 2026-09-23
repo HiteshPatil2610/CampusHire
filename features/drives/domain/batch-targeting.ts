@@ -36,3 +36,23 @@ export function withTargetedBatchYears(
 
 export const BATCH_TARGETING_REQUIRED =
   "Select the batches this drive is open to before publishing it.";
+
+/**
+ * Which selected batches are not offered: a batch can be targeted only if
+ * students actually hold that passout year (`present`), or if the drive
+ * already targeted it (`alreadyTargeted`) — so an existing drive stays
+ * editable even after its last student of a batch has moved on. Years are
+ * never typed in or hard-coded. Returns the refused years; empty means valid.
+ */
+export function unavailableBatchYears(
+  selected: string[],
+  present: number[],
+  alreadyTargeted: string[] | null = null
+): string[] {
+  const allowed = new Set([...present.map(String), ...(alreadyTargeted ?? [])]);
+  return [...new Set(selected)].filter((year) => !allowed.has(year)).sort();
+}
+
+export function unavailableBatchMessage(years: string[]): string {
+  return `No student is in batch ${years.join(", ")} — choose from the batches your students are in.`;
+}

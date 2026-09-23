@@ -1,94 +1,97 @@
 import { describe, it, expect } from "vitest";
 import {
   getDriveStatus,
-  isDriveOpen,
-  getDaysUntilDeadline,
   getDriveDisplayStatus,
+  isDriveOpen,
+  openApplicationWhere,
+  openApplicationSql,
+  getDaysUntilDeadline,
 } from "../utils/drive-status";
 
-describe("getDriveDisplayStatus", () => {
-  function daysFromNow(days: number): Date {
-    const date = new Date();
-    date.setDate(date.getDate() + days);
-    return date;
-  }
+/**
+ * The application window — the one place "is this drive taking applications"
+ * is decided:  open ⇔ applicationStartDate <= now <= applicationDeadline.
+ * The next stage date plays no part in it.
+ */
 
-  it("returns 'open' while the application deadline is still ahead", () => {
-    expect(getDriveDisplayStatus(daysFromNow(3), daysFromNow(10))).toBe("open");
+const at = (iso: string) => new Date(iso);
+const window = {
+  applicationStartDate: at("2026-10-01T00:00:00Z"),
+  applicationDeadline: at("2026-10-10T00:00:00Z"),
+};
+
+describe("getDriveStatus — the application window", () => {
+  it("7. an application that has not started is 'upcoming', never open", () => {
+    expect(getDriveStatus(window, at("2026-09-30T23:59:59.999Z"))).toBe("upcoming");
+    expect(isDriveOpen(window, at("2026-09-30T23:59:59.999Z"))).toBe(false);
   });
 
-  it("returns 'upcoming' when applications closed but the drive is still ahead", () => {
-    expect(getDriveDisplayStatus(daysFromNow(-2), daysFromNow(5))).toBe("upcoming");
+  it("8. a currently open application is 'open', inclusive at both ends", () => {
+    expect(getDriveStatus(window, at("2026-10-01T00:00:00Z"))).toBe("open");
+    expect(getDriveStatus(window, at("2026-10-05T12:00:00Z"))).toBe("open");
+    expect(getDriveStatus(window, at("2026-10-10T00:00:00Z"))).toBe("open");
   });
 
-  it("returns 'closed' once both the deadline and the drive date have passed", () => {
-    expect(getDriveDisplayStatus(daysFromNow(-10), daysFromNow(-3))).toBe("closed");
+  it("6. an expired application is 'closed'", () => {
+    expect(getDriveStatus(window, at("2026-10-10T00:00:00.001Z"))).toBe("closed");
   });
 
-  it("prefers 'open' even when the drive date has somehow passed", () => {
-    expect(getDriveDisplayStatus(daysFromNow(2), daysFromNow(-1))).toBe("open");
+  it("ignores the next stage date entirely", () => {
+    const withStage = { ...window, nextStageDate: at("2026-09-01T00:00:00Z") };
+    expect(getDriveStatus(withStage, at("2026-10-05T00:00:00Z"))).toBe("open");
+  });
+
+  it("accepts the strings a Date becomes in a client component", () => {
+    const serialized = {
+      applicationStartDate: window.applicationStartDate.toISOString(),
+      applicationDeadline: window.applicationDeadline.toISOString(),
+    };
+    expect(getDriveStatus(serialized, at("2026-10-05T00:00:00Z"))).toBe("open");
+  });
+
+  it("never opens an unreadable window", () => {
+    expect(getDriveStatus({ applicationStartDate: "nonsense", applicationDeadline: "nonsense" })).toBe("closed");
   });
 });
 
-describe("Drive Status Calculation", () => {
-  it("should return 'open' for future deadline", () => {
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + 7); // 7 days from now
+describe("getDriveDisplayStatus — what a student card says", () => {
+  const drive = { ...window, nextStageDate: at("2026-10-15T00:00:00Z") };
 
-    const status = getDriveStatus(futureDate);
-    expect(status).toBe("open");
+  it("upcoming before applications open", () => {
+    expect(getDriveDisplayStatus(drive, at("2026-09-20T00:00:00Z"))).toBe("upcoming");
   });
 
-  it("should return 'closed' for past deadline", () => {
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 7); // 7 days ago
-
-    const status = getDriveStatus(pastDate);
-    expect(status).toBe("closed");
+  it("open during the window", () => {
+    expect(getDriveDisplayStatus(drive, at("2026-10-05T00:00:00Z"))).toBe("open");
   });
 
-  it("should return 'closed' for current moment", () => {
-    const now = new Date();
-
-    const status = getDriveStatus(now);
-    expect(status).toBe("closed");
+  it("in-progress after applications close, while the next stage is ahead", () => {
+    expect(getDriveDisplayStatus(drive, at("2026-10-12T00:00:00Z"))).toBe("in-progress");
   });
 
-  it("should correctly identify open drive", () => {
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + 5);
+  it("closed once the next stage has passed too", () => {
+    expect(getDriveDisplayStatus(drive, at("2026-10-20T00:00:00Z"))).toBe("closed");
+  });
+});
 
-    expect(isDriveOpen(futureDate)).toBe(true);
+describe("the same rule for the database", () => {
+  it("a Prisma filter: started, and not yet ended", () => {
+    const now = at("2026-10-05T00:00:00Z");
+    expect(openApplicationWhere(now)).toEqual({
+      applicationStartDate: { lte: now },
+      applicationDeadline: { gte: now },
+    });
   });
 
-  it("should correctly identify closed drive", () => {
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 1);
-
-    expect(isDriveOpen(pastDate)).toBe(false);
+  it("raw SQL, with or without a table alias", () => {
+    expect(openApplicationSql()).toBe(`"applicationStartDate" <= NOW() AND "applicationDeadline" >= NOW()`);
+    expect(openApplicationSql("d")).toBe(`d."applicationStartDate" <= NOW() AND d."applicationDeadline" >= NOW()`);
   });
+});
 
-  it("should calculate days until deadline correctly", () => {
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + 7);
-
-    const days = getDaysUntilDeadline(futureDate);
-    expect(days).toBeGreaterThan(6.9);
-    expect(days).toBeLessThan(7.1);
-  });
-
-  it("should return 0 days for past deadline", () => {
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 3);
-
-    const days = getDaysUntilDeadline(pastDate);
-    expect(days).toBe(0);
-  });
-
-  it("should handle date object correctly", () => {
-    const futureDate = new Date("2030-12-31");
-
-    const status = getDriveStatus(futureDate);
-    expect(status).toBe("open");
+describe("getDaysUntilDeadline", () => {
+  it("counts down, and never below zero", () => {
+    expect(getDaysUntilDeadline(window.applicationDeadline, at("2026-10-08T00:00:00Z"))).toBe(2);
+    expect(getDaysUntilDeadline(window.applicationDeadline, at("2026-10-12T00:00:00Z"))).toBe(0);
   });
 });

@@ -86,7 +86,7 @@ const publishedInstance = {
   jobDescriptionText: null,
   requirements: null,
   skills: null,
-  driveDate: null,
+  nextStageDate: null,
   applicationDeadline: null,
   selectionRounds: null,
   minCGPA: null,
@@ -187,7 +187,8 @@ describe("applyToDrive", () => {
     jobDescriptionText: null,
     packageOffered: new Prisma.Decimal("12.00"),
     selectionRounds: JSON.stringify(["Aptitude", "Technical", "HR"]),
-    driveDate: new Date("2026-12-01"),
+    nextStageDate: new Date("2026-12-01"),
+    applicationStartDate: new Date("2026-01-01T00:00:00Z"),
     applicationDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
     applyMethod: "IN_APP" as const,
     externalApplyUrl: null,
@@ -491,6 +492,7 @@ describe("applyToDrive", () => {
     it("should reject if application deadline passed", async () => {
       const closedDrive = {
         ...mockDrive,
+        applicationStartDate: new Date("2026-01-01T00:00:00Z"),
         applicationDeadline: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
       };
 

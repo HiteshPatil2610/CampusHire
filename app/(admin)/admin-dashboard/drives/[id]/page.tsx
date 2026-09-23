@@ -77,6 +77,7 @@ export default async function DriveWorkspacePage({ params, searchParams }: PageP
       companyName: true,
       roleName: true,
       packageDisplay: true,
+      applicationStartDate: true,
       applicationDeadline: true,
       isCentralDrive: true,
       departmentId: true,
@@ -108,7 +109,8 @@ export default async function DriveWorkspacePage({ params, searchParams }: PageP
 
   const roleName = instance?.roleName ?? master.roleName;
   const deadline = instance?.applicationDeadline ?? master.applicationDeadline;
-  const open = getDriveStatus(deadline) === "open";
+  const open =
+    getDriveStatus({ applicationStartDate: master.applicationStartDate, applicationDeadline: deadline }) === "open";
   const lifecycle = instance?.status ?? "PUBLISHED";
 
   // Only the open tab's data.

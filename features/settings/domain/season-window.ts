@@ -23,29 +23,29 @@ const day = (date: Date) =>
   date.toLocaleDateString("en-IN", { dateStyle: "medium", timeZone: "Asia/Kolkata" });
 
 /**
- * Whether a drive date may be written.
+ * Whether a next stage date may be written.
  *
  * Not enforced, or no window set, means anything goes — the setting says
  * plainly that it only bites once it is turned on.
  */
-export function checkDriveDateInSeason(
-  driveDate: Date | null | undefined,
+export function checkNextStageDateInSeason(
+  nextStageDate: Date | null | undefined,
   window: SeasonWindow
 ): SeasonCheck {
   if (!window.enforceSeasonWindow) return { ok: true };
   if (!window.seasonStart || !window.seasonEnd) return { ok: true };
-  if (!driveDate || Number.isNaN(driveDate.getTime())) return { ok: true };
+  if (!nextStageDate || Number.isNaN(nextStageDate.getTime())) return { ok: true };
 
-  if (driveDate < window.seasonStart) {
+  if (nextStageDate < window.seasonStart) {
     return {
       ok: false,
-      error: `The placement season starts on ${day(window.seasonStart)}. Choose a drive date on or after it, or change the season in Institution settings.`,
+      error: `The placement season starts on ${day(window.seasonStart)}. Choose a next stage date on or after it, or change the season in Institution settings.`,
     };
   }
-  if (driveDate > window.seasonEnd) {
+  if (nextStageDate > window.seasonEnd) {
     return {
       ok: false,
-      error: `The placement season ends on ${day(window.seasonEnd)}. Choose a drive date on or before it, or change the season in Institution settings.`,
+      error: `The placement season ends on ${day(window.seasonEnd)}. Choose a next stage date on or before it, or change the season in Institution settings.`,
     };
   }
   return { ok: true };

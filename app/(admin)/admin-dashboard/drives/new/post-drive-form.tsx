@@ -9,7 +9,11 @@ import {
   type ApplicationFieldConfig,
 } from "@/components/admin/drives/admin-application-fields-panel";
 import { AdminDrivePreviewCard } from "@/components/admin/drives/admin-drive-preview-card";
-import DatePicker from "@/components/ui/date-picker";
+import {
+  DriveDateFields,
+  driveDateIssues,
+  type DriveDateValues,
+} from "@/features/drives/components/drive-date-fields";
 import UrlField from "@/components/ui/url-field";
 import CompanyLogoField from "@/components/shared/company-logo-field";
 import { useToast } from "@/hooks/use-toast";
@@ -54,6 +58,7 @@ export function PostDriveForm({
   const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [datesTouched, setDatesTouched] = useState(false);
 
   const [form, setForm] = useState({
     companyName: "",
@@ -65,8 +70,9 @@ export function PostDriveForm({
     minCGPA: "7.0",
     maxActiveBacklogs: "0",
     eligibleDepartments: [departmentId],
-    driveDate: "",
+    applicationStartDate: "",
     applicationDeadline: "",
+    nextStageDate: "",
     applyMethod: "IN_APP" as "IN_APP" | "EXTERNAL",
     externalApplyUrl: "",
     selectionRounds: ["Aptitude Test", "Technical Interview", "HR Interview"],
@@ -190,24 +196,11 @@ export function PostDriveForm({
       return;
     }
 
-    if (!form.driveDate || !form.applicationDeadline) {
-      toast({
-        title: "Error",
-        description: "Drive date and deadline are required",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const deadline = new Date(form.applicationDeadline);
-    const driveDate = new Date(form.driveDate);
-
-    if (deadline >= driveDate) {
-      toast({
-        title: "Error",
-        description: "Application deadline must be before drive date",
-        variant: "destructive",
-      });
+    // The same date rules the server applies; it re-checks them on submit.
+    setDatesTouched(true);
+    const dateProblems = Object.values(driveDateIssues(form, { startNotBeforeToday: true, requireAll: true }));
+    if (dateProblems.length > 0) {
+      toast({ title: "Check the dates", description: dateProblems.join(". "), variant: "destructive" });
       return;
     }
 
@@ -241,8 +234,9 @@ export function PostDriveForm({
         maxActiveBacklogs: parseInt(form.maxActiveBacklogs, 10),
         batchYears: selectedBatches,
         eligibleDepartments: form.eligibleDepartments,
-        driveDate: form.driveDate,
+        applicationStartDate: form.applicationStartDate,
         applicationDeadline: form.applicationDeadline,
+        nextStageDate: form.nextStageDate,
         applyMethod: form.applyMethod,
         externalApplyUrl: form.externalApplyUrl.trim() || undefined,
         selectionRounds: form.selectionRounds,
@@ -422,22 +416,13 @@ export function PostDriveForm({
       <div className="card" style={{ marginBottom: 20 }}>
         <h3 className="section-title">Dates & Application Method</h3>
 
-        <div className="field-row">
-          <div className="field">
-            <label>Drive Date *</label>
-            <DatePicker
-              value={form.driveDate ? new Date(form.driveDate) : null}
-              onChange={(date: Date | null) => setForm({ ...form, driveDate: date ? date.toISOString().split("T")[0] : "" })}
-            />
-          </div>
-          <div className="field">
-            <label>Application Deadline *</label>
-            <DatePicker
-              value={form.applicationDeadline ? new Date(form.applicationDeadline) : null}
-              onChange={(date: Date | null) => setForm({ ...form, applicationDeadline: date ? date.toISOString().split("T")[0] : "" })}
-            />
-          </div>
-        </div>
+        <DriveDateFields
+          values={form}
+          onChange={(dates: DriveDateValues) => setForm({ ...form, ...dates })}
+          startNotBeforeToday
+          showMissing={datesTouched}
+          disabled={isPending}
+        />
 
         <div className="field">
           <label>Application Method *</label>
@@ -559,8 +544,9 @@ export function PostDriveForm({
           packageOffered: parseFloat(form.packageOffered) || 0,
           packageDisplay: form.packageDisplay,
           minCGPA: parseFloat(form.minCGPA),
-          driveDate: form.driveDate ? new Date(form.driveDate) : new Date(),
-          applicationDeadline: form.applicationDeadline ? new Date(form.applicationDeadline) : new Date(),
+          applicationStartDate: form.applicationStartDate || null,
+          nextStageDate: form.nextStageDate || null,
+          applicationDeadline: form.applicationDeadline || null,
         }}
         venue={form.venue}
         reportingTime={form.reportingTime}

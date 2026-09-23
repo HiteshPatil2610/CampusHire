@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { indiaDay } from "../domain/drive-window";
 
 /**
  * Department scoping on drive mutations.
@@ -17,6 +18,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     drive: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
+    // Eligible-batch options: the batches students hold.
+    student: {
+      groupBy: vi.fn(async () => [{ expectedPassoutYear: 2026, _count: { _all: 40 } }]),
+    },
     // A department's own drive gets its pipeline when posted.
     driveDepartmentConfig: { findMany: vi.fn(async () => []) },
     department: { findMany: vi.fn() },
@@ -113,7 +118,9 @@ const superAdmin = { id: "user-super", role: "SUPER_ADMIN" as const };
 
 /** Dates far enough out to satisfy "deadline in the future, before drive date". */
 const deadline = new Date(Date.now() + 7 * 864e5).toISOString();
-const driveDate = new Date(Date.now() + 14 * 864e5).toISOString();
+const nextStageDate = new Date(Date.now() + 14 * 864e5).toISOString();
+/** Applications open today — the earliest a new drive may start. */
+const startDay = indiaDay(new Date());
 
 const baseDriveInput = {
   companyName: "Acme Corp",
@@ -121,7 +128,8 @@ const baseDriveInput = {
   packageOffered: 12,
   selectionRounds: ["Aptitude", "Technical"],
   batchYears: ["2026"],
-  driveDate,
+  nextStageDate,
+  applicationStartDate: startDay,
   applicationDeadline: deadline,
   applyMethod: "IN_APP" as const,
   minCGPA: 7,
@@ -136,6 +144,8 @@ const existingDriveOfA = {
   companyName: "Acme Corp",
   // Unchanged by the edits below: rounds belong to the recruitment pipeline.
   selectionRounds: JSON.stringify(["Aptitude", "Technical"]),
+  applicationStartDate: new Date("2026-01-01T00:00:00Z"),
+  eligibilityRules: [],
 };
 
 beforeEach(() => {
@@ -335,7 +345,8 @@ describe("createCentralDrive — super admin global access", () => {
     packageDisplay: "12 LPA",
     minCGPA: 6,
     maxActiveBacklogs: 0,
-    driveDate,
+    nextStageDate,
+    applicationStartDate: startDay,
     applicationDeadline: deadline,
     eligibleDepartments: [DEPT_A, DEPT_B, DEPT_C],
   };
@@ -401,5 +412,178 @@ describe("createCentralDrive — super admin global access", () => {
 
     expect(result.success).toBe(false);
     expect(prisma.drive.create).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 3 — drive origin (Item 16) and eligible batches (Item 9)
+// ---------------------------------------------------------------------------
+
+/** The BATCH_YEAR rule written for the drive, or null when none was. */
+function writtenBatchRule(): string[] | null {
+  for (const [args] of vi.mocked(prisma.driveEligibilityRule.createMany).mock.calls) {
+    const rows = (args as { data: { ruleType: string; listValue: string[] }[] }).data;
+    const batch = rows.find((row) => row.ruleType === "BATCH_YEAR");
+    if (batch) return batch.listValue;
+  }
+  return null;
+}
+
+describe("drive origin is decided by the server", () => {
+  it("11. a department-created drive is department-owned, never central, authored by the caller", async () => {
+    const result = await createDrive(baseDriveInput);
+
+    expect(result.success).toBe(true);
+    expect(prisma.drive.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          isCentralDrive: false,
+          departmentId: DEPT_A,
+          createdByUserId: adminOfA.user.id,
+        }),
+      })
+    );
+  });
+
+  it("12. a Super-Admin-created drive is central, department-less, authored by the Super Admin", async () => {
+    vi.mocked(prisma.department.findMany).mockResolvedValue([{ id: DEPT_A, code: "CS" }] as never);
+
+    await createCentralDrive({
+      companyName: "Globex",
+      roleName: "Analyst",
+      packageDisplay: "12 LPA",
+      minCGPA: 6,
+      maxActiveBacklogs: 0,
+      applicationStartDate: startDay,
+      applicationDeadline: deadline,
+      nextStageDate,
+      eligibleDepartments: [DEPT_A],
+    });
+
+    expect(prisma.drive.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          isCentralDrive: true,
+          departmentId: null,
+          createdByUserId: superAdmin.id,
+        }),
+      })
+    );
+  });
+
+  it("13. a department admin cannot make their drive central, or another department's, through the request", async () => {
+    const forged = {
+      ...baseDriveInput,
+      isCentralDrive: true,
+      departmentId: DEPT_B,
+      createdByUserId: "someone-else",
+    };
+
+    const result = await createDrive(forged as typeof baseDriveInput);
+
+    expect(result.success).toBe(true);
+    const [args] = vi.mocked(prisma.drive.create).mock.calls[0];
+    expect((args as { data: Record<string, unknown> }).data).toMatchObject({
+      isCentralDrive: false,
+      departmentId: DEPT_A,
+      createdByUserId: adminOfA.user.id,
+    });
+  });
+
+  it("13. an edit never rewrites origin or owner, whatever the request carries", async () => {
+    const forged = { ...baseDriveInput, isCentralDrive: true, departmentId: DEPT_B };
+
+    const result = await updateDrive("drive-1", forged as typeof baseDriveInput);
+
+    expect(result.success).toBe(true);
+    const [args] = vi.mocked(prisma.drive.update).mock.calls[0];
+    const data = (args as { data: Record<string, unknown> }).data;
+    expect(data).not.toHaveProperty("isCentralDrive");
+    expect(data).not.toHaveProperty("departmentId");
+  });
+
+  it("13. a department admin cannot edit a central drive, or another department's drive", async () => {
+    vi.mocked(prisma.drive.findUnique).mockResolvedValueOnce({
+      ...existingDriveOfA,
+      departmentId: null,
+      isCentralDrive: true,
+    } as never);
+    expect((await updateDrive("drive-1", baseDriveInput)).success).toBe(false);
+
+    vi.mocked(prisma.drive.findUnique).mockResolvedValueOnce({
+      ...existingDriveOfA,
+      departmentId: DEPT_B,
+    } as never);
+    expect((await updateDrive("drive-1", baseDriveInput)).success).toBe(false);
+
+    expect(prisma.drive.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("eligible batches come from the student database", () => {
+  it("9. multiple eligible batches are stored as the drive's one BATCH_YEAR rule", async () => {
+    vi.mocked(prisma.student.groupBy).mockResolvedValueOnce([
+      { expectedPassoutYear: 2026, _count: { _all: 40 } },
+      { expectedPassoutYear: 2027, _count: { _all: 55 } },
+    ] as never);
+
+    const result = await createDrive({ ...baseDriveInput, batchYears: ["2027", "2026"] });
+
+    expect(result.success).toBe(true);
+    expect(writtenBatchRule()).toEqual(["2026", "2027"]);
+  });
+
+  it("9. the options are the batches of the caller's own department", async () => {
+    await createDrive(baseDriveInput);
+
+    expect(prisma.student.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ departmentId: DEPT_A }) })
+    );
+  });
+
+  it("10. a department drive with no eligible batch is refused", async () => {
+    const result = await createDrive({ ...baseDriveInput, batchYears: [] });
+
+    expect(result.success).toBe(false);
+    expect(prisma.drive.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses a batch no student is in — years are never typed in", async () => {
+    const result = await createDrive({ ...baseDriveInput, batchYears: ["2026", "2031"] });
+
+    expect(result).toEqual({ success: false, error: expect.stringContaining("2031") });
+    expect(prisma.drive.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps a batch the drive already targets, even if no student is in it any more", async () => {
+    vi.mocked(prisma.drive.findUnique).mockResolvedValue({
+      ...existingDriveOfA,
+      eligibilityRules: [{ ruleType: "BATCH_YEAR", operator: "IN", numberValue: null, listValue: ["2025"] }],
+    } as never);
+
+    const result = await updateDrive("drive-1", { ...baseDriveInput, batchYears: ["2025", "2026"] });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("a central drive's batches are checked against the whole institution", async () => {
+    vi.mocked(prisma.department.findMany).mockResolvedValue([{ id: DEPT_A, code: "CS" }] as never);
+
+    await createCentralDrive({
+      companyName: "Globex",
+      roleName: "Analyst",
+      packageDisplay: "12 LPA",
+      minCGPA: 6,
+      maxActiveBacklogs: 0,
+      applicationStartDate: startDay,
+      applicationDeadline: deadline,
+      nextStageDate,
+      eligibleDepartments: [DEPT_A],
+      batchYears: ["2026"],
+    });
+
+    const [args] = vi.mocked(prisma.student.groupBy).mock.calls[0];
+    expect((args as { where: Record<string, unknown> }).where).not.toHaveProperty("departmentId");
+    expect(writtenBatchRule()).toEqual(["2026"]);
   });
 });

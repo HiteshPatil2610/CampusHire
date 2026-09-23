@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useState } from 'react';
 import type { Drive } from '@prisma/client';
 import { getDriveDisplayStatus } from '@/features/drives/utils/drive-status';
-import { formatDeadline, formatDriveDate } from '@/lib/drive-date-helpers';
+import { formatDeadline, formatNextStageDate } from '@/lib/drive-date-helpers';
 import { parseJsonArray } from '@/lib/parse-json-array';
 import {
   eligibleDepartmentIdsOf,
@@ -30,7 +30,7 @@ interface DriveCardProps {
  * - NO withdraw button (applications are immutable)
  * - NO edit button (applications are immutable)
  * - NO readiness/resume scores (deferred out of V1)
- * - Status is COMPUTED from deadline + drive date, never stored
+ * - Status is COMPUTED from deadline + next stage date, never stored
  * - Only shows eligible drives (server filters)
  */
 export function DriveCard({
@@ -42,7 +42,7 @@ export function DriveCard({
 }: DriveCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const status = getDriveDisplayStatus(drive.applicationDeadline, drive.driveDate);
+  const status = getDriveDisplayStatus(drive);
   const canApply = status === 'open';
 
   const departmentCodes = eligibleDepartmentIdsOf(drive)
@@ -157,7 +157,7 @@ export function DriveCard({
           color: 'var(--text-secondary)',
         }}
       >
-        <span>📅 {formatDriveDate(drive.driveDate)}</span>
+        <span>📅 {formatNextStageDate(drive.nextStageDate)}</span>
         <span>🎓 Min CGPA: {drive.minCGPA}</span>
         {departmentCodes.length > 0 && <span>🏢 {departmentCodes.join(', ')}</span>}
       </div>

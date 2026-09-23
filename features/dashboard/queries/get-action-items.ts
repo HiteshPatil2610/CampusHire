@@ -48,6 +48,7 @@ export async function getStudentActionItems(params: {
     driveId: string;
     companyName: string;
     roleName: string;
+    applicationStartDate: Date;
     deadline: Date;
     applied: boolean;
   }[];
@@ -140,7 +141,8 @@ export async function getAdminActionItems(): Promise<ActionItem[]> {
         where: {
           departmentId: department.id,
           status: "PUBLISHED",
-          drive: notCancelled,
+          // Already taking applications, and closing soon.
+          drive: { ...notCancelled, applicationStartDate: { lte: now } },
           OR: [
             { applicationDeadline: { gt: now, lte: soon } },
             { applicationDeadline: null, drive: { applicationDeadline: { gt: now, lte: soon } } },

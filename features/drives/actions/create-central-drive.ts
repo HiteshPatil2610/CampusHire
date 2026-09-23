@@ -9,8 +9,14 @@ import {
   type CreateCentralDriveInput,
 } from "../schemas/central-drive";
 import { buildCentralDriveData } from "../domain/drive-write-data";
-import { assertDeadlineInFuture } from "../domain/drive-window";
-import { checkDriveDateInSeason } from "@/features/settings/domain/season-window";
+import { validateDriveDates } from "../domain/drive-window";
+import {
+  unavailableBatchMessage,
+  unavailableBatchYears,
+  withTargetedBatchYears,
+} from "../domain/batch-targeting";
+import { getInstitutionBatchYears } from "@/features/students/queries/department-batch-years";
+import { checkNextStageDateInSeason } from "@/features/settings/domain/season-window";
 import { getInstitutionSettings } from "@/features/settings/queries/get-settings";
 import { legacyMasterRules } from "../domain/eligibility-rules";
 import { normalizeEditableFields } from "../domain/drive-lifecycle";
@@ -49,17 +55,26 @@ export async function createCentralDrive(
 
     const data = validated.data;
 
-    const deadline = assertDeadlineInFuture(
-      new Date(data.applicationDeadline)
-    );
-    if (!deadline.ok) {
-      return { success: false, error: deadline.error };
+    // The application window, decided here on the server: a new drive may
+    // start today but not before, and must end after it starts.
+    const window = validateDriveDates(data, { startNotBeforeToday: true });
+    if (!window.ok) {
+      return { success: false, error: window.issues.map((issue) => issue.message).join(". ") };
+    }
+
+    // Eligible batches: only batches students across the institution are in.
+    if (data.batchYears && data.batchYears.length > 0) {
+      const present = (await getInstitutionBatchYears()).map((row) => row.year);
+      const unknownBatches = unavailableBatchYears(data.batchYears, present);
+      if (unknownBatches.length > 0) {
+        return { success: false, error: unavailableBatchMessage(unknownBatches) };
+      }
     }
 
     // The placement season, when the institution enforces one. Checked as the
     // drive is written, never retroactively: changing the season later does
     // not invalidate drives that already exist.
-    const season = checkDriveDateInSeason(new Date(data.driveDate), await getInstitutionSettings());
+    const season = checkNextStageDateInSeason(window.dates.nextStageDate, await getInstitutionSettings());
     if (!season.ok) {
       return { success: false, error: season.error! };
     }
@@ -98,7 +113,7 @@ export async function createCentralDrive(
 
     const drive = await createDriveWithEligibility(
       {
-        ...buildCentralDriveData(data),
+        ...buildCentralDriveData(data, window.dates),
         ...pipelineColumns,
         // Locked unless the Super Admin opened it to departments.
         departmentEditableFields: normalizeEditableFields(data.departmentEditableFields),
@@ -109,7 +124,8 @@ export async function createCentralDrive(
       // of the same type.
       {
         legacy: legacyMasterRules(data.minCGPA, data.maxActiveBacklogs),
-        extras: data.eligibilityRules,
+        // The eligible batches are the master's BATCH_YEAR rule.
+        extras: withTargetedBatchYears(data.eligibilityRules ?? [], data.batchYears ?? []),
       }
     );
 

@@ -55,12 +55,65 @@ Update this file after every meaningful implementation change.
 - All V1 frontend integration units complete ✅
 - ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 1144 tests pass, 0 failures (after Phase 2).
+- Current baseline: 1174 tests pass, 0 failures (after Phase 3).
 
 ## Completed
 
-- **PHASE 2 — Year-level promotion + dropout lifecycle (Item 18) (CODE
-  COMPLETE — migration rehearsed, NOT YET APPLIED):**
+- **PHASE 3 — Drive dates, eligible batches and drive origin (Items 9, 11, 12,
+  16) (CODE COMPLETE — migration rehearsed, NOT YET APPLIED):**
+  - **Schema** (`20260930000000_drive_application_window`): `Drive.driveDate`
+    and `DriveDepartmentConfig.driveDate` **renamed** to `nextStageDate` (values
+    kept — the tracker says it always meant the next stage); new
+    `Drive.applicationStartDate` (NOT NULL), backfilled with each drive's
+    `createdAt` (the window every drive already had); editable-field key
+    `driveDate` → `nextStageDate` (data + CHECK); CHECKs: end > start, next
+    stage > end, and origin `isCentralDrive = (departmentId IS NULL)`.
+    Application End Date stays the `applicationDeadline` column.
+  - **One window helper:** `getDriveStatus` (`utils/drive-status.ts`) — open ⇔
+    start ≤ now ≤ end — plus `openApplicationWhere` / `openApplicationSql` for
+    queries. Every caller and the ~12 inline deadline comparisons and 3 raw-SQL
+    open-drive counts were moved onto it. New states: "upcoming" (not open yet)
+    and, on cards, "in-progress" (applications closed, next stage ahead).
+    Students see "Applications not open yet — opens on …" instead of Apply.
+  - **One date rule set:** `domain/drive-window.ts` (`validateDriveDates`,
+    India calendar days): start ≥ today (same day ok; only for new drives or a
+    moved start), end > start, next stage > end. Used by both schemas
+    (order rules), all four create/update actions (with the today rule),
+    department overrides, readiness, deadline extension, and the forms through
+    one `DriveDateFields` component with inline messages.
+  - **Fixed:** the department forms turned a picked day into the previous day
+    (`toISOString()` in IST); forms now send the day seen, the server stores
+    India-day boundaries, and date formatting pins India time.
+  - **Eligible batches (Item 9):** options only from students' passout years
+    (`getDepartmentBatchYears` / new `getInstitutionBatchYears`); free-typed
+    years removed from the picker; server refuses a year no student holds
+    unless the drive already targeted it (`unavailableBatchYears`) — in
+    department create/update, department configuration and central
+    create/update. The Super Admin's central drive gained an optional batch
+    picker, stored as the master's BATCH_YEAR rule.
+  - **Origin (Item 16):** reused `isCentralDrive`. Bug fixed: the Super Admin
+    dashboard's "Central drives" card listed every drive, department ones
+    included — now `getRecentCentralDrives` (central only). Department drives
+    now record `createdByUserId`. Tests prove a forged `isCentralDrive`,
+    `departmentId` or author in the request changes nothing.
+  - **Tests:** 1174 pass, 0 fail (drive-window 18, drive-status 13, origin and
+    batch 11, central origin 3 new or rewritten). 11 mutations: 10 caught at
+    once; the 11th (the dashboard's origin filter) was inline in a page no
+    test could reach — moved into `getRecentCentralDrives`, now caught.
+    `tsc`, lint (0 errors), `next build` clean.
+  - **Migration:** drift check empty; rehearsed on production in a forced
+    rollback: next stage dates equal the old drive dates, starts equal
+    `createdAt`, old key refused / new accepted, start=end refused, next ≤ end
+    refused, central-with-department and department-made-central refused;
+    nothing persisted.
+  - **Known concerns:** no student has a batch yet (0 distinct passout years),
+    so no department can post a drive until students are imported with
+    batches. Students' drive cards and some admin tables still format dates in
+    the browser's time zone (correct in India). Existing BATCH_YEAR rules
+    (2023–2027) stay valid as "already targeted". Not browser-verified.
+
+- **PHASE 2 — Year-level promotion + dropout lifecycle (Item 18) (COMPLETE —
+  migration applied to production 2026-09-23 by the owner):**
   - **Design:** year level is derived (`yearLevelFor(expectedPassoutYear,
     now)`, cycle turns July 1 IST) — the owner's choice — so annual promotion
     writes nothing and can never double-apply; a drop moves the passout year

@@ -39,11 +39,12 @@ export type StudentWithEligibilityInfo = Student & {
 };
 
 /**
- * A drive as the eligibility check needs it: its deadline, the departments it
+ * A drive as the eligibility check needs it: its application window, the departments it
  * is assigned to, and the rule set already resolved for the student's
  * department (see `resolveDepartmentDriveWithRules`).
  */
 export type DriveWithEligibility = {
+  applicationStartDate: Date;
   applicationDeadline: Date;
   eligibilityRules: EligibilityRuleInput[];
 } & HasEligibleDepartmentLinks;
@@ -82,7 +83,7 @@ export function isStudentEligibleForDrive(
     return false;
   }
 
-  if (getDriveStatus(drive.applicationDeadline) !== "open") {
+  if (getDriveStatus(drive) !== "open") {
     return false;
   }
 
@@ -118,7 +119,10 @@ export function getIneligibilityReasons(
     return reasons; // Every academic rule would repeat this; say it once.
   }
 
-  if (getDriveStatus(drive.applicationDeadline) !== "open") {
+  const window = getDriveStatus(drive);
+  if (window === "upcoming") {
+    reasons.push("Applications have not opened yet");
+  } else if (window === "closed") {
     reasons.push("Drive is closed");
   }
 

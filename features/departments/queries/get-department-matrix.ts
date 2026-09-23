@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { placedStudentSql } from "@/features/students/utils/placement-status";
 import { requireSuperAdmin } from "@/lib/auth";
+import { openApplicationSql } from "@/features/drives/utils/drive-status";
 
 export interface DepartmentMatrixRow {
   id:              string;
@@ -73,7 +74,7 @@ export async function getDepartmentMatrix(): Promise<DepartmentMatrixRow[]> {
     LEFT JOIN (
       SELECT "departmentId" AS did, COUNT(*) AS "openDrives"
       FROM "Drive"
-      WHERE "applicationDeadline" > NOW()
+      WHERE ${Prisma.raw(openApplicationSql())}
       GROUP BY "departmentId"
     ) v ON v.did = d."id"
     ORDER BY d."code" ASC

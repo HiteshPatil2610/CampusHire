@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DRIVE_DATE_MESSAGES, validateDriveDates } from "../domain/drive-window";
 
 /**
  * Field constraints shared by every drive form.
@@ -77,10 +78,14 @@ export const maxActiveBacklogsField = (defaultValue?: number) => {
   return defaultValue === undefined ? base : base.default(defaultValue);
 };
 
-export const driveDateField = z.string().min(1, "Drive date is required");
-export const applicationDeadlineField = z
-  .string()
-  .min(1, "Application deadline is required");
+/**
+ * The three dates, as calendar days ("2026-10-01"). Their rules — end after
+ * start, next stage after end, start not before today — live in
+ * `domain/drive-window.ts`; see `driveDatesRefinement` below.
+ */
+export const applicationStartDateField = z.string().min(1, DRIVE_DATE_MESSAGES.startRequired);
+export const applicationDeadlineField = z.string().min(1, DRIVE_DATE_MESSAGES.endRequired);
+export const nextStageDateField = z.string().min(1, DRIVE_DATE_MESSAGES.nextStageRequired);
 
 /**
  * Which departments the master drive is open to. For a department drive the
@@ -107,8 +112,9 @@ export const driveCoreShape = {
   roleName: roleNameField,
   companyLogoUrl: companyLogoUrlField,
   minCGPA: minCGPAField,
-  driveDate: driveDateField,
+  applicationStartDate: applicationStartDateField,
   applicationDeadline: applicationDeadlineField,
+  nextStageDate: nextStageDateField,
   eligibleDepartments: eligibleDepartmentsField,
   venue: venueField,
   reportingTime: reportingTimeField,
@@ -117,24 +123,20 @@ export const driveCoreShape = {
 } as const;
 
 /**
- * A drive's application window must close before the drive is held. Applied as
- * a `.refine` by both schemas, with the message they already shared.
+ * The order of a drive's dates — end after start, next stage after end —
+ * as a `.superRefine` both schemas apply, reporting each problem on its own
+ * field. "Start not before today" depends on whether the start is being set
+ * now (a new drive, or an edit that moves it), which a schema cannot know, so
+ * each action applies `validateDriveDates` with that decision; the schema
+ * never lets a mis-ordered window through regardless.
  */
-export const deadlineBeforeDriveDate = {
-  check: (data: { driveDate: string; applicationDeadline: string }) => {
-    const driveDate = new Date(data.driveDate);
-    const deadline = new Date(data.applicationDeadline);
-
-    // An unparseable date yields NaN, and every comparison against NaN is
-    // false — so a malformed value fails this check rather than passing it.
-    if (Number.isNaN(driveDate.getTime()) || Number.isNaN(deadline.getTime())) {
-      return false;
-    }
-
-    return deadline < driveDate;
-  },
-  message: {
-    message: "Application deadline must be before the drive date",
-    path: ["applicationDeadline"],
-  },
-};
+export function driveDatesRefinement(
+  data: { applicationStartDate: string; applicationDeadline: string; nextStageDate: string },
+  ctx: z.RefinementCtx
+): void {
+  const decision = validateDriveDates(data, { startNotBeforeToday: false });
+  if (decision.ok) return;
+  for (const issue of decision.issues) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [issue.field], message: issue.message });
+  }
+}

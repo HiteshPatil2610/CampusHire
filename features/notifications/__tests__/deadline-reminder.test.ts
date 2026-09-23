@@ -43,8 +43,9 @@ const future = new Date(Date.now() + 2 * 86_400_000);
 
 const instance = (overrides: object = {}) => ({
   status: "PUBLISHED",
+  applicationStartDate: new Date("2026-01-01T00:00:00Z"),
   applicationDeadline: future,
-  drive: { companyName: "Acme", lifecycleStatus: "PUBLISHED", applicationDeadline: future },
+  drive: { companyName: "Acme", lifecycleStatus: "PUBLISHED", applicationStartDate: new Date("2026-01-01T00:00:00Z"), applicationDeadline: future },
   ...overrides,
 });
 
@@ -155,7 +156,7 @@ describe("who it reaches", () => {
         { userId: "u3", departmentId: CSE, roleName: "SDE" },
       ],
       missingAcademic: [],
-      resolvedByDepartment: new Map([[CSE, { roleName: "SDE", applicationDeadline: future }]]),
+      resolvedByDepartment: new Map([[CSE, { roleName: "SDE", applicationStartDate: new Date("2026-01-01T00:00:00Z"), applicationDeadline: future }]]),
     } as never);
     vi.mocked(applicantRecipients).mockResolvedValue([{ userId: "u2", departmentId: CSE }] as never);
   });
@@ -193,7 +194,7 @@ describe("who it reaches", () => {
     vi.mocked(resolveDriveAudience).mockResolvedValue({
       eligible: [{ userId: "u1", departmentId: CSE, roleName: "SDE" }],
       missingAcademic: [],
-      resolvedByDepartment: new Map([[CSE, { roleName: "SDE", applicationDeadline: new Date(Date.now() - 1000) }]]),
+      resolvedByDepartment: new Map([[CSE, { roleName: "SDE", applicationStartDate: new Date("2026-01-01T00:00:00Z"), applicationDeadline: new Date(Date.now() - 1000) }]]),
     } as never);
 
     expect(await fanOutDeadlineReminder({ driveId: "d1", departmentId: CSE }, "dispatch-1")).toBe(0);

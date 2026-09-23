@@ -6,7 +6,7 @@ import { DepartmentCentralDrivesView } from "./department-central-drives-view";
 import type { DepartmentCentralDrivesResult } from "../queries/get-department-central-drives";
 import type { DepartmentOwnDrivesResult, OwnDriveListItem } from "../queries/get-department-own-drives";
 import { getDriveStatus } from "../utils/drive-status";
-import { formatDriveDate, formatDeadline } from "@/lib/drive-date-helpers";
+import { formatNextStageDate, formatDeadline } from "@/lib/drive-date-helpers";
 import { formatPackage } from "../utils/format-package";
 import StatusBadge from "@/components/ui/status-badge";
 
@@ -64,7 +64,7 @@ function OwnDrivesPanel({ drives }: { drives: OwnDriveListItem[] }) {
             <tr>
               <th>Company / Role</th>
               <th>Package</th>
-              <th>Drive Date</th>
+              <th>Next Stage Date</th>
               <th>Deadline</th>
               <th style={{ textAlign: "right" }}>Applications</th>
               <th style={{ textAlign: "right" }}>Status</th>
@@ -73,7 +73,7 @@ function OwnDrivesPanel({ drives }: { drives: OwnDriveListItem[] }) {
           </thead>
           <tbody>
             {drives.map((drive) => {
-              const open = getDriveStatus(new Date(drive.applicationDeadline)) === "open";
+              const open = getDriveStatus(drive) === "open";
               return (
                 <tr key={drive.id}>
                   <td>
@@ -81,7 +81,7 @@ function OwnDrivesPanel({ drives }: { drives: OwnDriveListItem[] }) {
                     <div className="text-muted" style={{ fontSize: 11 }}>{drive.roleName}</div>
                   </td>
                   <td style={{ fontSize: 13 }}>{formatPackage(drive)}</td>
-                  <td style={{ fontSize: 12 }}>{formatDriveDate(new Date(drive.driveDate))}</td>
+                  <td style={{ fontSize: 12 }}>{formatNextStageDate(new Date(drive.nextStageDate))}</td>
                   <td style={{ fontSize: 12 }}>{formatDeadline(new Date(drive.applicationDeadline))}</td>
                   <td style={{ textAlign: "right", fontSize: 13 }}>
                     {drive._count.applications}
