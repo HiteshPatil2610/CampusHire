@@ -2,17 +2,11 @@ import { z } from "zod";
 import { DRIVE_DATE_MESSAGES, validateDriveDates } from "../domain/drive-window";
 
 /**
- * Field constraints shared by every drive form.
+ * Field constraints the drive forms are built from.
  *
- * A department drive and a central drive are validated by two schemas because
- * they genuinely take different input — a department drive carries selection
- * rounds and a numeric package, a central drive derives its apply method from
- * a portal URL. What they share was previously copied between the two files,
- * so a rule changed in one silently diverged from the other. It lives here now
- * and both schemas compose it.
- *
- * Every message is the one both schemas already used, so no existing form's
- * validation output changes.
+ * The drive form's schema (`drive-form.ts`) composes these; the department
+ * drive configuration (`drive-department-config.ts`) reuses the URL and text
+ * helpers. One definition each, so a rule cannot drift between forms.
  */
 
 /**
@@ -63,20 +57,12 @@ export const minCGPAField = z
   .min(0, "CGPA cannot be negative")
   .max(10, "CGPA cannot exceed 10");
 
-/**
- * @param defaultValue omit to make the field required (the department drive
- * form asks for it explicitly); pass 0 to default it (the central drive modal
- * does not show the input).
- */
-export const maxActiveBacklogsField = (defaultValue?: number) => {
-  const base = z
+export const maxActiveBacklogsField = () =>
+  z
     .number()
     .int("Backlogs must be a whole number")
     .min(0, "Backlogs cannot be negative")
     .max(10, "Backlogs limit seems unrealistic");
-
-  return defaultValue === undefined ? base : base.default(defaultValue);
-};
 
 /**
  * The three dates, as calendar days ("2026-10-01"). Their rules — end after
@@ -87,48 +73,19 @@ export const applicationStartDateField = z.string().min(1, DRIVE_DATE_MESSAGES.s
 export const applicationDeadlineField = z.string().min(1, DRIVE_DATE_MESSAGES.endRequired);
 export const nextStageDateField = z.string().min(1, DRIVE_DATE_MESSAGES.nextStageRequired);
 
-/**
- * Which departments the master drive is open to. For a department drive the
- * server overrides whatever arrives here with the caller's own department —
- * see `resolveDeptAdminEligibleDepartments`.
- */
-export const eligibleDepartmentsField = z
-  .array(z.string().min(1))
-  .min(1, "At least one eligible department is required")
-  .max(50, "Too many departments");
-
-/** Logistics shown to students. Optional on both forms. */
+/** Logistics shown to students. Optional. */
 export const venueField = z.string().max(500).optional();
 export const reportingTimeField = z.string().max(100).optional();
 export const contactPersonField = z.string().max(200).optional();
 export const contactPhoneField = z.string().max(50).optional();
 
 /**
- * The fields both drive schemas define identically. Spread into each schema's
- * own `z.object({ ... })` alongside the fields that differ.
- */
-export const driveCoreShape = {
-  companyName: companyNameField,
-  roleName: roleNameField,
-  companyLogoUrl: companyLogoUrlField,
-  minCGPA: minCGPAField,
-  applicationStartDate: applicationStartDateField,
-  applicationDeadline: applicationDeadlineField,
-  nextStageDate: nextStageDateField,
-  eligibleDepartments: eligibleDepartmentsField,
-  venue: venueField,
-  reportingTime: reportingTimeField,
-  contactPerson: contactPersonField,
-  contactPhone: contactPhoneField,
-} as const;
-
-/**
  * The order of a drive's dates — end after start, next stage after end —
- * as a `.superRefine` both schemas apply, reporting each problem on its own
- * field. "Start not before today" depends on whether the start is being set
- * now (a new drive, or an edit that moves it), which a schema cannot know, so
- * each action applies `validateDriveDates` with that decision; the schema
- * never lets a mis-ordered window through regardless.
+ * as a refinement, reporting each problem on its own field. "Start not before
+ * today" depends on whether the start is being set now (a new drive, or an
+ * edit that moves it), which a schema cannot know, so the actions and the form
+ * apply `validateDriveDates` with that decision; the schema never lets a
+ * mis-ordered window through regardless.
  */
 export function driveDatesRefinement(
   data: { applicationStartDate: string; applicationDeadline: string; nextStageDate: string },

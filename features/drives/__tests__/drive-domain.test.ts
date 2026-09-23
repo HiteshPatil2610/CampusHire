@@ -17,8 +17,7 @@ import {
   toCentralDriveUpdateData,
 } from "../domain/drive-write-data";
 import { validateDriveDates, type DriveDates } from "../domain/drive-window";
-import { driveSchema } from "../schemas/drive";
-import { createCentralDriveSchema } from "../schemas/central-drive";
+import { driveFormSchema } from "../schemas/drive-form";
 
 /**
  * The unified drive domain.
@@ -256,15 +255,17 @@ describe("resolveDepartmentDrive", () => {
   });
 });
 
+
 // ---------------------------------------------------------------------------
-// Write payloads
+// Write payloads — both kinds are written from the one drive form
 // ---------------------------------------------------------------------------
 
-const departmentInput = {
+/** One drive form submission; the role decides which extras ride along. */
+const formInput = {
   companyName: "Acme Corp",
   roleName: "Software Engineer",
   packageOffered: 12,
-  selectionRounds: ["Aptitude", "Technical"],
+  packageDisplay: "12 - 16 LPA",
   batchYears: ["2026"],
   applicationStartDate: "2026-10-01",
   applicationDeadline: "2026-11-01",
@@ -272,36 +273,34 @@ const departmentInput = {
   applyMethod: "IN_APP" as const,
   minCGPA: 7,
   maxActiveBacklogs: 0,
-  eligibleDepartments: [DEPT_A],
+  jobDescriptionText: "Build things",
+  skills: ["Java", "SQL"],
+};
+
+const departmentInput = {
+  ...formInput,
+  selectionRounds: ["Aptitude", "Technical"],
   applicationFields: '[{"key":"name"}]',
+  venue: "Hall A",
 };
 
 const centralInput = {
+  ...formInput,
   companyName: "Globex",
-  roleName: "Analyst",
-  packageDisplay: "14 - 22 LPA",
-  minCGPA: 6,
-  maxActiveBacklogs: 0,
-  applicationStartDate: "2026-10-01",
-  applicationDeadline: "2026-11-01",
-  nextStageDate: "2026-12-01",
-  eligibleDepartments: [DEPT_A],
+  departmentScope: { mode: "SELECTED" as const, departmentIds: [DEPT_A] },
+  departmentEditableFields: ["roleName" as const],
 };
 
 /** The instants the actions pass to the builders, from validateDriveDates. */
 const DATES: DriveDates = (() => {
-  const decision = validateDriveDates(centralInput, { startNotBeforeToday: false });
+  const decision = validateDriveDates(formInput, { startNotBeforeToday: false });
   if (!decision.ok) throw new Error("fixture dates invalid");
   return decision.dates;
 })();
 
 describe("drive write payloads", () => {
   it("stamps a department drive with its owner and non-central kind", () => {
-    const data = buildDepartmentDriveData(
-      driveSchema.parse(departmentInput),
-      DEPT_A,
-      DATES
-    );
+    const data = buildDepartmentDriveData(driveFormSchema.parse(departmentInput), DEPT_A, DATES);
 
     expect(data.isCentralDrive).toBe(false);
     expect(data.departmentId).toBe(DEPT_A);
@@ -316,149 +315,150 @@ describe("drive write payloads", () => {
     expect(data).not.toHaveProperty("applicationFields");
   });
 
-  it("stamps a central drive as central and department-less", () => {
-    const data = buildCentralDriveData(
-      createCentralDriveSchema.parse(centralInput),
-      DATES
-    );
+  it("stamps a central drive as a central, department-less DRAFT", () => {
+    const data = buildCentralDriveData(driveFormSchema.parse(centralInput), DATES);
 
     expect(data.isCentralDrive).toBe(true);
     expect(data.departmentId).toBeNull();
-    // NOT NULL column, seeded empty — rounds are configured after creation.
+    expect(data.lifecycleStatus).toBe("DRAFT");
+    // NOT NULL column, seeded empty — a master's rounds come from its pipeline.
     expect(data.selectionRounds).toBe("[]");
   });
 
-  it("derives a central drive's apply method from the portal URL", () => {
-    const withPortal = buildCentralDriveData(
-      createCentralDriveSchema.parse({
-        ...centralInput,
-        externalApplyUrl: "careers.globex.com/apply",
-      }),
-      DATES
-    );
-    const withoutPortal = buildCentralDriveData(
-      createCentralDriveSchema.parse(centralInput),
-      DATES
-    );
+  it("writes the same content columns for both kinds from the same input", () => {
+    const department = buildDepartmentDriveData(driveFormSchema.parse(departmentInput), DEPT_A, DATES);
+    const central = buildCentralDriveData(driveFormSchema.parse(centralInput), DATES);
 
-    expect(withPortal.applyMethod).toBe("EXTERNAL");
-    expect(withPortal.externalApplyUrl).toBe("https://careers.globex.com/apply");
-    expect(withoutPortal.applyMethod).toBe("IN_APP");
-    expect(withoutPortal.externalApplyUrl).toBeNull();
+    for (const column of [
+      "roleName",
+      "packageOffered",
+      "packageDisplay",
+      "jobDescriptionText",
+      "skills",
+      "applyMethod",
+      "minCGPA",
+      "maxActiveBacklogs",
+      "applicationStartDate",
+      "applicationDeadline",
+      "nextStageDate",
+    ] as const) {
+      expect(central[column]).toEqual(department[column]);
+    }
+    expect(department.skills).toBe(JSON.stringify(["Java", "SQL"]));
   });
 
-  it("parses a central drive's numeric package from its free-text CTC", () => {
-    const data = buildCentralDriveData(
-      createCentralDriveSchema.parse(centralInput),
+  it("keeps a portal URL only when students apply externally", () => {
+    const external = buildCentralDriveData(
+      driveFormSchema.parse({ ...centralInput, applyMethod: "EXTERNAL", externalApplyUrl: "careers.globex.com/apply" }),
+      DATES
+    );
+    const inApp = buildCentralDriveData(
+      driveFormSchema.parse({ ...centralInput, externalApplyUrl: "careers.globex.com/apply" }),
       DATES
     );
 
-    expect(data.packageOffered).toBe(14);
-    // What students actually see stays the text the admin typed.
-    expect(data.packageDisplay).toBe("14 - 22 LPA");
+    expect(external.applyMethod).toBe("EXTERNAL");
+    expect(external.externalApplyUrl).toBe("https://careers.globex.com/apply");
+    expect(inApp.applyMethod).toBe("IN_APP");
+    expect(inApp.externalApplyUrl).toBeNull();
+  });
+
+  it("clears an emptied optional field instead of storing an empty string", () => {
+    const data = buildDepartmentDriveData(
+      driveFormSchema.parse({ ...departmentInput, packageDisplay: "", venue: "" }),
+      DEPT_A,
+      DATES
+    );
+
+    expect(data.packageDisplay).toBeNull();
+    expect(data.venue).toBeNull();
   });
 
   it("never rewrites ownership or kind on a department edit", () => {
-    const data = toDepartmentDriveUpdateData(driveSchema.parse(departmentInput), DATES);
+    const data = toDepartmentDriveUpdateData(driveFormSchema.parse(departmentInput), DATES);
 
     expect(data).not.toHaveProperty("isCentralDrive");
     expect(data).not.toHaveProperty("departmentId");
     expect(data.companyName).toBe("Acme Corp");
   });
 
-  it("never rewrites ownership, kind or rounds on a central edit", () => {
-    const data = toCentralDriveUpdateData(
-      createCentralDriveSchema.parse(centralInput),
-      DATES
-    );
+  it("never rewrites ownership, kind, lifecycle or rounds on a central edit", () => {
+    const data = toCentralDriveUpdateData(driveFormSchema.parse(centralInput), DATES);
 
     expect(data).not.toHaveProperty("isCentralDrive");
     expect(data).not.toHaveProperty("departmentId");
-    // Re-sending the seeded "[]" would wipe rounds configured after creation.
+    expect(data).not.toHaveProperty("lifecycleStatus");
+    // Re-sending the seeded "[]" would wipe the rounds its pipeline set.
     expect(data).not.toHaveProperty("selectionRounds");
     expect(data.companyName).toBe("Globex");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Shared validation
+// The one validation schema
 // ---------------------------------------------------------------------------
 
-describe("shared validation rules", () => {
-  it("applies the same company/role constraints to both kinds", () => {
-    expect(
-      driveSchema.safeParse({ ...departmentInput, companyName: "" }).success
-    ).toBe(false);
-    expect(
-      createCentralDriveSchema.safeParse({ ...centralInput, companyName: "" })
-        .success
-    ).toBe(false);
-  });
-
-  it("applies the same CGPA bounds to both kinds", () => {
-    expect(
-      driveSchema.safeParse({ ...departmentInput, minCGPA: 11 }).success
-    ).toBe(false);
-    expect(
-      createCentralDriveSchema.safeParse({ ...centralInput, minCGPA: 11 })
-        .success
-    ).toBe(false);
-  });
-
-  it("requires the application end to precede the next stage date on both kinds", () => {
-    const deptResult = driveSchema.safeParse({
-      ...departmentInput,
-      applicationDeadline: "2026-12-15",
-    });
-    const centralResult = createCentralDriveSchema.safeParse({
-      ...centralInput,
-      applicationDeadline: "2026-12-15",
-    });
-
-    expect(deptResult.success).toBe(false);
-    expect(centralResult.success).toBe(false);
-    if (!deptResult.success && !centralResult.success) {
-      expect(deptResult.error.errors[0].message).toBe(
-        centralResult.error.errors[0].message
-      );
+describe("the drive form schema", () => {
+  it("applies the same rules whichever role submits", () => {
+    for (const input of [departmentInput, centralInput]) {
+      expect(driveFormSchema.safeParse(input).success).toBe(true);
+      expect(driveFormSchema.safeParse({ ...input, companyName: "" }).success).toBe(false);
+      expect(driveFormSchema.safeParse({ ...input, minCGPA: 11 }).success).toBe(false);
+      expect(driveFormSchema.safeParse({ ...input, applicationDeadline: "2026-12-15" }).success).toBe(false);
     }
   });
 
+  it("requires the application end to precede the next stage date", () => {
+    const result = driveFormSchema.safeParse({ ...departmentInput, applicationDeadline: "2026-12-15" });
+
+    expect(result.success).toBe(false);
+    // Reported on the next stage date, the field that has to move.
+    if (!result.success) expect(result.error.issues[0].path).toEqual(["nextStageDate"]);
+  });
+
   it("rejects an unparseable date rather than letting it through", () => {
-    expect(
-      driveSchema.safeParse({ ...departmentInput, nextStageDate: "not-a-date" })
-        .success
-    ).toBe(false);
+    expect(driveFormSchema.safeParse({ ...departmentInput, nextStageDate: "not-a-date" }).success).toBe(false);
   });
 
-  it("requires backlogs on a department drive but defaults them centrally", () => {
-    const { maxActiveBacklogs: _dept, ...deptWithout } = departmentInput;
-    const { maxActiveBacklogs: _central, ...centralWithout } = centralInput;
+  it("requires the package and the eligibility bar from every role", () => {
+    const { packageOffered: _package, ...withoutPackage } = departmentInput;
+    const { maxActiveBacklogs: _backlogs, ...withoutBacklogs } = centralInput;
 
-    expect(driveSchema.safeParse(deptWithout).success).toBe(false);
-
-    const parsed = createCentralDriveSchema.safeParse(centralWithout);
-    expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.maxActiveBacklogs).toBe(0);
+    expect(driveFormSchema.safeParse(withoutPackage).success).toBe(false);
+    expect(driveFormSchema.safeParse(withoutBacklogs).success).toBe(false);
   });
 
-  it("still rejects more than two decimal places on a package", () => {
-    expect(
-      driveSchema.safeParse({ ...departmentInput, packageOffered: 12.345 })
-        .success
-    ).toBe(false);
-    expect(
-      driveSchema.safeParse({ ...departmentInput, packageOffered: 12.34 })
-        .success
-    ).toBe(true);
+  it("rejects more than two decimal places on a package", () => {
+    expect(driveFormSchema.safeParse({ ...departmentInput, packageOffered: 12.345 }).success).toBe(false);
+    expect(driveFormSchema.safeParse({ ...departmentInput, packageOffered: 12.34 }).success).toBe(true);
   });
 
-  it("still requires an external URL when the apply method is EXTERNAL", () => {
-    expect(
-      driveSchema.safeParse({
-        ...departmentInput,
-        applyMethod: "EXTERNAL",
-      }).success
-    ).toBe(false);
+  it("requires an external URL when the apply method is EXTERNAL", () => {
+    const result = driveFormSchema.safeParse({ ...departmentInput, applyMethod: "EXTERNAL" });
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues[0].path).toEqual(["externalApplyUrl"]);
+  });
+
+  it("refuses origin and ownership fields outright instead of stripping them", () => {
+    for (const forged of [
+      { isCentralDrive: true },
+      { departmentId: "dept-b" },
+      { createdByUserId: "someone-else" },
+      { lifecycleStatus: "PUBLISHED" },
+      { eligibleDepartments: ["dept-b"] },
+    ]) {
+      expect(driveFormSchema.safeParse({ ...departmentInput, ...forged }).success).toBe(false);
+    }
+  });
+
+  it("accepts All departments or a non-empty selection, nothing else", () => {
+    const scoped = (departmentScope: unknown) => driveFormSchema.safeParse({ ...centralInput, departmentScope });
+
+    expect(scoped({ mode: "ALL" }).success).toBe(true);
+    expect(scoped({ mode: "SELECTED", departmentIds: [DEPT_A] }).success).toBe(true);
+    expect(scoped({ mode: "SELECTED", departmentIds: [] }).success).toBe(false);
+    expect(scoped({ mode: "ALL", departmentIds: [DEPT_A] }).success).toBe(false);
+    expect(scoped({ mode: "EVERYONE" }).success).toBe(false);
   });
 });

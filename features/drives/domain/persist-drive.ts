@@ -106,7 +106,7 @@ export async function updateDriveWithEligibility(
   initialStatus: DepartmentDriveStatus = "ASSIGNED",
   /**
    * A replacement default application form, or omit to leave it untouched.
-   * The caller decides whether the form may still change (see `updateDrive`).
+   * The caller decides whether the form may still change (see `saveDrive`).
    */
   form?: ApplicationFieldConfig[] | null
 ): Promise<UpdateDriveOutcome> {

@@ -1,21 +1,54 @@
 import type { Prisma } from "@prisma/client";
-import type { DriveInput } from "../schemas/drive";
-import type { CreateCentralDriveInput } from "../schemas/central-drive";
-import { parsePackageFromDisplay } from "../utils/parse-package-display";
+import type { DriveFormData } from "../schemas/drive-form";
 import { driveKindColumns } from "./drive-kind";
 import type { DriveDates } from "./drive-window";
 
 /**
- * Turning validated form input into the `Drive` column payload.
+ * Turning a validated drive form into the `Drive` column payload.
  *
- * Each of these was written out twice — once in the create action and again,
- * character for character, in the update action. A field added to one and
- * forgotten in the other is exactly how `applicationFields` came to be
- * persisted by the department create path but not by the central one.
+ * Both kinds of drive are written from the same form, so they share one set
+ * of content columns (`driveContentColumns`). What differs is only what the
+ * kind itself decides: its origin (`driveKindColumns`), and whether it starts
+ * as a released department drive with its own selection rounds or as a DRAFT
+ * master whose rounds come from its pipeline.
  *
  * `packageOffered` stays a plain number here and Prisma widens it into the
  * `NUMERIC(10,2)` column; nothing in this file does arithmetic on money.
  */
+
+/** Blank → null, so an emptied optional field clears its column. */
+const orNull = (value: string | null | undefined) => (value ? value : null);
+
+/** The columns every drive takes from the form, whoever posted it. */
+function driveContentColumns(input: DriveFormData, dates: DriveDates) {
+  return {
+    companyName: input.companyName,
+    companyLogoUrl: input.companyLogoUrl ?? null,
+    roleName: input.roleName,
+    packageOffered: input.packageOffered,
+    packageDisplay: orNull(input.packageDisplay),
+    jobDescriptionUrl: orNull(input.jobDescriptionUrl),
+    jobDescriptionText: orNull(input.jobDescriptionText),
+    requirements: orNull(input.requirements),
+    skills: input.skills && input.skills.length > 0 ? JSON.stringify(input.skills) : null,
+    applicationStartDate: dates.applicationStartDate,
+    applicationDeadline: dates.applicationDeadline,
+    nextStageDate: dates.nextStageDate,
+    applyMethod: input.applyMethod,
+    // A portal URL only means something when students apply there.
+    externalApplyUrl: input.applyMethod === "EXTERNAL" ? orNull(input.externalApplyUrl) : null,
+    minCGPA: input.minCGPA,
+    maxActiveBacklogs: input.maxActiveBacklogs,
+    pptLink: orNull(input.pptLink),
+    venue: orNull(input.venue),
+    reportingTime: orNull(input.reportingTime),
+    contactPerson: orNull(input.contactPerson),
+    contactPhone: orNull(input.contactPhone),
+    // `applicationFields` is deliberately absent: the form is written to
+    // `DriveApplicationField` rows by `writeMasterForm`, which dual-writes
+    // this column. Writing it here too could leave the two disagreeing.
+  } satisfies Partial<Prisma.DriveUncheckedCreateInput>;
+}
 
 /**
  * A department drive. `departmentId` is the caller's own department, resolved
@@ -25,84 +58,32 @@ import type { DriveDates } from "./drive-window";
  * produced from the submitted days.
  */
 export function buildDepartmentDriveData(
-  input: DriveInput,
+  input: DriveFormData,
   departmentId: string,
   dates: DriveDates
-): Prisma.DriveUncheckedCreateInput {
+): Omit<Prisma.DriveUncheckedCreateInput, "createdByUserId"> {
   return {
     ...driveKindColumns("DEPARTMENT", departmentId),
-    companyName: input.companyName,
-    roleName: input.roleName,
-    companyLogoUrl: input.companyLogoUrl ?? null,
-    jobDescriptionUrl: input.jobDescriptionUrl || null,
-    packageOffered: input.packageOffered,
-    packageDisplay: input.packageDisplay ?? null,
-    selectionRounds: JSON.stringify(input.selectionRounds),
-    applicationStartDate: dates.applicationStartDate,
-    applicationDeadline: dates.applicationDeadline,
-    nextStageDate: dates.nextStageDate,
-    applyMethod: input.applyMethod,
-    externalApplyUrl: input.externalApplyUrl || null,
-    minCGPA: input.minCGPA,
-    maxActiveBacklogs: input.maxActiveBacklogs,
-    venue: input.venue ?? null,
-    reportingTime: input.reportingTime ?? null,
-    contactPerson: input.contactPerson ?? null,
-    contactPhone: input.contactPhone ?? null,
-    pptLink: input.pptLink ?? null,
-    // `applicationFields` is deliberately absent: the form is written to
-    // `DriveApplicationField` rows by `writeMasterForm`, which dual-writes
-    // this column. Writing it here too could leave the two disagreeing.
+    ...driveContentColumns(input, dates),
+    selectionRounds: JSON.stringify(input.selectionRounds ?? []),
   };
 }
 
 /**
- * A central (master) drive. Two values are derived rather than submitted:
- *
- * - `applyMethod` — a company portal URL means students register externally;
- *   without one they apply in-app like any department drive.
- * - `packageOffered` — parsed from the free-text CTC. `packageDisplay` stays
- *   what students actually see.
- *
- * `createdByUserId` is passed separately because it is only set on create;
- * an edit does not reassign authorship.
+ * A central (master) drive. It is composed and assigned before departments
+ * release it, so it starts as a DRAFT; its selection rounds come from its
+ * recruitment pipeline (the action adds them), so they are seeded empty here —
+ * the column is NOT NULL.
  */
 export function buildCentralDriveData(
-  input: CreateCentralDriveInput,
+  input: DriveFormData,
   dates: DriveDates
 ): Omit<Prisma.DriveUncheckedCreateInput, "createdByUserId"> {
-  const portalUrl = input.externalApplyUrl || null;
-
   return {
     ...driveKindColumns("CENTRAL", null),
-    // A master drive is composed and assigned before it is released. Nothing
-    // gates student visibility on this yet — that lands with the lifecycle
-    // phase — so today it is a recorded intent, not an access decision.
     lifecycleStatus: "DRAFT",
-    // The modal does not collect selection rounds; they are configured after
-    // creation. The column is NOT NULL, so it is seeded empty.
     selectionRounds: JSON.stringify([]),
-    companyName: input.companyName,
-    companyLogoUrl: input.companyLogoUrl ?? null,
-    roleName: input.roleName,
-    jobDescriptionText: input.jobDescriptionText || null,
-    // Master defaults a department may override on its own instance.
-    requirements: input.requirements || null,
-    skills: input.skills && input.skills.length > 0 ? JSON.stringify(input.skills) : null,
-    packageOffered: parsePackageFromDisplay(input.packageDisplay),
-    packageDisplay: input.packageDisplay,
-    applicationStartDate: dates.applicationStartDate,
-    applicationDeadline: dates.applicationDeadline,
-    nextStageDate: dates.nextStageDate,
-    applyMethod: portalUrl ? "EXTERNAL" : "IN_APP",
-    externalApplyUrl: portalUrl,
-    minCGPA: input.minCGPA,
-    maxActiveBacklogs: input.maxActiveBacklogs,
-    venue: input.venue ?? null,
-    reportingTime: input.reportingTime ?? null,
-    contactPerson: input.contactPerson ?? null,
-    contactPhone: input.contactPhone ?? null,
-    pptLink: input.pptLink || null,
+    ...driveContentColumns(input, dates),
   };
 }
 
@@ -111,41 +92,24 @@ export function buildCentralDriveData(
  *
  * - `isCentralDrive` / `departmentId` — a drive never changes ownership or
  *   kind after creation, so an edit must not be able to reassign either.
- * - `selectionRounds` (central only) — the central modal does not collect it,
- *   so re-sending the seeded `[]` on every edit would wipe whatever was
- *   configured afterwards.
+ * - `selectionRounds` (central only) — a master's rounds come from its
+ *   pipeline, so re-sending the seeded `[]` would wipe them.
  * - `lifecycleStatus` (central only) — an edit is not a lifecycle transition.
  *   Re-sending the seeded `DRAFT` would silently pull a released drive back.
  */
 export function toDepartmentDriveUpdateData(
-  input: DriveInput,
+  input: DriveFormData,
   dates: DriveDates
 ): Prisma.DriveUncheckedUpdateInput {
-  const { isCentralDrive, departmentId, ...rest } = buildDepartmentDriveData(
-    input,
-    // Discarded immediately below — ownership is never rewritten by an edit.
-    "",
-    dates
-  );
-  void isCentralDrive;
-  void departmentId;
-  return rest;
+  return {
+    ...driveContentColumns(input, dates),
+    selectionRounds: JSON.stringify(input.selectionRounds ?? []),
+  };
 }
 
 export function toCentralDriveUpdateData(
-  input: CreateCentralDriveInput,
+  input: DriveFormData,
   dates: DriveDates
 ): Prisma.DriveUncheckedUpdateInput {
-  const {
-    isCentralDrive,
-    departmentId,
-    selectionRounds,
-    lifecycleStatus,
-    ...rest
-  } = buildCentralDriveData(input, dates);
-  void isCentralDrive;
-  void departmentId;
-  void selectionRounds;
-  void lifecycleStatus;
-  return rest;
+  return driveContentColumns(input, dates);
 }

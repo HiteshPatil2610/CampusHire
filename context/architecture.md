@@ -115,9 +115,10 @@ code does not require remembering that "config" means "instance".
   central drive can never be given an owning department.
 - **Origin is `isCentralDrive`** (Item 16): true for a drive the Super Admin
   posted, false for one a department posted for itself. Set once, server-side,
-  from the caller's role — `createDrive` always writes a department drive in the
-  caller's own department with the caller as `createdByUserId`,
-  `createCentralDrive` always a central one — and never by an edit. A CHECK ties
+  from the session's role by `postDrive` — a department admin always gets a
+  department drive in their own department with themselves as
+  `createdByUserId`, the Super Admin always a central one — and never by an
+  edit. The drive form's schema refuses the origin columns outright. A CHECK ties
   it to `departmentId` (central ⇔ no owning department). Every central view
   filters on it (`getCentralDrives`, `getRecentCentralDrives` for the Super
   Admin dashboard); every department view on the department and
@@ -131,11 +132,25 @@ code does not require remembering that "config" means "instance".
   may be added but not removed or renamed. (One deliberate exception, Phase 3:
   `driveDate` became `nextStageDate` everywhere at once, with every reader
   updated and type-checked, per the tracker's Item 11.)
-- **Validation is shared, not duplicated.** `schemas/drive-core.ts` holds every
-  constraint both drive forms use; `drive.ts` and `central-drive.ts` compose it
-  and declare only what genuinely differs (a department drive has a numeric
-  package and selection rounds; a central drive has free-text CTC and derives
-  its apply method from a portal URL).
+- **One drive form (Item 10, Phase 4).** Super Admin Post Drive
+  (`/super-admin-dashboard/drives/new`) and a department admin's Post / Edit
+  Drive are one component, `components/drive-form/drive-form.tsx`, with one
+  schema (`schemas/drive-form.ts`, `.strict()`), one set of role rules
+  (`domain/drive-form-rules.ts` → `checkDriveFormForRole`) and one pair of
+  server actions (`actions/drive-form-actions.ts` → `postDrive`, `saveDrive`).
+  The form runs the schema and role rules live (`checkDriveForm`); the actions
+  run them again and decide the kind from the session. Only the role's fields
+  differ: the Super Admin picks All departments (the default,
+  `departmentScope` omitted or `ALL`, resolved to every active department when
+  written) or specific ones, sets recruitment stages and department edit
+  permissions, and batches are optional; a department admin's drive is locked
+  to their own department, carries selection rounds, logistics and the
+  application form, and needs a batch. A Super Admin's drive for one
+  department is still central. Central Drive Processing (a department
+  configuring its instance, `DepartmentDriveConfigPanel`) keeps its
+  inherit/override model and shares the date helpers, batch picker and rules
+  engine; its "Department Logistics" card is Item 13's, awaiting a spec.
+  `schemas/drive-core.ts` holds the field constraints these compose.
 - **Writes are shared too.** `domain/drive-write-data.ts` builds the column
   payload once per kind, and `domain/persist-drive.ts` owns the
   drive-plus-eligibility transaction and the audit entry. An edit never
@@ -608,7 +623,7 @@ may not carry BATCH_YEAR themselves — batches have one entry point.
 - **Required before publishing.** `publishDepartmentDrive` refuses a drive
   whose effective rule set (the department's, else the master's) targets no
   batch. A department-owned drive is published when posted, so its create and
-  edit forms require at least one batch (`driveSchema.batchYears`).
+  edit forms require at least one batch (`checkDriveFormForRole`).
   Instances published before this rule keep publishing to every batch.
 - A student whose batch is not on record fails a batch rule — it never passes
   by default.

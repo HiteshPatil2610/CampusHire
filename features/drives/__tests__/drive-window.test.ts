@@ -10,8 +10,8 @@ import {
   toDayInput,
   validateDriveDates,
 } from "../domain/drive-window";
-import { driveSchema } from "../schemas/drive";
-import { createCentralDriveSchema } from "../schemas/central-drive";
+import { driveFormSchema } from "../schemas/drive-form";
+
 
 /**
  * A drive's dates (Items 11 and 12):
@@ -146,12 +146,11 @@ describe("checkStoredWindow — a department's resolved dates", () => {
   });
 });
 
-describe("both drive schemas apply the same order rules", () => {
-  const department = {
+describe("the drive form schema applies the order rules for every role", () => {
+  const shared = {
     companyName: "Acme",
     roleName: "SE",
     packageOffered: 12,
-    selectionRounds: ["Aptitude"],
     batchYears: ["2027"],
     applicationStartDate: "2026-10-05",
     applicationDeadline: "2026-10-05",
@@ -159,22 +158,12 @@ describe("both drive schemas apply the same order rules", () => {
     applyMethod: "IN_APP" as const,
     minCGPA: 7,
     maxActiveBacklogs: 0,
-    eligibleDepartments: ["dept-a"],
   };
-  const central = {
-    companyName: "Globex",
-    roleName: "Analyst",
-    packageDisplay: "10 LPA",
-    minCGPA: 6,
-    maxActiveBacklogs: 0,
-    applicationStartDate: "2026-10-05",
-    applicationDeadline: "2026-10-05",
-    nextStageDate: "2026-12-01",
-    eligibleDepartments: ["dept-a"],
-  };
+  const department = { ...shared, selectionRounds: ["Aptitude"] };
+  const central = { ...shared, departmentScope: { mode: "ALL" as const } };
 
-  it("an end equal to the start is refused on the end field, by both", () => {
-    for (const result of [driveSchema.safeParse(department), createCentralDriveSchema.safeParse(central)]) {
+  it("an end equal to the start is refused on the end field, whoever submits", () => {
+    for (const result of [driveFormSchema.safeParse(department), driveFormSchema.safeParse(central)]) {
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error.errors[0]).toMatchObject({

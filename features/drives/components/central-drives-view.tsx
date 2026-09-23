@@ -1,21 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import StatusBadge from "@/components/ui/status-badge";
 import { formatNextStageDate, formatDeadline } from "@/lib/drive-date-helpers";
 import { getDriveStatus } from "../utils/drive-status";
 import { CentralDriveDetailPanel } from "./central-drive-detail-panel";
-import { PostCentralDriveModal } from "./post-central-drive-modal";
 import {
   EMPTY_DRIVE_FILTER,
   driveFilterActive,
   filterDrives,
   type DriveFilterInput,
 } from "../domain/drive-list-filter";
-import type { StageDraft } from "@/features/recruitment/components/pipeline-editor";
 import type { CentralDriveListItem, DriveDeptStatusSummary } from "../queries/get-central-drives";
 import { formatPackage } from "../utils/format-package";
-import type { DepartmentBatchYear } from "@/features/students/queries/department-batch-years";
 
 interface DepartmentOption {
   id: string;
@@ -26,11 +24,10 @@ interface DepartmentOption {
 interface CentralDrivesViewProps {
   drives: CentralDriveListItem[];
   departments: DepartmentOption[];
-  /** The institution's defaults for a new drive (Settings → Institution). */
-  driveDefaults?: { minCGPA: number | null; stages: StageDraft[] };
-  /** Batches (passout years) students across the institution are in. */
-  batchYears: DepartmentBatchYear[];
 }
+
+/** The one drive form, as the Super Admin's Post Drive page. */
+const POST_DRIVE_HREF = "/super-admin-dashboard/drives/new";
 
 /** Color class for each dept instance status. */
 const DEPT_STATUS_BADGE: Record<string, string> = {
@@ -77,10 +74,7 @@ function DeptStatusHierarchy({ summary }: { summary: DriveDeptStatusSummary[] })
 export function CentralDrivesView({
   drives,
   departments,
-  driveDefaults,
-  batchYears,
 }: CentralDrivesViewProps) {
-  const [modalOpen, setModalOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
     drives[0]?.id ?? null
   );
@@ -138,13 +132,9 @@ export function CentralDrivesView({
             engineering departments.
           </p>
         </div>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => setModalOpen(true)}
-        >
-          + Post Central Drive
-        </button>
+        <Link href={POST_DRIVE_HREF} className="btn btn-primary">
+          + Post Drive
+        </Link>
       </div>
 
       {/* KPI strip */}
@@ -182,13 +172,9 @@ export function CentralDrivesView({
           <div className="text-muted" style={{ fontSize: 12, marginBottom: 16 }}>
             Post a central drive to open it across every active department.
           </div>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => setModalOpen(true)}
-          >
-            + Post Central Drive
-          </button>
+          <Link href={POST_DRIVE_HREF} className="btn btn-primary btn-sm">
+            + Post Drive
+          </Link>
         </div>
       ) : (
         <div
@@ -373,14 +359,6 @@ export function CentralDrivesView({
         </div>
       )}
 
-      <PostCentralDriveModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        departments={departments}
-        onCreated={(driveId) => setSelectedId(driveId)}
-        defaults={driveDefaults}
-        batchYears={batchYears}
-      />
     </div>
   );
 }

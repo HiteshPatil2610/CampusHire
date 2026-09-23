@@ -7,6 +7,11 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],
   },
+  // tsconfig keeps JSX as-is for Next to compile; tests compile it themselves,
+  // so component tests can render to markup.
+  oxc: {
+    jsx: { runtime: 'automatic' },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),

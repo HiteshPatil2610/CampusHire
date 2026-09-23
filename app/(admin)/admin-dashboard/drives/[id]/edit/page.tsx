@@ -1,11 +1,13 @@
 import { requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import { EditDriveForm } from "./edit-drive-form";
-import { eligibleDepartmentLinksInclude } from "@/features/drives/utils/eligible-departments";
-import { serializePackageOffered } from "@/features/drives/utils/serialize-drive";
+import { DriveForm } from "@/features/drives/components/drive-form/drive-form";
 import { getDepartmentBatchYears } from "@/features/students/queries/department-batch-years";
 import { targetedBatchYears } from "@/features/drives/domain/batch-targeting";
+import { indiaDay } from "@/features/drives/domain/drive-window";
+import { isCentralDrive } from "@/features/drives/domain/drive-kind";
+import { parseJsonArray } from "@/lib/parse-json-array";
+import type { ApplicationFieldConfig } from "@/components/admin/drives/admin-application-fields-panel";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -15,22 +17,21 @@ export default async function EditDrivePage(props: PageProps) {
   const params = await props.params;
   const { department } = await requireDepartmentAdmin();
 
-  // Fetch the drive
   const drive = await prisma.drive.findUnique({
     where: { id: params.id },
-    include: { ...eligibleDepartmentLinksInclude, eligibilityRules: true },
+    include: { eligibilityRules: true },
   });
 
   if (!drive) {
     notFound();
   }
 
-  // Verify drive belongs to admin's department
-  if (drive.departmentId !== department.id) {
+  // A department edits only its own department's drives; a central drive is
+  // the Super Admin's. `saveDrive` checks both again on submit.
+  if (isCentralDrive(drive) || drive.departmentId !== department.id) {
     throw new AuthorizationError("You do not have permission to edit this drive");
   }
 
-  // Fetch all active departments
   const [allDepts, batchYears] = await Promise.all([
     prisma.department.findMany({
       where: { isActive: true },
@@ -39,7 +40,10 @@ export default async function EditDrivePage(props: PageProps) {
     }),
     getDepartmentBatchYears(department.id),
   ]);
-  const { eligibilityRules, ...driveRow } = drive;
+
+  const applicationFields = drive.applicationFields
+    ? (JSON.parse(drive.applicationFields) as ApplicationFieldConfig[])
+    : [];
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -50,14 +54,42 @@ export default async function EditDrivePage(props: PageProps) {
         </p>
       </div>
 
-      <EditDriveForm
-        driveId={drive.id}
-        drive={serializePackageOffered(driveRow)}
+      <DriveForm
+        scope={{
+          role: "DEPARTMENT_ADMIN",
+          department: { id: department.id, name: department.name, code: department.code },
+          allDepartments: allDepts,
+        }}
+        mode={{ kind: "edit", driveId: drive.id }}
         batchYears={batchYears}
-        initialBatches={targetedBatchYears(eligibilityRules) ?? []}
-        departmentId={department.id}
-        departmentCode={department.code}
-        allDepartments={allDepts}
+        initialValues={{
+          companyName: drive.companyName,
+          companyLogoUrl: drive.companyLogoUrl,
+          roleName: drive.roleName,
+          packageOffered: drive.packageOffered.toString(),
+          packageDisplay: drive.packageDisplay ?? "",
+          jobDescriptionUrl: drive.jobDescriptionUrl ?? "",
+          jobDescriptionText: drive.jobDescriptionText ?? "",
+          requirements: drive.requirements ?? "",
+          skills: parseJsonArray(drive.skills).join(", "),
+          minCGPA: String(drive.minCGPA),
+          maxActiveBacklogs: String(drive.maxActiveBacklogs),
+          batchYears: targetedBatchYears(drive.eligibilityRules) ?? [],
+          // Stored instants shown as the India days they fall on.
+          applicationStartDate: indiaDay(drive.applicationStartDate),
+          applicationDeadline: indiaDay(drive.applicationDeadline),
+          nextStageDate: indiaDay(drive.nextStageDate),
+          applyMethod: drive.applyMethod,
+          externalApplyUrl: drive.externalApplyUrl ?? "",
+          pptLink: drive.pptLink ?? "",
+          venue: drive.venue ?? "",
+          reportingTime: drive.reportingTime ?? "",
+          contactPerson: drive.contactPerson ?? "",
+          contactPhone: drive.contactPhone ?? "",
+          selectionRounds: parseJsonArray(drive.selectionRounds),
+        }}
+        initialApplicationFields={applicationFields}
+        doneHref="/admin-dashboard/drives"
       />
     </div>
   );

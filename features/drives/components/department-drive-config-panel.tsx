@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { parseJsonArray } from "@/lib/parse-json-array";
 import { eligibleDepartmentIdsOf } from "../utils/eligible-departments";
 import { getDriveStatus } from "../utils/drive-status";
+import { endOfIndiaDay, indiaDay, startOfIndiaDay } from "../domain/drive-window";
 import { saveDriveDepartmentConfig } from "../actions/save-drive-department-config";
 import { StudentApplicationPreviewModal } from "./student-application-preview";
 import {
@@ -114,11 +115,16 @@ const inputStyle: React.CSSProperties = {
   background: "var(--surface-2)",
 };
 
-/** A date as the `YYYY-MM-DD` a native date input expects, or "" for none. */
+/**
+ * A stored instant as the India day it falls on — the `YYYY-MM-DD` a native
+ * date input expects, or "" for none. The same conversion every drive form
+ * uses (`indiaDay`); `toISOString()` put a next stage date stored as 00:00 in
+ * India on the previous day.
+ */
 function toDateInput(value: Date | string | null): string {
   if (!value) return "";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  return Number.isNaN(date.getTime()) ? "" : indiaDay(date);
 }
 
 /** "Java, SQL" → ["Java", "SQL"]; blank → null, which means inherit. */
@@ -336,8 +342,9 @@ export function DepartmentDriveConfigPanel({
     jobDescriptionText: jdOverride.trim() || null,
     requirements: requirementsOverride.trim() || null,
     skills: listToJson(skillsOverride),
-    nextStageDate: nextStageDateOverride ? new Date(nextStageDateOverride) : null,
-    applicationDeadline: deadlineOverride ? new Date(deadlineOverride) : null,
+    // The instants the server will store for these days (see department-overrides).
+    nextStageDate: nextStageDateOverride ? startOfIndiaDay(nextStageDateOverride) : null,
+    applicationDeadline: deadlineOverride ? endOfIndiaDay(deadlineOverride) : null,
     selectionRounds: listToJson(roundsOverride),
     minCGPA: ruleMirrors.minCGPA,
     maxActiveBacklogs: ruleMirrors.maxActiveBacklogs,

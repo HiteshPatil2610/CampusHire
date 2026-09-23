@@ -2,22 +2,16 @@ import { requireSuperAdmin } from "@/lib/auth";
 import { getCentralDrives } from "@/features/drives/queries/get-central-drives";
 import { getDepartments } from "@/features/departments/queries/get-departments";
 import { CentralDrivesView } from "@/features/drives/components/central-drives-view";
-import { getInstitutionSettings } from "@/features/settings/queries/get-settings";
-import { institutionDefaultStages } from "@/features/settings/domain/default-pipeline";
-import { toStageDrafts } from "@/features/recruitment/domain/stage-drafts";
-import { getInstitutionBatchYears } from "@/features/students/queries/department-batch-years";
 
 export default async function CampusDrivesPage() {
   await requireSuperAdmin();
 
-  const [centralDrives, departments, settings, batchYears] = await Promise.all([
+  const [centralDrives, departments] = await Promise.all([
     getCentralDrives({ page: 1, pageSize: 100 }),
     getDepartments({ page: 1, pageSize: 100, includeInactive: false }),
-    getInstitutionSettings(),
-    // Eligible-batch options: the passout years students actually hold.
-    getInstitutionBatchYears(),
   ]);
 
+  // Posting a drive is its own page (`./new`), the same form departments use.
   return (
     <CentralDrivesView
       drives={centralDrives.data}
@@ -26,11 +20,6 @@ export default async function CampusDrivesPage() {
         name: dept.name,
         code: dept.code,
       }))}
-      driveDefaults={{
-        minCGPA: settings.defaultMinCGPA,
-        stages: toStageDrafts(institutionDefaultStages(settings.defaultPipelineStages)),
-      }}
-      batchYears={batchYears}
     />
   );
 }

@@ -13,7 +13,7 @@ export type DriveWithCount = Drive & {
  * department admin's department in their eligible-department list.
  *
  * Read-only from the department admin's side — editing a central drive
- * stays with the Super Admin via updateCentralDrive.
+ * stays with the Super Admin (`saveDrive`).
  *
  * Authorization: DEPT_ADMIN only, scoped to their own department.
  */

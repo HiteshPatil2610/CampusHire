@@ -33,6 +33,8 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/auth", () => ({
   requireDepartmentAdmin: vi.fn(),
   requireSuperAdmin: vi.fn(),
+  requireAnyRole: vi.fn(),
+  AuthenticationError: class AuthenticationError extends Error {},
   AuthorizationError: class AuthorizationError extends Error {},
 }));
 
@@ -61,7 +63,7 @@ vi.mock("../domain/persist-drive", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { requireDepartmentAdmin, requireSuperAdmin, AuthorizationError } from "@/lib/auth";
+import { requireAnyRole, requireDepartmentAdmin, requireSuperAdmin, AuthorizationError } from "@/lib/auth";
 import { createAuditLogInTransaction } from "@/lib/audit";
 import {
   notifyDeadlineExtended,
@@ -84,7 +86,7 @@ import {
   masterPipelineStages,
 } from "@/features/recruitment/domain/master-pipeline";
 import { catalogField } from "../domain/application-form";
-import { createCentralDrive } from "../actions/create-central-drive";
+import { postDrive } from "../actions/drive-form-actions";
 import {
   extendDepartmentDriveDeadline,
   saveMasterPipeline,
@@ -385,6 +387,7 @@ describe("creating a master drive", () => {
   const input = {
     companyName: "Acme",
     roleName: "SE",
+    packageOffered: 12,
     packageDisplay: "12 LPA",
     minCGPA: 7,
     maxActiveBacklogs: 0,
@@ -392,15 +395,18 @@ describe("creating a master drive", () => {
     applicationStartDate: indiaDay(new Date()),
     applicationDeadline: indiaDay(inDays(10)),
     nextStageDate: indiaDay(inDays(20)),
-    eligibleDepartments: [CSE],
+    applyMethod: "IN_APP" as const,
+    departmentScope: { mode: "SELECTED" as const, departmentIds: [CSE] },
   };
 
   beforeEach(() => {
+    // The one posting action decides the drive's kind from the session.
+    vi.mocked(requireAnyRole).mockResolvedValue({ ...superAdmin, role: "SUPER_ADMIN" } as never);
     vi.mocked(prisma.department.findMany).mockResolvedValue([{ id: CSE, code: "CSE" }] as never);
   });
 
   it("stores the permissions, the pipeline, and assigns only the selected departments", async () => {
-    const result = await createCentralDrive({
+    const result = await postDrive({
       ...input,
       departmentEditableFields: ["skills", "roleName"],
       recruitmentStages: TECH_STAGES,
@@ -418,13 +424,13 @@ describe("creating a master drive", () => {
   });
 
   it("locks every field unless the Super Admin opens it", async () => {
-    await createCentralDrive(input);
+    await postDrive(input);
     const [data] = vi.mocked(createDriveWithEligibility).mock.calls[0];
     expect(data).toMatchObject({ departmentEditableFields: [] });
   });
 
   it("refuses an invalid pipeline, writing nothing", async () => {
-    const result = await createCentralDrive({
+    const result = await postDrive({
       ...input,
       recruitmentStages: [{ name: "Offer", stageType: "OFFER" }],
     });
@@ -432,9 +438,12 @@ describe("creating a master drive", () => {
     expect(createDriveWithEligibility).not.toHaveBeenCalled();
   });
 
-  it("does not configure student application fields", () => {
-    const source = readFileSync(join(__dirname, "../components/post-central-drive-modal.tsx"), "utf8");
-    expect(source).not.toMatch(/applicationFields|ApplicationFormEditor/);
+  it("does not take student application fields — each department sets its own", async () => {
+    const result = await postDrive({ ...input, applicationFields: '[{"key":"name"}]' });
+
+    expect(result.success).toBe(false);
+    expect(result.fieldErrors).toHaveProperty("applicationFields");
+    expect(createDriveWithEligibility).not.toHaveBeenCalled();
   });
 });
 

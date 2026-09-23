@@ -1,14 +1,14 @@
 import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { PostDriveForm } from "./post-drive-form";
+import { DriveForm } from "@/features/drives/components/drive-form/drive-form";
 import { getDepartmentBatchYears } from "@/features/students/queries/department-batch-years";
 import { getDepartmentSettings } from "@/features/settings/queries/get-settings";
 
 export default async function PostDrivePage() {
   const { department } = await requireDepartmentAdmin();
 
-  // Fetch all active departments for eligibility selection
   const [allDepts, batchYears, settings] = await Promise.all([
+    // Shown for context only: a department drive reaches its own department.
     prisma.department.findMany({
       where: { isActive: true },
       select: { id: true, name: true, code: true },
@@ -29,20 +29,22 @@ export default async function PostDrivePage() {
         </p>
       </div>
 
-      <PostDriveForm
-        departmentId={department.id}
-        departmentName={department.name}
-        departmentCode={department.code}
-        allDepartments={allDepts}
-        batchYears={batchYears}
-        defaults={{
-          venue: settings.defaultVenue,
-          reportingTime: settings.defaultReportingTime,
-          coordinatorName: settings.coordinatorName,
-          coordinatorPhone: settings.coordinatorPhone,
-          coordinatorEmail: settings.coordinatorEmail,
-          instructions: settings.defaultInstructions,
+      <DriveForm
+        scope={{
+          role: "DEPARTMENT_ADMIN",
+          department: { id: department.id, name: department.name, code: department.code },
+          allDepartments: allDepts,
         }}
+        batchYears={batchYears}
+        initialValues={{
+          minCGPA: "7.0",
+          // Every one of these can be typed over before the drive is posted.
+          venue: settings.defaultVenue ?? "",
+          reportingTime: settings.defaultReportingTime ?? "",
+          contactPerson: settings.coordinatorName ?? "",
+          contactPhone: settings.coordinatorPhone ?? "",
+        }}
+        doneHref="/admin-dashboard/drives"
       />
     </div>
   );
