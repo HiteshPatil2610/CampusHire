@@ -17,14 +17,14 @@ _Last updated: 2026-09-24 (after Phase 8)._
 - [x] **Apply the Phase 7 migration** — done; confirmed live on production
   (`Skill` table, `StudentSkill.skillId`, `SKILL_PENDING_REVIEW` all present).
 
-- [ ] **Apply the Phase 8 migration**, from the repo folder:
-
-  ```bash
-  npx prisma migrate deploy
-  ```
-  *Helps with:* the announcement "edited" timestamp (Item 19) — adds one
-  nullable column, `Announcement.editedAt`. Rehearsed on production in a
-  forced rollback; nothing else is touched.
+- [x] **Apply the Phase 8 migration** — done; confirmed live on production
+  (`Announcement.editedAt` exists, `prisma migrate status` reports up to
+  date). Along the way, fixed `prisma migrate deploy` timing out on
+  `pg_advisory_lock` — it was using the pooled `DATABASE_URL`, which
+  PgBouncer's transaction-mode pooling can't hold a session lock on.
+  `prisma/schema.prisma` now points migrations at `DATABASE_URL_UNPOOLED`
+  (already in your `.env`) via `directUrl`; the app's own queries are
+  untouched and still use the pooled connection.
 
 - [ ] **Run the production build once and fix anything it reports.**
   `npx next build` from the repo folder, or let the test deployment build the

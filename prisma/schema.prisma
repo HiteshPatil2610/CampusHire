@@ -9,6 +9,12 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Migrations need `pg_advisory_lock`, which requires a session-persistent
+  // connection — the pooled DATABASE_URL (PgBouncer, transaction mode) can't
+  // hold one, so `prisma migrate deploy` times out acquiring it. This runs
+  // migrations over the direct connection instead; the app's own queries
+  // still use the pooled DATABASE_URL above.
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // Index policy
