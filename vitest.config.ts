@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import path from 'path';
 
 export default defineConfig({
@@ -6,6 +6,8 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],
+    // Database integration tests run only via `npm run test:integration`.
+    exclude: [...configDefaults.exclude, 'tests/integration/**'],
   },
   // tsconfig keeps JSX as-is for Next to compile; tests compile it themselves,
   // so component tests can render to markup.
