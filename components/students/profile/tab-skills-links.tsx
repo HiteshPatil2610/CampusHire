@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import TagInput from '@/components/ui/tag-input';
 import UrlField from '@/components/ui/url-field';
+import SkillPicker, { type SkillTag } from './skill-picker';
 import { useToast } from '@/hooks/use-toast';
 import { updatePersonalInfo } from '@/features/students/actions/profile-personal';
 import { addSkill, removeSkill } from '@/features/students/actions/profile-skills';
@@ -20,21 +20,20 @@ function stripUrlPrefix(url: string | null | undefined, host: string): string {
     .replace(new RegExp(`^${host}`, 'i'), '');
 }
 
+/** A legacy row with no master entry is treated as already-approved. */
+function toSkillTags(profile: CompleteProfile, type: 'TECHNICAL' | 'SOFT'): SkillTag[] {
+  return profile.skills
+    .filter((skill) => skill.skillType === type)
+    .map((skill) => ({ name: skill.skillName, pending: skill.skill?.status === 'PENDING' }));
+}
+
 export default function TabSkillsLinks({ profile }: TabSkillsLinksProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
-  const [technicalSkills, setTechnicalSkills] = useState<string[]>(
-    profile.skills
-      .filter((skill) => skill.skillType === 'TECHNICAL')
-      .map((skill) => skill.skillName)
-  );
-  const [softSkills, setSoftSkills] = useState<string[]>(
-    profile.skills
-      .filter((skill) => skill.skillType === 'SOFT')
-      .map((skill) => skill.skillName)
-  );
+  const [technicalSkills, setTechnicalSkills] = useState<SkillTag[]>(() => toSkillTags(profile, 'TECHNICAL'));
+  const [softSkills, setSoftSkills] = useState<SkillTag[]>(() => toSkillTags(profile, 'SOFT'));
   const [links, setLinks] = useState({
     linkedinUrl: stripUrlPrefix(profile.student.linkedinUrl, 'linkedin.com/in/'),
     githubUrl: stripUrlPrefix(profile.student.githubUrl, 'github.com/'),
@@ -48,6 +47,8 @@ export default function TabSkillsLinks({ profile }: TabSkillsLinksProps) {
         linkedinUrl: links.linkedinUrl
           ? `https://linkedin.com/in/${links.linkedinUrl.replace(/^\/+/, '')}`
           : undefined,
+        // GitHub is optional everywhere (Item 2) — an empty value is simply
+        // not sent, same as LinkedIn and Portfolio above and below.
         githubUrl: links.githubUrl
           ? `https://github.com/${links.githubUrl.replace(/^\/+/, '')}`
           : undefined,
@@ -63,15 +64,11 @@ export default function TabSkillsLinks({ profile }: TabSkillsLinksProps) {
         return;
       }
 
-      const existingTechnical = profile.skills.filter(
-        (skill) => skill.skillType === 'TECHNICAL'
-      );
-      const existingSoft = profile.skills.filter(
-        (skill) => skill.skillType === 'SOFT'
-      );
+      const existingTechnical = profile.skills.filter((skill) => skill.skillType === 'TECHNICAL');
+      const existingSoft = profile.skills.filter((skill) => skill.skillType === 'SOFT');
 
       for (const skill of existingTechnical) {
-        if (!technicalSkills.includes(skill.skillName)) {
+        if (!technicalSkills.some((tag) => tag.name === skill.skillName)) {
           const result = await removeSkill(skill.id);
           if (!result.success) {
             toast({
@@ -85,7 +82,7 @@ export default function TabSkillsLinks({ profile }: TabSkillsLinksProps) {
       }
 
       for (const skill of existingSoft) {
-        if (!softSkills.includes(skill.skillName)) {
+        if (!softSkills.some((tag) => tag.name === skill.skillName)) {
           const result = await removeSkill(skill.id);
           if (!result.success) {
             toast({
@@ -98,9 +95,9 @@ export default function TabSkillsLinks({ profile }: TabSkillsLinksProps) {
         }
       }
 
-      for (const skillName of technicalSkills) {
-        if (!existingTechnical.some((skill) => skill.skillName === skillName)) {
-          const result = await addSkill({ skillName, skillType: 'TECHNICAL' });
+      for (const tag of technicalSkills) {
+        if (!existingTechnical.some((skill) => skill.skillName === tag.name)) {
+          const result = await addSkill({ skillName: tag.name, skillType: 'TECHNICAL' });
           if (!result.success) {
             toast({
               title: 'Error',
@@ -112,9 +109,9 @@ export default function TabSkillsLinks({ profile }: TabSkillsLinksProps) {
         }
       }
 
-      for (const skillName of softSkills) {
-        if (!existingSoft.some((skill) => skill.skillName === skillName)) {
-          const result = await addSkill({ skillName, skillType: 'SOFT' });
+      for (const tag of softSkills) {
+        if (!existingSoft.some((skill) => skill.skillName === tag.name)) {
+          const result = await addSkill({ skillName: tag.name, skillType: 'SOFT' });
           if (!result.success) {
             toast({
               title: 'Error',
@@ -139,19 +136,23 @@ export default function TabSkillsLinks({ profile }: TabSkillsLinksProps) {
 
       <div className="field" style={{ marginBottom: 20 }}>
         <label>Technical Skills</label>
-        <TagInput
+        <SkillPicker
+          skillType="TECHNICAL"
           value={technicalSkills}
           onChange={setTechnicalSkills}
           placeholder="e.g. Python, React, Docker…"
+          disabled={isPending}
         />
       </div>
 
       <div className="field" style={{ marginBottom: 24 }}>
         <label>Soft Skills</label>
-        <TagInput
+        <SkillPicker
+          skillType="SOFT"
           value={softSkills}
           onChange={setSoftSkills}
           placeholder="e.g. Communication, Teamwork…"
+          disabled={isPending}
         />
       </div>
 
@@ -171,7 +172,7 @@ export default function TabSkillsLinks({ profile }: TabSkillsLinksProps) {
           />
         </div>
         <div className="field">
-          <label>GitHub</label>
+          <label>GitHub (optional)</label>
           <UrlField
             platform="github"
             value={links.githubUrl}

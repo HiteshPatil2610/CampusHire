@@ -354,6 +354,15 @@ export const NOTIFICATION_EVENTS: Record<NotificationEvent, NotificationEventDef
     legacyType: "SYSTEM",
     description: "Notifications for an event could not be delivered",
   },
+  SKILL_PENDING_REVIEW: {
+    label: "Skill review",
+    category: "SYSTEM",
+    priority: "ACTION_REQUIRED",
+    audience: SUPER,
+    optional: false,
+    legacyType: "SYSTEM",
+    description: "A student typed a skill that is not yet on the master list",
+  },
 
   // ---- Any role -----------------------------------------------------------
   ANNOUNCEMENT: {

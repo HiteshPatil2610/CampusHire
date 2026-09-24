@@ -22,6 +22,9 @@ export async function getStudentProfile(studentId: string): Promise<CompleteProf
       academic: true,
       skills: {
         orderBy: { createdAt: "desc" },
+        // The master entry's status only — a pending badge, nothing more of
+        // the catalogue is this query's concern.
+        include: { skill: { select: { status: true } } },
       },
       projects: {
         orderBy: { createdAt: "desc" },
@@ -94,6 +97,7 @@ export async function getStudentProfileByUserId(userId: string): Promise<Complet
       academic: true,
       skills: {
         orderBy: { createdAt: "desc" },
+        include: { skill: { select: { status: true } } },
       },
       projects: {
         orderBy: { createdAt: "desc" },

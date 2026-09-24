@@ -75,6 +75,7 @@ export const AuditEntityType = {
   DEPARTMENT_SETTINGS: "DepartmentSettings",
   STUDENT_DROP: "StudentDrop",
   ACADEMIC_CUTOVER: "AcademicCycleCutover",
+  SKILL: "Skill",
 } as const;
 
 /**

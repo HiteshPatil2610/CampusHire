@@ -25,7 +25,6 @@ export default function TabPreferences({ profile }: TabPreferencesProps) {
 
   const [form, setForm] = useState(() => ({
     preferredRoles: parseJsonArray(profile.preferences?.preferredRoles),
-    preferredLocations: parseJsonArray(profile.preferences?.preferredLocations),
     // Stored as an array for compatibility, but the form offers a single type.
     companyType:
       parseJsonArray(profile.preferences?.preferredCompanyTypes)[0] ??
@@ -46,13 +45,10 @@ export default function TabPreferences({ profile }: TabPreferencesProps) {
   }
 
   function handleSave() {
-    if (
-      form.preferredRoles.length === 0 ||
-      form.preferredLocations.length === 0
-    ) {
+    if (form.preferredRoles.length === 0) {
       toast({
         title: 'Validation error',
-        description: 'Add at least one target role and one preferred location.',
+        description: 'Add at least one target role.',
         variant: 'destructive',
       });
       return;
@@ -61,7 +57,6 @@ export default function TabPreferences({ profile }: TabPreferencesProps) {
     startTransition(async () => {
       const result = await updatePreferences({
         preferredRoles: form.preferredRoles,
-        preferredLocations: form.preferredLocations,
         preferredCompanyTypes: [form.companyType],
         workModes: form.workModes,
         willingToRelocate: form.willingToRelocate,
@@ -99,22 +94,6 @@ export default function TabPreferences({ profile }: TabPreferencesProps) {
           value={form.preferredRoles}
           onChange={(preferredRoles) => setForm({ ...form, preferredRoles })}
           placeholder="e.g. DevOps Engineer, ML Engineer…"
-        />
-      </div>
-
-      <div className="field">
-        <div className="field-label-row">
-          <label>Preferred Job Locations &amp; Cities</label>
-          <span className="field-hint-inline">
-            Press Enter or comma (,) to add tags
-          </span>
-        </div>
-        <TagInput
-          value={form.preferredLocations}
-          onChange={(preferredLocations) =>
-            setForm({ ...form, preferredLocations })
-          }
-          placeholder="e.g. Mumbai, Delhi NCR, Chennai…"
         />
       </div>
 

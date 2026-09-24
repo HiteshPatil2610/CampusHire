@@ -578,21 +578,30 @@ export function StudentDetailsDialog({
                   Technical Skills & Proficiencies
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {skills.map((skill: { id: string; skillName: string }) => (
-                    <span
-                      key={skill.id}
-                      style={{
-                        fontSize: 11,
-                        padding: '3px 8px',
-                        borderRadius: 4,
-                        background: 'var(--surface-hover)',
-                        border: '0.5px solid var(--border)',
-                        fontWeight: 500,
-                      }}
-                    >
-                      {skill.skillName}
-                    </span>
-                  ))}
+                  {skills.map((skill: { id: string; skillName: string; skill?: { status: string } | null }) => {
+                    const isPending = skill.skill?.status === 'PENDING';
+                    return (
+                      <span
+                        key={skill.id}
+                        title={isPending ? 'Not yet on the master list' : undefined}
+                        style={{
+                          fontSize: 11,
+                          padding: '3px 8px',
+                          borderRadius: 4,
+                          background: isPending ? 'var(--amber-light)' : 'var(--surface-hover)',
+                          border: `0.5px solid ${isPending ? 'var(--amber)' : 'var(--border)'}`,
+                          fontWeight: 500,
+                        }}
+                      >
+                        {skill.skillName}
+                        {isPending && (
+                          <span style={{ marginLeft: 4, fontSize: 9, color: 'var(--amber)', fontWeight: 700 }}>
+                            PENDING
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -33,6 +33,16 @@ enum SkillType {
   SOFT
 }
 
+// Where a master skill entry stands. PENDING = a student typed it and it
+// matched nothing on the list; a Super Admin has not decided yet. APPROVED =
+// on the list, offered by the autocomplete. There is no REJECTED status: a
+// rejected entry is deleted outright (see Skill's comment), so nothing
+// lingers to be resubmitted or shown by mistake.
+enum SkillStatus {
+  PENDING
+  APPROVED
+}
+
 // How a student entered the degree programme.
 //
 // REGULAR students complete 12th and start at semester 1. DIPLOMA students
@@ -196,6 +206,7 @@ model User {
   studentDropsRecorded    StudentDrop[]                @relation("StudentDropRecordedBy")
   studentDropsUndone      StudentDrop[]                @relation("StudentDropUndoneBy")
   academicCutovers        AcademicCycleCutover[]       @relation("AcademicCutoverRecordedBy")
+  skillsApproved          Skill[]                      @relation("SkillApprovedBy")
 }
 
 // Department model - represents academic departments
@@ -305,33 +316,33 @@ model AdminInvitation {
 
 // Student model - represents a student in the placement system
 model Student {
-  id              String    @id @default(cuid())
-  userId          String?   @unique // Optional: null for bulk-imported pending students
-  departmentId    String
+  id                  String    @id @default(cuid())
+  userId              String?   @unique // Optional: null for bulk-imported pending students
+  departmentId        String
   // The college's MIS number — the student's institutional identifier, and
   // the key self-registration matches on. Required at every write boundary
   // (import, manual add, registration, approval); nullable here only because
   // students created before it existed have none. `id` stays the primary
   // key: every foreign key in the schema points at it.
-  misNumber       String?   @unique
+  misNumber           String?   @unique
   // University PRN. Optional, but never shared by two students.
-  prnNumber       String?   @unique
+  prnNumber           String?   @unique
   // Required at every write boundary since MIS identity landed; nullable only
   // for students created before that. Postgres permits many NULLs under a
   // unique index, so the constraint still holds for everyone who has one.
-  rollNumber      String?   @unique
-  name            String
-  email           String    @unique // For matching during self-registration
-  phoneNumber     String?
-  isPending       Boolean   @default(true) // true until linked to User via registration
-  profilePhotoUrl String?
-  linkedinUrl     String?
-  githubUrl       String?
-  portfolioUrl    String?
-  gender          String?
-  dateOfBirth     DateTime?
-  address         String?   @db.Text
-  personalEmail   String?
+  rollNumber          String?   @unique
+  name                String
+  email               String    @unique // For matching during self-registration
+  phoneNumber         String?
+  isPending           Boolean   @default(true) // true until linked to User via registration
+  profilePhotoUrl     String?
+  linkedinUrl         String?
+  githubUrl           String?
+  portfolioUrl        String?
+  gender              String?
+  dateOfBirth         DateTime?
+  address             String?   @db.Text
+  personalEmail       String?
   // The year the student is expected to pass out, e.g. 2027. This is the
   // student's batch: the label "2023-27" is derived from it by
   // `batchLabel` (features/students/utils/batch.ts) and never stored.
@@ -341,33 +352,35 @@ model Student {
   // How the student entered the degree. Captured at registration, before any
   // StudentAcademic row exists, which is why it lives here rather than on the
   // academic record: it is an admission fact, not a marks fact.
-  entryType       EntryType @default(REGULAR)
+  entryType           EntryType @default(REGULAR)
   // Whether the student is participating in campus placement at all.
   // A student who has opted out is excluded from placement KPIs and is not
   // offered drives. Placement itself is never stored here — it is derived
   // from a DriveApplication with status = SELECTED.
-  optedIn         Boolean   @default(true)
+  optedIn             Boolean   @default(true)
   // Set by a department admin to freeze the opt-in choice. While locked the
   // student cannot change `optedIn` themselves; only an admin can.
-  optedInLocked   Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  optedInLocked       Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // Relations
-  user           User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  department     Department             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  academic       StudentAcademic?
-  preferences    StudentPreferences?
-  skills         StudentSkill[]
-  projects       StudentProject[]
-  experiences    StudentExperience[]
-  certifications StudentCertification[]
-  applications   DriveApplication[]
-  semesterMarks  SemesterMark[]
-  placements     StudentPlacement[]
+  user            User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department      Department             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  academic        StudentAcademic?
+  preferences     StudentPreferences?
+  skills          StudentSkill[]
+  // Master skill entries this student was the first to request. See Skill.
+  skillsRequested Skill[]                @relation("SkillRequestedBy")
+  projects        StudentProject[]
+  experiences     StudentExperience[]
+  certifications  StudentCertification[]
+  applications    DriveApplication[]
+  semesterMarks   SemesterMark[]
+  placements      StudentPlacement[]
   // Every drop recorded against the student, undone ones included. The
   // student's drop count is the number not undone — derived, not stored.
-  drops          StudentDrop[]
+  drops           StudentDrop[]
 
   // A department's roster by batch. Also serves the plain departmentId
   // lookup (leftmost column), so no separate index is kept for it.
@@ -500,9 +513,21 @@ model StudentAcademic {
 }
 
 // StudentSkill - stores skills (many-to-one with Student)
+// A skill on one student's profile. `skillName`/`skillType` are kept
+// denormalized — they are what the eligibility engine's SKILL rule and every
+// display read, and what a student sees on their own profile — so nothing
+// that reads a student's skills needs to join `Skill` at all. `skillId` is
+// the reference (Item 3): set for everything added since the master list
+// existed, and backfilled onto rows that predate it (see the migration).
+// Null only for a legacy row an admin later deletes without a replacement.
+//
+// A rejected master entry is deleted, which cascades here: every student who
+// had picked it up loses that row too — "remove it from affected student
+// profiles" is the database doing the removal, not a second write.
 model StudentSkill {
   id        String    @id @default(cuid())
   studentId String
+  skillId   String?
   skillName String
   skillType SkillType
   createdAt DateTime  @default(now())
@@ -510,8 +535,47 @@ model StudentSkill {
 
   // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  skill   Skill?  @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, skillName])
+  @@index([skillId])
+}
+
+// The master skill list (Item 3): one shared catalogue of Technical and Soft
+// skills, offered by every student's autocomplete once APPROVED.
+//
+// A name a student types that matches nothing here (case- and
+// space-insensitive, `normalizedName`) creates a PENDING row the moment it is
+// typed — the student's profile shows it right away, tagged pending, rather
+// than waiting on a Super Admin. `addSkillToProfile` matches or creates this
+// row before writing the `StudentSkill`, so two students requesting the same
+// new name share one PENDING entry and one notification, not two.
+//
+// `@@unique([normalizedName, skillType])` is the whole moderation queue: it
+// is what stops the same name being requested twice, approved twice, or
+// existing as both pending and approved at once.
+model Skill {
+  id                   String      @id @default(cuid())
+  // The spelling of whoever named it first — approved or not, this is what
+  // every student who picks it sees and what the autocomplete offers.
+  name                 String
+  normalizedName       String
+  skillType            SkillType
+  status               SkillStatus @default(PENDING)
+  // Null once the requester's account or record is gone; the skill and
+  // whoever already has it are unaffected either way.
+  requestedByStudentId String?
+  approvedById         String?
+  approvedAt           DateTime?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  requestedByStudent Student?       @relation("SkillRequestedBy", fields: [requestedByStudentId], references: [id], onDelete: SetNull)
+  approvedBy         User?          @relation("SkillApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  studentSkills      StudentSkill[]
+
+  @@unique([normalizedName, skillType])
+  @@index([status, skillType])
 }
 
 // StudentProject - stores projects (many-to-one with Student)
@@ -953,10 +1017,10 @@ model DriveApplicationSnapshot {
 // email DOES match a pending imported student never reaches this table; it
 // links to that record directly.
 model StudentAccessRequest {
-  id           String              @id @default(cuid())
-  userId       String              @unique
-  name         String
-  email        String
+  id                  String              @id @default(cuid())
+  userId              String              @unique
+  name                String
+  email               String
   // Identity as the applicant typed it. Nullable only for requests made
   // before MIS-based verification; every new request carries MIS, roll
   // number and batch.
@@ -964,16 +1028,16 @@ model StudentAccessRequest {
   prnNumber           String?
   rollNumber          String?
   expectedPassoutYear Int?
-  departmentId String
-  phoneNumber  String
-  entryType    EntryType           @default(REGULAR)
-  status       AccessRequestStatus @default(PENDING)
+  departmentId        String
+  phoneNumber         String
+  entryType           EntryType           @default(REGULAR)
+  status              AccessRequestStatus @default(PENDING)
   // Who decided, and why — a rejection should be explainable to the student.
-  reviewedById String?
-  reviewedAt   DateTime?
-  reviewNote   String?             @db.Text
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  reviewedById        String?
+  reviewedAt          DateTime?
+  reviewNote          String?             @db.Text
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
@@ -1073,6 +1137,7 @@ enum NotificationEvent {
   APPLICATION_MILESTONE
   ACCESS_REQUEST_ESCALATED
   SYSTEM_ALERT
+  SKILL_PENDING_REVIEW
   // Any role
   ANNOUNCEMENT
 }

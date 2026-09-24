@@ -161,7 +161,10 @@ export type AcademicInfoInput = z.infer<typeof academicInfoSchema>;
  * Skill Schema
  */
 export const skillSchema = z.object({
-  skillName: z.string().min(1, "Skill name is required").trim(),
+  // Max matches the master list's own shape (`Skill_name_shape`,
+  // features/skills/schemas/skill.ts), so a name this form accepts is never
+  // refused when it is matched or created there.
+  skillName: z.string().min(1, "Skill name is required").max(60, "Skill name is too long").trim(),
   skillType: z.enum(["TECHNICAL", "SOFT"], {
     required_error: "Skill type is required",
   }),
@@ -225,9 +228,6 @@ export const preferencesSchema = z.object({
   preferredRoles: z
     .array(z.string().min(1))
     .min(1, "At least one preferred role is required"),
-  preferredLocations: z
-    .array(z.string().min(1))
-    .min(1, "At least one preferred location is required"),
   preferredCompanyTypes: z
     .array(z.string().min(1))
     .min(1, "At least one preferred company type is required"),

@@ -2,12 +2,10 @@ import type { Role, User } from '@prisma/client';
 import { NotificationList } from '@/components/notifications/NotificationList';
 import { NotificationsFilterBar } from '@/components/notifications/notifications-filter-bar';
 import { MarkAllReadButton } from '@/components/notifications/mark-all-read-button';
-import { NotificationPreferences } from '@/components/notifications/notification-preferences';
 import {
   getCategoryCounts,
   getNotifications,
 } from '@/features/notifications/queries/get-notifications';
-import { getMyMutedEvents } from '@/features/notifications/actions/set-notification-preference';
 import { parseNotificationFilter } from '@/features/notifications/schemas/notification';
 import { materializeDueNotifications } from '@/features/notifications/domain/materialize';
 
@@ -22,6 +20,11 @@ import { materializeDueNotifications } from '@/features/notifications/domain/mat
  *
  * Every query is scoped to the signed-in user; no user id is ever taken from
  * a request.
+ *
+ * Item 6: preference editing itself is not shown here — it lives once, under
+ * each role's own Settings page (`<NotificationPreferences>` there), so it is
+ * never out of sync with the copy that page shows for it. This page is the
+ * feed only.
  */
 
 const COPY: Record<Role, { title: string; subtitle: string }> = {
@@ -55,7 +58,7 @@ export async function NotificationCenter({ user, searchParams }: NotificationCen
   const rawPage = Number(searchParams.page);
   const page = Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1;
 
-  const [notifications, counts, mutedEvents] = await Promise.all([
+  const [notifications, counts] = await Promise.all([
     getNotifications(user.id, {
       page,
       pageSize: 25,
@@ -63,7 +66,6 @@ export async function NotificationCenter({ user, searchParams }: NotificationCen
       category: filter === 'all' || filter === 'unread' ? 'all' : filter,
     }),
     getCategoryCounts(user.id),
-    getMyMutedEvents(),
   ]);
 
   const copy = COPY[user.role];
@@ -99,8 +101,6 @@ export async function NotificationCenter({ user, searchParams }: NotificationCen
       <div style={{ marginTop: 24 }}>
         <NotificationList initialNotifications={notifications} />
       </div>
-
-      <NotificationPreferences role={user.role} mutedEvents={mutedEvents} />
     </div>
   );
 }

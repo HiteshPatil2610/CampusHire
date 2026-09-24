@@ -3,7 +3,9 @@
 import { afterStudentProfileSave } from "../domain/after-profile-save";
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { deliverNotificationSafely, superAdminRecipients } from "@/lib/notifications";
 import { skillSchema, type SkillInput } from "../schemas/profile";
+import { matchOrCreateSkill } from "@/features/skills/domain/match-or-create-skill";
 
 export interface ActionResult {
   success: boolean;
@@ -11,8 +13,15 @@ export interface ActionResult {
 }
 
 /**
- * Add a new skill to student profile
- * Prevents duplicate skills via unique constraint
+ * Add a skill to a student's profile (Item 3).
+ *
+ * The name is matched against the master list — or, if nothing matches,
+ * turned into a new PENDING entry — by `matchOrCreateSkill`, the one place
+ * that decision is made; this action just does it inside the same
+ * transaction as the student's own row, so "the skill is on their profile"
+ * and "the skill exists" are never true one without the other. The Super
+ * Admins are told once per *new* pending entry, however many students end up
+ * requesting the same unmatched name while it waits.
  */
 export async function addSkill(input: SkillInput): Promise<ActionResult> {
   try {
@@ -40,14 +49,47 @@ export async function addSkill(input: SkillInput): Promise<ActionResult> {
       };
     }
 
-    // Add skill
-    await prisma.studentSkill.create({
-      data: {
-        studentId: student.id,
-        skillName: validated.skillName,
+    const { skill, createdNew } = await prisma.$transaction(async (tx) => {
+      const matched = await matchOrCreateSkill(tx, {
+        name: validated.skillName,
         skillType: validated.skillType,
-      },
+        requestedByStudentId: student.id,
+      });
+
+      // The canonical spelling on the master entry, not necessarily what was
+      // typed — so everyone who holds this skill shows the same text.
+      await tx.studentSkill.create({
+        data: {
+          studentId: student.id,
+          skillId: matched.skill.id,
+          skillName: matched.skill.name,
+          skillType: validated.skillType,
+        },
+      });
+
+      return matched;
     });
+
+    if (createdNew) {
+      // Best-effort end to end, including resolving who to tell: a failure
+      // here must never turn an already-written skill and profile entry into
+      // a reported failure to save.
+      await deliverNotificationSafely({
+        event: "SKILL_PENDING_REVIEW",
+        role: "SUPER_ADMIN",
+        recipients: await superAdminRecipients().catch(() => []),
+        content: {
+          title: "New skill awaiting review",
+          message: `"${skill.name}" (${skill.skillType === "TECHNICAL" ? "Technical" : "Soft"}) was typed by a student and is not yet on the master list.`,
+          actionUrl: "/super-admin-dashboard/skills",
+        },
+        // One notification per pending skill, ever — not per student who
+        // types it while it waits.
+        dedupeKey: `skill-pending:${skill.id}`,
+        resourceType: "Skill",
+        resourceId: skill.id,
+      });
+    }
 
     // Item 7: re-check drive eligibility now; tell the student about new ones.
 
@@ -92,7 +134,9 @@ export async function removeSkill(skillId: string): Promise<ActionResult> {
       };
     }
 
-    // Delete skill
+    // Delete skill. Only the student's own entry — the master Skill row (and
+    // anyone else who holds it) is untouched: removing your own use of a
+    // skill is not a verdict on it.
     await prisma.studentSkill.delete({
       where: { id: skillId },
     });

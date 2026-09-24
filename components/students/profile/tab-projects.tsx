@@ -170,7 +170,7 @@ export default function TabProjects({ profile }: TabProjectsProps) {
             </div>
 
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>Project / GitHub Link *</label>
+              <label>Project / GitHub Link (optional)</label>
               <UrlField
                 platform="url"
                 value={row.projectUrl}

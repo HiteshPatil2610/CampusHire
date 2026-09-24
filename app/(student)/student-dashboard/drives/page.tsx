@@ -47,7 +47,7 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
       include: {
         department: { select: { id: true, name: true, code: true } },
         academic: true,
-        skills: true,
+        skills: { include: { skill: { select: { status: true } } } },
         projects: true,
         experiences: true,
         certifications: true,

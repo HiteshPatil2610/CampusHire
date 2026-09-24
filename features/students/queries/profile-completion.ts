@@ -1,4 +1,4 @@
-import type { Student, StudentAcademic, StudentSkill, StudentProject, StudentExperience, StudentCertification, StudentPreferences, Department, SemesterMark } from "@prisma/client";
+import type { Student, StudentAcademic, StudentSkill, StudentProject, StudentExperience, StudentCertification, StudentPreferences, Department, SemesterMark, SkillStatus } from "@prisma/client";
 import { preCollegePercentage } from "../utils/entry-type";
 
 /**
@@ -15,7 +15,12 @@ export interface CompleteProfile {
    * SELECTED. Placement is derived from this, never from a stored column.
    */
   selectedOffers: SelectedOffer[];
-  skills: StudentSkill[];
+  /**
+   * `skill` is the master entry — null only for a legacy row that predates
+   * the master list and has not been matched to one (see the migration's
+   * backfill). Its `status` is what lets the profile show "(pending review)".
+   */
+  skills: (StudentSkill & { skill: { status: SkillStatus } | null })[];
   projects: StudentProject[];
   experiences: StudentExperience[];
   certifications: StudentCertification[];
@@ -54,15 +59,15 @@ export interface ProfileCompletion {
 
 /**
  * Calculate profile completion percentage
- * 
+ *
  * Algorithm: Simple ratio of required fields filled to total required fields
- * Total required fields: 17
- * 
+ * Total required fields: 16
+ *
  * Personal (3 required):
  *  - name ✓ (always filled from registration)
  *  - rollNumber ✓ (always filled from registration)
  *  - departmentId ✓ (always filled from registration)
- * 
+ *
  * Academic (5 required):
  *  - tenthPercentage
  *  - the pre-college record matching the student's entry type:
@@ -70,30 +75,32 @@ export interface ProfileCompletion {
  *  - currentCGPA
  *  - currentSemester
  *  - activeBacklogs (defaults to 0, counts as filled)
- * 
+ *
  * Skills (1 required):
  *  - at least one skill entry
- * 
+ *
  * Projects (1 required):
  *  - at least one project entry
- * 
+ *
  * Experience (1 required):
  *  - at least one experience entry
- * 
+ *
  * Certifications (1 required):
  *  - at least one certification entry
- * 
- * Preferences (5 required):
+ *
+ * Preferences (4 required):
  *  - preferredRoles (at least one)
- *  - preferredLocations (at least one)
  *  - preferredCompanyTypes (at least one)
  *  - willingToRelocate (defaults to false, counts as filled)
  *  - expectedPackageMin OR expectedPackageMax (at least one)
+ *
+ * Item 5 dropped Preferred Job Location from here: the field is retired
+ * (nobody sets it, so it can no longer complete or block completion).
  */
 export function calculateProfileCompletion(profile: CompleteProfile): ProfileCompletion {
   const missingFields: string[] = [];
   let requiredFieldsFilled = 0;
-  const totalRequiredFields = 17;
+  const totalRequiredFields = 16;
 
   // Personal section (3 required fields - always filled from registration)
   const personalComplete = !!(
@@ -205,17 +212,6 @@ export function calculateProfileCompletion(profile: CompleteProfile): ProfileCom
     }
 
     try {
-      const locations = JSON.parse(profile.preferences.preferredLocations);
-      if (Array.isArray(locations) && locations.length > 0) {
-        preferencesFieldsFilled++;
-      } else {
-        missingFields.push("Preferred Locations");
-      }
-    } catch {
-      missingFields.push("Preferred Locations");
-    }
-
-    try {
       const companyTypes = JSON.parse(profile.preferences.preferredCompanyTypes);
       if (Array.isArray(companyTypes) && companyTypes.length > 0) {
         preferencesFieldsFilled++;
@@ -259,7 +255,7 @@ export function calculateProfileCompletion(profile: CompleteProfile): ProfileCom
       projects: projectsComplete,
       experience: experienceComplete,
       certifications: certificationsComplete,
-      preferences: profile.preferences !== null && preferencesFieldsFilled === 5,
+      preferences: profile.preferences !== null && preferencesFieldsFilled === 4,
     },
   };
 }

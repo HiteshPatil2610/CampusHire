@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import DatePicker from '@/components/ui/date-picker';
@@ -180,9 +181,12 @@ export default function TabPersonalInfo({ profile }: TabPersonalInfoProps) {
         }}
       >
         {profile.student.profilePhotoUrl ? (
-          <img
+          <Image
             src={profile.student.profilePhotoUrl}
             alt={profile.student.name}
+            width={56}
+            height={56}
+            unoptimized
             style={{
               width: 56,
               height: 56,

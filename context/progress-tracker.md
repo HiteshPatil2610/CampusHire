@@ -55,9 +55,78 @@ Update this file after every meaningful implementation change.
 - All V1 frontend integration units complete ✅
 - ARCH-FIX2 units 1–4 and 7–10 complete (units 9 and 10 needed no migration) (application integrity, placement and batch targeting, recruitment pipelines, the Master → Department drive workflow, notifications and announcements, admin invitations and settings). Units 5 (frontend, reviewed and fixed) and 6 (recruitment and placement workspace) are done and need no database change. Unit 11 in `context/arch-fix/` is not started.
 - Not yet browser-verified: the unit-3 and unit-4 screens (need signed-in accounts).
-- Current baseline: 1277 tests pass, 0 failures (after Phase 6).
+- Current baseline: 1308 tests pass, 0 failures (after Phase 7).
 
 ## Completed
+
+- **PHASE 7 — Student profile fixes: GitHub optional, master skill list,
+  Preferred Location retired, Notification Preferences de-duplicated (Items
+  2, 3, 5, 6) (CODE COMPLETE — migration rehearsed, NOT YET APPLIED):**
+  - **Item 2 (GitHub optional):** the schema, the database column, every
+    action and profile completion already treated a project's link as
+    optional — the only bug was the label "Project / GitHub Link *", which
+    claimed otherwise. Fixed to "(optional)".
+  - **Item 3 (master skill list), new `features/skills/`:** one shared
+    catalogue (`Skill`: name, `normalizedName`, `skillType`, `status`
+    PENDING/APPROVED). `matchOrCreateSkill` is the one place a typed name is
+    matched (case/edge-space-insensitive) or turned into a new PENDING row,
+    inside the same transaction as the student's own `StudentSkill` — so a
+    new skill shows on their profile at once, tagged pending, and a
+    concurrent request for the same new name (`P2002`) becomes an ordinary
+    match rather than a duplicate. `searchSkills` is the autocomplete
+    (APPROVED only). The Super Admin's `/super-admin-dashboard/skills`
+    approves (lists it for everyone) or rejects — reject **deletes** the row;
+    there is no REJECTED status. `StudentSkill.skillId → Skill.id` is
+    `ON DELETE CASCADE`, so a reject removes it from every profile that had
+    it as a database consequence of the delete, not a second write.
+    Approving/rejecting are audited (`AuditEntityType.SKILL`); a new
+    `SKILL_PENDING_REVIEW` Super Admin notification is deduped per skill id,
+    so however many students request the same new name, one notification
+    goes out. `StudentSkill.skillName` stays the source of truth for
+    eligibility and every display — only the profile edit screen also shows
+    a "pending" badge from the joined `skill.status`.
+  - **Migration** (`20261001000000_skill_master_list`, additive): `Skill`
+    table + `SkillStatus` enum + `NotificationEvent.SKILL_PENDING_REVIEW`;
+    `StudentSkill.skillId` nullable FK; CHECKs (name 1–60 chars — "C", "Go",
+    "R" are real; `normalizedName` must equal what the app would compute;
+    PENDING carries no approval, APPROVED always has one). Backfill: every
+    existing `StudentSkill` row is folded into one APPROVED `Skill` per
+    (case/space-insensitive name, type) — nothing deleted or renamed on
+    `StudentSkill`, only `skillId` filled in; a no-op today (0 existing
+    `StudentSkill` rows in production) but written correct for real data.
+    Rehearsed on production in a forced rollback: all 4 CHECKs refused bad
+    data, a 1-character name was accepted, the duplicate-name unique index
+    held, approve worked, and deleting the pending skill cascaded to delete
+    its `StudentSkill` row — nothing persisted.
+  - **Item 5 (Preferred Job Location retired):** removed from the schema
+    (zod), the form (`tab-preferences.tsx`), and profile completion (now
+    4 preference fields, 16 total, not 5/17). The database column stays —
+    columns are never dropped automatically — and is always written `"[]"`
+    on save, ignoring anything sent for it, so an old value is never revived
+    and the NOT NULL constraint is still satisfied. No migration.
+  - **Item 6 (Notification Preferences):** removed from the shared
+    `/notifications` page (`notification-center.tsx`); it already existed
+    once under each role's own Settings page (student, department admin,
+    Super Admin) — that stayed exactly as it was, per the tracker's "do not
+    remove the underlying preference system."
+  - **Fixed in passing:** `admin-status.test.ts` (Phase 6) had no
+    `@clerk/nextjs/server` mock, so `disableDepartmentAdmin`'s session-ending
+    call was hitting Clerk's real API on every test run — usually fast enough
+    to pass, but a source of intermittent 5-second timeouts under load. Now
+    mocked, and asserts the sessions are actually ended.
+  - **Tests:** 1308 pass (31 new: `features/skills/__tests__` for the master
+    list end to end including a real found bug — `addSkill`'s notification
+    step wasn't wrapped in the same best-effort pattern the rest of the
+    codebase uses for `superAdminRecipients()`, fixed; caught by "a failed
+    notification never fails the save"; `features/students/__tests__` for
+    Items 2, 5, 6). 3/3 spot-checked mutations caught. `tsc`, lint (0
+    errors, 1 pre-existing unrelated warning) clean.
+  - **Not done:** applying the migration; browser verification.
+
+- **Owner checklist:** `context/owner-action-items.md` lists everything that
+  must be done outside the code (Clerk, Vercel env, Neon, data, real-account
+  checks, decisions), with what each one unlocks. Update it whenever a phase
+  adds such a step.
 
 - **PHASE 6 — Admin access revocation + invitation (Items 22, 23)
   (CODE COMPLETE — no migration; not browser-verified, not built):**

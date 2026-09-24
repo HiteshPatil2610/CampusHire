@@ -57,9 +57,9 @@ describe("Profile Completion Calculation", () => {
 
     // Personal fields (3) are filled from registration
     // All other sections are empty
-    expect(completion.percentage).toBe(18); // 3/17 = 17.65%, rounded to 18%
+    expect(completion.percentage).toBe(19); // 3/16 = 18.75%, rounded to 19%
     expect(completion.requiredFieldsFilled).toBe(3);
-    expect(completion.totalRequiredFields).toBe(17);
+    expect(completion.totalRequiredFields).toBe(16);
   });
 
   it("should count personal fields as filled after registration", () => {
@@ -103,13 +103,15 @@ describe("Profile Completion Calculation", () => {
   });
 
   it("should require at least one skill", () => {
-    const skill: StudentSkill = {
+    const skill: CompleteProfile["skills"][number] = {
       id: "skill-1",
       studentId: "student-1",
+      skillId: null,
       skillName: "JavaScript",
       skillType: "TECHNICAL",
       createdAt: new Date(),
       updatedAt: new Date(),
+      skill: null,
     };
 
     const profileWithoutSkill = createMockProfile();
@@ -215,9 +217,9 @@ describe("Profile Completion Calculation", () => {
     const profile = createMockProfile({ preferences });
     const completion = calculateProfileCompletion(profile);
 
-    // Personal (3) + Preferences (5) = 8 filled
+    // Personal (3) + Preferences (4, since Item 5 dropped location) = 7 filled
     expect(completion.sectionsStatus.preferences).toBe(true);
-    expect(completion.requiredFieldsFilled).toBeGreaterThanOrEqual(8);
+    expect(completion.requiredFieldsFilled).toBeGreaterThanOrEqual(7);
   });
 
   it("should reach 100% only when all required fields are filled", () => {
@@ -244,13 +246,15 @@ describe("Profile Completion Calculation", () => {
       updatedAt: new Date(),
     };
 
-    const skill: StudentSkill = {
+    const skill: CompleteProfile["skills"][number] = {
       id: "skill-1",
       studentId: "student-1",
+      skillId: null,
       skillName: "JavaScript",
       skillType: "TECHNICAL",
       createdAt: new Date(),
       updatedAt: new Date(),
+      skill: null,
     };
 
     const project: StudentProject = {
@@ -317,7 +321,7 @@ describe("Profile Completion Calculation", () => {
     const completion = calculateProfileCompletion(profile);
 
     expect(completion.percentage).toBe(100);
-    expect(completion.requiredFieldsFilled).toBe(17);
+    expect(completion.requiredFieldsFilled).toBe(16);
     expect(completion.sectionsStatus.personal).toBe(true);
     expect(completion.sectionsStatus.academic).toBe(true);
     expect(completion.sectionsStatus.skills).toBe(true);
@@ -352,13 +356,15 @@ describe("Profile Completion Calculation", () => {
       updatedAt: new Date(),
     };
 
-    const skill: StudentSkill = {
+    const skill: CompleteProfile["skills"][number] = {
       id: "skill-1",
       studentId: "student-1",
+      skillId: null,
       skillName: "JavaScript",
       skillType: "TECHNICAL",
       createdAt: new Date(),
       updatedAt: new Date(),
+      skill: null,
     };
 
     const profile = createMockProfile({
@@ -368,8 +374,8 @@ describe("Profile Completion Calculation", () => {
 
     const completion = calculateProfileCompletion(profile);
 
-    // Personal (3) + Academic (5) + Skills (1) = 9 out of 17 = 53%
-    expect(completion.percentage).toBe(53);
+    // Personal (3) + Academic (5) + Skills (1) = 9 out of 16 = 56%
+    expect(completion.percentage).toBe(56);
     expect(completion.requiredFieldsFilled).toBe(9);
   });
 

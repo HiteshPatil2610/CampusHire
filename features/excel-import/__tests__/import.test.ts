@@ -42,13 +42,27 @@ vi.mock("@/lib/audit", () => ({
   AuditEntityType: { BULK_IMPORT: "BulkImport" },
 }));
 
-vi.mock("@/lib/blob", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/blob")>("@/lib/blob");
-  return {
-    isOwnImportFileUrl: actual.isOwnImportFileUrl,
-    deleteImportFile: vi.fn(async () => {}),
-  };
-});
+// Not `vi.importActual` for the untouched export: the real module imports
+// `lib/env.ts`, which validates `process.env` at load time — something
+// Vitest (unlike Next.js) never populates from `.env`, so pulling in the
+// real module here made this suite's pass/fail depend on whatever the
+// invoking shell happened to export. `isOwnImportFileUrl` is pure string
+// logic, so it's reproduced directly instead.
+vi.mock("@/lib/blob", () => ({
+  isOwnImportFileUrl: (url: string, adminId: string) => {
+    try {
+      const parsed = new URL(url);
+      return (
+        parsed.protocol === "https:" &&
+        parsed.hostname.endsWith(".public.blob.vercel-storage.com") &&
+        parsed.pathname.startsWith(`/imports/${adminId}-`)
+      );
+    } catch {
+      return false;
+    }
+  },
+  deleteImportFile: vi.fn(async () => {}),
+}));
 
 const DEPARTMENT = { id: "dept-1", name: "Computer Engineering", code: "COMP" };
 const NOTHING_REGISTERED: ExistingIdentifiers = {

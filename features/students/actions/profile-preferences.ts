@@ -24,9 +24,13 @@ export async function updatePreferences(input: PreferencesInput): Promise<Action
 
     // Convert arrays to JSON strings for database storage
     const preferredRoles = JSON.stringify(validated.preferredRoles);
-    const preferredLocations = JSON.stringify(validated.preferredLocations);
     const preferredCompanyTypes = JSON.stringify(validated.preferredCompanyTypes);
     const workModes = JSON.stringify(validated.workModes);
+    // Item 5: Preferred Job Location is retired — no longer collected, shown
+    // or read anywhere. The column stays (it is NOT NULL, and columns are
+    // never dropped automatically), always written empty so nothing revives
+    // a value nobody can see or edit any more.
+    const preferredLocations = "[]";
 
     // Upsert preferences record
     await prisma.studentPreferences.upsert({
@@ -43,12 +47,14 @@ export async function updatePreferences(input: PreferencesInput): Promise<Action
       },
       update: {
         preferredRoles,
-        preferredLocations,
         preferredCompanyTypes,
         workModes,
         expectedPackageMin: validated.expectedPackageMin ?? null,
         expectedPackageMax: validated.expectedPackageMax ?? null,
         willingToRelocate: validated.willingToRelocate,
+        // preferredLocations intentionally left out of the update: an
+        // existing value (from before Item 5) is left as it is rather than
+        // being overwritten on every save, since nothing reads it either way.
       },
     });
 

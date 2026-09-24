@@ -48,6 +48,12 @@ vi.mock("@/lib/notifications", () => ({
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
+// Disabling ends the admin's Clerk sessions (Phase 6, `end-sessions.ts`) —
+// mocked here so this stays a unit test rather than a real call to Clerk's
+// API on every run.
+const clerk = { sessions: { getSessionList: vi.fn(), revokeSession: vi.fn() } };
+vi.mock("@clerk/nextjs/server", () => ({ clerkClient: vi.fn(async () => clerk) }));
+
 import { prisma } from "@/lib/prisma";
 import { createAuditLogInTransaction } from "@/lib/audit";
 import { deliverNotificationSafely } from "@/lib/notifications";
@@ -67,7 +73,7 @@ const admin = (overrides: object = {}) => ({
   userId: "user-1",
   departmentId: CSE,
   status: "ACTIVE",
-  user: { id: "user-1", email: "admin@college.edu", name: "CSE Admin", role: "DEPT_ADMIN" },
+  user: { id: "user-1", clerkId: "clerk-user-1", email: "admin@college.edu", name: "CSE Admin", role: "DEPT_ADMIN" },
   department: { id: CSE, code: "CSE", name: "Computer Science", isActive: true },
   ...overrides,
 });
@@ -76,6 +82,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   tx.departmentAdmin.updateMany.mockResolvedValue({ count: 1 } as never);
   vi.mocked(prisma.departmentAdmin.findUnique).mockResolvedValue(admin() as never);
+  clerk.sessions.getSessionList.mockResolvedValue({ data: [{ id: "sess-1" }] });
+  clerk.sessions.revokeSession.mockResolvedValue({});
 });
 
 describe("disabling", () => {
@@ -96,6 +104,13 @@ describe("disabling", () => {
     expect(vi.mocked(createAuditLogInTransaction).mock.calls[0][1]).toMatchObject({
       action: "DISABLE",
     });
+    // Phase 6: signed out everywhere, not just refused on their next request.
+    expect(clerk.sessions.getSessionList).toHaveBeenCalledWith({
+      userId: "clerk-user-1",
+      status: "active",
+      limit: 100,
+    });
+    expect(clerk.sessions.revokeSession).toHaveBeenCalledWith("sess-1");
   });
 
   it("deletes nothing: no user, no admin row, no history", async () => {

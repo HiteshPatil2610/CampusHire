@@ -488,6 +488,47 @@ DriveEligibilityRule { driveId? | driveDepartmentConfigId?, ruleType, operator,
   stored rule of those two types, `withLegacyRules` derives it from the column;
   a stored rule always wins. Remove both when the columns are dropped.
 
+## The master skill list is a moderation queue, not a second identity system
+
+`features/skills/` (Item 3). One shared catalogue (`Skill`: `name`,
+`normalizedName`, `skillType`, `status` PENDING/APPROVED), offered by every
+student's autocomplete once APPROVED — Technical and Soft are the same table,
+distinguished by `skillType`, exactly like `StudentSkill`.
+
+- **One place a name becomes a Skill row: `matchOrCreateSkill`.** Matched by
+  `(normalizedName, skillType)` — case- and edge-space-insensitive, exact
+  otherwise — against *any* status; a miss creates a new PENDING row,
+  attributed to the requesting student, inside the same transaction as their
+  own `StudentSkill`. There is no separate "propose a skill" step: typing an
+  unmatched name *is* the proposal, and it shows on the student's profile
+  immediately, tagged pending — nothing waits on the Super Admin for that.
+  Two students requesting the same new name at once race on
+  `Skill_normalizedName_skillType_key`; the loser's insert fails `P2002`,
+  caught and turned into an ordinary match, so it is always one Skill row and
+  one notification, never two.
+- **`StudentSkill.skillName` stays the source of truth for everything that
+  already reads it** — the eligibility engine's SKILL rule, every display —
+  so nothing that consumes a student's skills needs to know the master list
+  exists. `skillId` is the reference; a legacy row from before this table
+  existed has one too, backfilled by the migration (never left null except
+  where an admin later clears it). Only the profile edit screen joins
+  `skill.status` at all, to show a "pending" badge.
+- **Reject deletes; there is no REJECTED status.** `StudentSkill.skillId →
+  Skill.id` is `ON DELETE CASCADE`, so removing a rejected skill from every
+  profile that had picked it up is the foreign key doing it, not a second
+  write a reject action could forget or a status a stale UI could keep
+  showing. A rejected name is free to be typed and reviewed again, from
+  nothing.
+- **Approve only ever adds a name to the list.** Nothing about a student who
+  already holds a skill changes when it is approved or rejected while
+  PENDING — approving does not retroactively grant it to anyone, rejecting
+  removes it only from whoever already has it.
+- **The Super Admin's, not a department's.** One shared list, one review
+  queue (`/super-admin-dashboard/skills`), matching the tracker's "master
+  skill list" being singular. Notified once per pending skill
+  (`SKILL_PENDING_REVIEW`, deduped by skill id), however many students
+  request the same unmatched name while it waits.
+
 ## The application form is per department
 
 Before publishing, a department admin decides exactly which fields its students
