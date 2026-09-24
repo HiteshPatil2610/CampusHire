@@ -17,6 +17,7 @@ import {
   AuditAction,
   AuditEntityType,
 } from "@/lib/audit";
+import { parsePackageFromDisplay } from "@/features/drives/utils/parse-package-display";
 import {
   recordPlacementSchema,
   revokePlacementSchema,
@@ -69,6 +70,12 @@ export async function recordManualPlacement(
       return { success: false, error: "Student not found in your department." };
     }
 
+    // The number behind the text, for anything that later needs to sort or
+    // total packages. 0 means "no digit in the text" (e.g. "Competitive"),
+    // which is not a real package — stored as null, not a false zero.
+    const parsedPackage = data.packageDisplay ? parsePackageFromDisplay(data.packageDisplay) : 0;
+    const packageOffered = parsedPackage > 0 ? parsedPackage : null;
+
     const placement = await prisma.$transaction(async (tx) => {
       const created = await tx.studentPlacement.create({
         data: {
@@ -76,7 +83,7 @@ export async function recordManualPlacement(
           source: "MANUAL",
           companyName: data.companyName,
           roleName: data.roleName,
-          packageOffered: data.packageOffered ?? null,
+          packageOffered,
           packageDisplay: data.packageDisplay || null,
           placedAt: new Date(data.placedAt),
           recordedById: user.id,

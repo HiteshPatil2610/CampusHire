@@ -1275,6 +1275,11 @@ model Announcement {
   publishAt      DateTime?
   expiresAt      DateTime?
   publishedAt    DateTime?
+  // Set only by an edit to an already-existing row (`saveAnnouncement` with
+  // an id) — never by creating one, publishing it or archiving it. `updatedAt`
+  // changes on every one of those and so cannot tell "edited" from "status
+  // changed"; this can.
+  editedAt       DateTime?
   archivedAt     DateTime?
   archivedById   String?
   attachmentUrl  String?

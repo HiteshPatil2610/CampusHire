@@ -3,7 +3,7 @@
 import { afterStudentProfileSave } from "../domain/after-profile-save";
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { deliverNotificationSafely, superAdminRecipients } from "@/lib/notifications";
+import { deliverNotificationSafely, departmentAdminRecipients } from "@/lib/notifications";
 import { skillSchema, type SkillInput } from "../schemas/profile";
 import { matchOrCreateSkill } from "@/features/skills/domain/match-or-create-skill";
 
@@ -19,9 +19,11 @@ export interface ActionResult {
  * turned into a new PENDING entry — by `matchOrCreateSkill`, the one place
  * that decision is made; this action just does it inside the same
  * transaction as the student's own row, so "the skill is on their profile"
- * and "the skill exists" are never true one without the other. The Super
- * Admins are told once per *new* pending entry, however many students end up
- * requesting the same unmatched name while it waits.
+ * and "the skill exists" are never true one without the other. This
+ * student's own department admins are told once per *new* pending entry,
+ * however many students end up requesting the same unmatched name while it
+ * waits — review happens in the admin panel, not the Super Admin's, even
+ * though the list itself is shared institution-wide.
  */
 export async function addSkill(input: SkillInput): Promise<ActionResult> {
   try {
@@ -76,12 +78,12 @@ export async function addSkill(input: SkillInput): Promise<ActionResult> {
       // a reported failure to save.
       await deliverNotificationSafely({
         event: "SKILL_PENDING_REVIEW",
-        role: "SUPER_ADMIN",
-        recipients: await superAdminRecipients().catch(() => []),
+        role: "DEPT_ADMIN",
+        recipients: await departmentAdminRecipients(student.departmentId).catch(() => []),
         content: {
           title: "New skill awaiting review",
           message: `"${skill.name}" (${skill.skillType === "TECHNICAL" ? "Technical" : "Soft"}) was typed by a student and is not yet on the master list.`,
-          actionUrl: "/super-admin-dashboard/skills",
+          actionUrl: "/admin-dashboard/skills",
         },
         // One notification per pending skill, ever — not per student who
         // types it while it waits.

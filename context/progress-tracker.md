@@ -59,6 +59,22 @@ Update this file after every meaningful implementation change.
 
 ## Completed
 
+- **Sign-in / sign-up visual reskin ("Oxford auth shell"):** restyled
+  `/sign-in` and `/sign-up` to a dark bezel, gold-accented split-panel layout
+  (imported from a claude.ai/design mockup) with a navy info tile that
+  mirrors sides between the two routes and a cross-link CTA. Clerk's
+  `<SignIn>`/`<SignUp>` remain the only auth logic — this only reskins them
+  via `getAuthOxfordAppearance()` (`components/auth/clerk-appearance.ts`);
+  no custom password form was built, per the architecture invariant that
+  identity/session always comes from Clerk (`architecture.md:1153`). Shell
+  markup lives in `components/auth/auth-split-shell.tsx`; styles are scoped
+  under `.auth-oxford-page` in `app/globals.css` and use a local, separate
+  color palette (documented in `ui-context.md` §4.4) — intentionally not the
+  app's terracotta/parchment tokens, confirmed with the user. Tile panel
+  collapses on mobile (<860px), form goes full-width. Browser-verified:
+  desktop split layout, mode mirroring, Clerk email/password flow (including
+  a live error state), and the mobile fallback.
+
 - **PHASE 7 — Student profile fixes: GitHub optional, master skill list,
   Preferred Location retired, Notification Preferences de-duplicated (Items
   2, 3, 5, 6) (CODE COMPLETE — migration rehearsed, NOT YET APPLIED):**
@@ -4280,3 +4296,120 @@ at the dashboard root). The Recents list and the "New …" primary-action button
 Verified: `tsc --noEmit` clean. Not clicked through in-browser (needs an
 authenticated session) — check the collapse/expand, tooltips, account menu and
 that wide tables/sticky elements still behave inside the scrolling canvas.
+
+---
+
+## PHASE 8 — Department Admin Operations (Items 14, 15, 17, 19)
+
+### Items 14 + 15 — the duplicate Package field, investigated then fixed
+
+Traced both Package fields before touching either, per the tracker's
+instruction. `Drive.packageOffered`/`packageDisplay` (a required number plus
+an optional free-text override, e.g. "14-22 LPA") is a different, intentional
+design — clearly labeled in the drive form ("Package Offered (in LPA) *" /
+"Package Display (optional)"), and every live table already renders it
+correctly through one helper, `formatPackage()`. That pair was left alone.
+
+The actual bug was `StudentPlacement.packageOffered`/`packageDisplay` on the
+**off-campus placement** form (`student-placement-panel.tsx`): two
+independent, unlinked inputs the admin filled in by hand, which could
+disagree. Checked every reader in the app — `get-student-placements.ts`'s own
+list render, `get-global-placements.ts`, `get-drive-placements.ts`,
+`drive-placement-tab.tsx`, the Super Admin placements export — all of them
+render `packageDisplay` only; `packageOffered` was written but never read
+back anywhere for a MANUAL placement. (It legitimately matters for an
+APPLICATION-sourced placement, where `moveApplication` snapshots both fields
+straight from the Drive — untouched.)
+
+Fix: one Package input remains (`packageDisplay`, free text). The server
+derives `packageOffered` from it with the already-written but previously
+unused `parsePackageFromDisplay` helper, so the numeric column stays
+available for any future sorting/aggregate use without the admin ever typing
+it twice. A display string with no digit in it (e.g. "Competitive") stores
+`packageOffered: null`, not a false zero. No DB column was dropped — per
+standing policy, and because packageOffered is still populated for the
+APPLICATION path. No migration needed (no schema change).
+
+### Item 17 — batch filter: multi-select, Graduated added
+
+`getDepartmentStudents`'s `year` param (single value: all/third/fourth)
+became `years` (`RosterYearCategory[]`: third/fourth/graduated), OR'd
+together in the query. "Graduated" is `expectedPassoutYear < finalYearPassout`
+— an open-ended range, not one passout year, since more than one batch can be
+graduated at once. The year OR-clause and the search OR-clause are kept as
+separate Prisma keys (`OR` for years, `AND: [{ OR: [...search...] }]` for
+search) so multi-select doesn't collide with the search filter under the same
+`OR` key. URL param: `?years=third,fourth` (comma-separated), default (no
+param) = every student. UI: All / 4th Year / 3rd Year / Graduated toggle
+buttons, any combination selectable at once.
+
+### Item 19 — Announcements
+
+Found a feature that was already most of the way there: audience targeting
+(STUDENTS/ADMINS/EVERYONE + department + batch years), scheduling, expiry,
+attachments, a card/feed layout (`AnnouncementCard`/`AnnouncementDetail`, not
+a table), and server-side authorization (`canManageAnnouncement`) already
+existed from an earlier build. Added what the tracker actually asked for on
+top of it, rather than rebuilding:
+
+- **Rich text.** `render-rich-text.tsx`: `**bold**`, `- `/`* ` bullet lines,
+  and `[text](url)` links, built as React elements — never
+  `dangerouslySetInnerHTML`, so there is nothing an author can type that
+  becomes a live tag or script. A link whose URL doesn't start with
+  `http://`/`https://` (e.g. `javascript:`, `data:`) renders as the literal
+  text instead of becoming a link. The composer's textarea gained a small
+  toolbar (Bold / Bullet list / Link) that wraps the current selection with
+  that same syntax; the card excerpt strips the syntax back to plain text
+  (`announcementExcerpt`) rather than showing raw `**`/`[]()`.
+- **Edited timestamp.** New nullable column `Announcement.editedAt`
+  (migration `20261002000000_announcement_edited_at`, additive). Set only by
+  `saveAnnouncement` against an *existing* row — not by create, publish or
+  archive, all of which also touch Prisma's own `updatedAt` and so can't tell
+  "the text changed" from "the status changed." Shown in the manager list,
+  the card and the detail view as "· edited".
+- **Department filter + date sort**, Super Admin's manager view only (a
+  department admin's list is already scoped to their one department, so a
+  filter would do nothing there). Client-side over the already-loaded
+  `managed` array — Super Admin's own query already caps at 100 rows, so no
+  new server round trip was worth adding for this.
+- **Delete.** Relabeled the existing "Archive" action to "Delete" with a
+  two-step inline confirm (matching the Confirm/Cancel pattern already used
+  for revoking a placement), rather than inventing a hard delete — archiving
+  was already exactly the soft-delete/history-kept behavior this app uses
+  everywhere else (drops, disables, revocations), it just wasn't labeled that
+  way to the admin.
+
+Migration rehearsed on production in a forced rollback (column add + a
+no-op write, confirmed not to persist), same pattern as every prior phase.
+
+Verified: `tsc --noEmit` clean, `next lint` clean, 1330/1330 tests passing
+(up from 1308 — 22 new: Package derivation x2, roster batch-filter rewrite
+x7, announcement editedAt x3, rich-text safety/rendering x10). Not clicked
+through in-browser — the batch filter's multi-select buttons, the rich-text
+toolbar, and the Super Admin's department/sort selects are worth a manual
+pass.
+
+---
+
+## Correction — Skill Review moved from the Super Admin panel to the admin panel
+
+Built under the Super Admin in Phase 7, per that phase's tracker wording
+("Super Admin approve/reject"). Moved on request to `/admin-dashboard/skills`
+instead — the department admins are who actually curate the list day to day.
+
+The master `Skill` list itself is still one shared, institution-wide
+catalogue (no `departmentId` on it) — moving the page did not make it
+per-department. `getPendingSkills`/`approveSkill`/`rejectSkill` now check
+`requireDepartmentAdmin()` instead of `requireSuperAdmin()`, and any active
+department admin sees and can act on the same single queue, not just their
+own department's requests.
+
+What did become department-scoped: who gets told. `SKILL_PENDING_REVIEW`'s
+audience changed from `SUPER_ADMIN` to `DEPT_ADMIN`, and `addSkill` now
+resolves recipients with `departmentAdminRecipients(student.departmentId)` —
+the requesting student's own department's admins, not a broadcast to every
+department admin in the institution.
+
+Verified: `tsc --noEmit` clean, `next lint` clean, all 1330 tests passing
+(`skill-master-list.test.ts` rewritten for the new authorization and
+recipients). Not clicked through in-browser.

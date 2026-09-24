@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -50,6 +50,7 @@ export function AnnouncementComposer({
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   const [form, setForm] = useState({
     title: editing?.title ?? "",
@@ -136,6 +137,45 @@ export function AnnouncementComposer({
     setForm((current) => ({ ...current, attachmentUrl: result.url, attachmentName: result.name }));
   }
 
+  /**
+   * Wraps the selected text (or inserts a placeholder) with rich-text
+   * syntax at the textarea's cursor — see `render-rich-text.tsx` for how
+   * `**bold**`, `- item` and `[text](url)` are rendered back out safely.
+   */
+  function applyFormatting(before: string, after: string, placeholder: string) {
+    const el = contentRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = form.content.slice(start, end) || placeholder;
+    const next = form.content.slice(0, start) + before + selected + after + form.content.slice(end);
+    setForm({ ...form, content: next });
+    requestAnimationFrame(() => {
+      el.focus();
+      const cursor = start + before.length + selected.length + after.length;
+      el.setSelectionRange(cursor, cursor);
+    });
+  }
+
+  function applyBulletList() {
+    const el = contentRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = form.content.slice(start, end) || "List item";
+    const bulleted = selected
+      .split("\n")
+      .map((line) => (line.trim() ? `- ${line}` : line))
+      .join("\n");
+    const next = form.content.slice(0, start) + bulleted + form.content.slice(end);
+    setForm({ ...form, content: next });
+    requestAnimationFrame(() => {
+      el.focus();
+      const cursor = start + bulleted.length;
+      el.setSelectionRange(cursor, cursor);
+    });
+  }
+
   return (
     <div className="card" style={{ marginBottom: 20 }}>
       <h3 className="section-title">{editing ? "Edit announcement" : "New announcement"}</h3>
@@ -159,8 +199,38 @@ export function AnnouncementComposer({
 
       <div className="field" style={{ marginBottom: 12 }}>
         <label htmlFor="ann-content">Announcement *</label>
+        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px" }}
+            title="Bold"
+            onClick={() => applyFormatting("**", "**", "bold text")}
+          >
+            B
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            style={{ fontSize: 11, padding: "2px 8px" }}
+            title="Bullet list"
+            onClick={applyBulletList}
+          >
+            • List
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            style={{ fontSize: 11, padding: "2px 8px" }}
+            title="Link"
+            onClick={() => applyFormatting("[", "](https://)", "link text")}
+          >
+            🔗 Link
+          </button>
+        </div>
         <textarea
           id="ann-content"
+          ref={contentRef}
           rows={6}
           maxLength={10000}
           value={form.content}
@@ -175,7 +245,7 @@ export function AnnouncementComposer({
           }}
         />
         <span className="text-muted" style={{ fontSize: 11 }}>
-          {form.content.length}/10000
+          {form.content.length}/10000 · **bold**, "- " for a list, [text](url) for a link
         </span>
       </div>
 

@@ -278,6 +278,59 @@ describe("a draft notifies nobody; publishing notifies once", () => {
   });
 });
 
+describe("the edited timestamp (Phase 8, Item 19)", () => {
+  it("is not set when an announcement is first created", async () => {
+    asDeptAdmin();
+
+    await saveAnnouncement(draft as never);
+
+    expect(created().data).not.toHaveProperty("editedAt");
+  });
+
+  it("is set when an existing announcement is edited", async () => {
+    asDeptAdmin();
+    vi.mocked(prisma.announcement.findUnique).mockResolvedValue({
+      id: "ann-1",
+      departmentId: CSE,
+      status: "DRAFT",
+      batchYears: [],
+    } as never);
+    tx.announcement.update.mockResolvedValue({
+      id: "ann-1",
+      title: draft.title,
+      status: "DRAFT",
+      audience: "STUDENTS",
+      departmentId: CSE,
+      batchYears: [],
+      priority: "INFO",
+    } as never);
+
+    await saveAnnouncement({ ...draft, id: "ann-1" } as never);
+
+    const data = tx.announcement.update.mock.calls[0][0] as { data: { editedAt: unknown } };
+    expect(data.data.editedAt).toBeInstanceOf(Date);
+  });
+
+  it("is untouched by publishing or archiving — only a real edit sets it", async () => {
+    asDeptAdmin();
+    vi.mocked(prisma.announcement.findUnique).mockResolvedValue({
+      id: "ann-1",
+      departmentId: CSE,
+      status: "DRAFT",
+      title: draft.title,
+      audience: "STUDENTS",
+      batchYears: [],
+      priority: "INFO",
+      expiresAt: null,
+    } as never);
+
+    await publishAnnouncement({ id: "ann-1" });
+
+    const publishData = tx.announcement.updateMany.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(publishData.data).not.toHaveProperty("editedAt");
+  });
+});
+
 describe("attachments", () => {
   it("refuses a link that was not uploaded here", async () => {
     asDeptAdmin();

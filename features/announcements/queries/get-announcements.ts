@@ -32,6 +32,7 @@ export interface AnnouncementRow {
   publishAt: Date | null;
   expiresAt: Date | null;
   createdAt: Date;
+  editedAt: Date | null;
   attachmentUrl: string | null;
   attachmentName: string | null;
   canManage: boolean;
@@ -49,6 +50,7 @@ const ANNOUNCEMENT_SELECT = {
   publishAt: true,
   expiresAt: true,
   createdAt: true,
+  editedAt: true,
   attachmentUrl: true,
   attachmentName: true,
   department: { select: { code: true } },
@@ -94,6 +96,7 @@ function toRow(
     publishAt: announcement.publishAt,
     expiresAt: announcement.expiresAt,
     createdAt: announcement.createdAt,
+    editedAt: announcement.editedAt,
     attachmentUrl: announcement.attachmentUrl,
     attachmentName: announcement.attachmentName,
     canManage: canManageAnnouncement(viewer, announcement),

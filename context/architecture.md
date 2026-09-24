@@ -523,11 +523,14 @@ distinguished by `skillType`, exactly like `StudentSkill`.
   already holds a skill changes when it is approved or rejected while
   PENDING — approving does not retroactively grant it to anyone, rejecting
   removes it only from whoever already has it.
-- **The Super Admin's, not a department's.** One shared list, one review
-  queue (`/super-admin-dashboard/skills`), matching the tracker's "master
-  skill list" being singular. Notified once per pending skill
-  (`SKILL_PENDING_REVIEW`, deduped by skill id), however many students
-  request the same unmatched name while it waits.
+- **One shared list, reviewed from the admin panel.** One review queue
+  (`/admin-dashboard/skills`, `requireDepartmentAdmin`), matching the
+  tracker's "master skill list" being singular — any active department
+  admin sees and can act on the same queue, not just their own department's
+  requests. The requesting student's own department admins are notified once
+  per pending skill (`SKILL_PENDING_REVIEW`, `DEPT_ADMIN` audience, deduped
+  by skill id), however many students request the same unmatched name while
+  it waits — not a broadcast to every department.
 
 ## The application form is per department
 
@@ -1164,4 +1167,7 @@ is worth more than any query-level optimisation in this file.
 18. A notification is written by exactly one function, for a recipient whose role the event is defined for, under a dedupe key that makes the same event a no-op the second time. Students are told about a drive only where it is published and only if the shared evaluator finds them eligible; a department admin's announcement reaches their own department's students and nobody else, with the scope taken from their session. An announcement is the record and its notifications only point at it.
 17. Eligibility is decided in one place (the evaluator). Screens that list students for a drive show what `getDriveStudents` returns and never re-derive it. An application moves only through `moveApplication`, and a placement is confirmed by a person before it is created; a bulk move never selects.
 16. A department admin may override a master content field only if the Super Admin opened it (`Drive.departmentEditableFields`), checked in `saveDriveDepartmentConfig` against the stored list — never against what the form shows. A department drive is published only when `departmentDriveReadiness` says it is ready, computed on the server from the stored configuration. A drive is never deleted to stop it: it is CANCELLED, with who, when and why recorded, and its applications and snapshots are kept.
-9. A successfully-imported Excel/CSV file does not persist in Blob storage after its rows are committed — cleanup happens in the same transaction/flow as the successful import, not as a separate best-effort job. 
+9. A successfully-imported Excel/CSV file does not persist in Blob storage after its rows are committed — cleanup happens in the same transaction/flow as the successful import, not as a separate best-effort job.
+10. A record with a free-text "display" field and a numeric field behind it (e.g. `packageDisplay`/`packageOffered`) has exactly one of them as the field an admin types — the other is derived server-side (`parsePackageFromDisplay`), never a second independent input. Before adding a second such pair anywhere, check every reader of the existing one first: if only the display field is ever read, the numeric field is not "the other option," it is dead weight waiting to disagree with it.
+11. Announcement content supports a small, whitelisted rich-text syntax (`**bold**`, `- `/`* ` bullets, `[text](url)` links), rendered by `render-rich-text.tsx` as React elements it builds itself — never `dangerouslySetInnerHTML`. A link is only ever created for an `http(s)://` URL; anything else renders as the literal text. Do not extend this to accept raw HTML or a client-side markdown library that injects innerHTML — the safety property here is that nothing typed into an announcement can become a live tag or script, and that must survive any future extension of the syntax.
+12. `Announcement.editedAt` is set only by an edit to an *existing* row, never by create, publish or archive — those also change Prisma's own `updatedAt`, which is why `updatedAt` cannot be shown to users as "edited" and a separate column exists. The same shape (an explicit, narrowly-set timestamp instead of reusing `updatedAt`) is the right pattern anywhere "when did a person last change the content" needs to mean something narrower than "when did any field last change." 

@@ -3,6 +3,7 @@ import type { AnnouncementRow } from "../queries/get-announcements";
 import { PRIORITY_PRESENTATION } from "@/features/notifications/utils/notification-priority";
 import type { NotificationPriority } from "@prisma/client";
 import { batchLabel } from "@/features/students/utils/batch";
+import { announcementExcerpt } from "../domain/render-rich-text";
 
 /**
  * One announcement in a list. The same card for every role; what differs is
@@ -16,10 +17,7 @@ export function AnnouncementCard({
   basePath: string;
 }) {
   const presentation = PRIORITY_PRESENTATION[announcement.priority as NotificationPriority];
-  const excerpt =
-    announcement.content.length > 220
-      ? `${announcement.content.slice(0, 217)}…`
-      : announcement.content;
+  const excerpt = announcementExcerpt(announcement.content);
 
   return (
     <Link
@@ -60,6 +58,7 @@ export function AnnouncementCard({
           timeZone: "Asia/Kolkata",
         })}`}
         {announcement.attachmentName && " · 1 attachment"}
+        {announcement.editedAt && " · edited"}
       </div>
     </Link>
   );

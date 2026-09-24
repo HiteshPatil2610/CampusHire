@@ -3,11 +3,12 @@ import type { NotificationPriority } from "@prisma/client";
 import { PRIORITY_PRESENTATION } from "@/features/notifications/utils/notification-priority";
 import type { AnnouncementRow } from "../queries/get-announcements";
 import { batchLabel } from "@/features/students/utils/batch";
+import { renderAnnouncementContent } from "../domain/render-rich-text";
 
 /**
- * One announcement, read in full. The content is plain text and rendered as
- * text — an announcement is written by a person and read by many, so nothing
- * in it is interpreted as markup.
+ * One announcement, read in full. The content supports a small, safe rich-text
+ * syntax (bold, bullet lists, links) — see `render-rich-text.tsx` for why it
+ * is never raw HTML.
  */
 export function AnnouncementDetail({
   announcement,
@@ -49,19 +50,17 @@ export function AnnouncementDetail({
           })}
           {announcement.expiresAt &&
             ` · hidden after ${new Date(announcement.expiresAt).toLocaleDateString("en-IN")}`}
+          {announcement.editedAt &&
+            ` · edited ${new Date(announcement.editedAt).toLocaleString("en-IN", {
+              dateStyle: "medium",
+              timeStyle: "short",
+              timeZone: "Asia/Kolkata",
+            })}`}
         </div>
 
-        <p
-          style={{
-            fontSize: 13,
-            lineHeight: 1.7,
-            color: "var(--text-primary)",
-            whiteSpace: "pre-wrap",
-            margin: 0,
-          }}
-        >
-          {announcement.content}
-        </p>
+        <div style={{ fontSize: 13, lineHeight: 1.7, color: "var(--text-primary)" }}>
+          {renderAnnouncementContent(announcement.content)}
+        </div>
 
         {announcement.attachmentUrl && announcement.attachmentName && (
           <p style={{ marginTop: 16 }}>

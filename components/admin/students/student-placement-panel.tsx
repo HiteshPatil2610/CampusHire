@@ -41,7 +41,6 @@ export function StudentPlacementPanel({
     companyName: '',
     roleName: '',
     packageDisplay: '',
-    packageOffered: '',
     placedAt: new Date().toISOString().slice(0, 10),
   });
 
@@ -66,7 +65,6 @@ export function StudentPlacementPanel({
         companyName: form.companyName,
         roleName: form.roleName,
         packageDisplay: form.packageDisplay,
-        packageOffered: form.packageOffered ? Number(form.packageOffered) : undefined,
         placedAt: form.placedAt,
       });
       if (result.success) {
@@ -190,8 +188,6 @@ export function StudentPlacementPanel({
               onChange={(e) => setForm({ ...form, roleName: e.target.value })} />
             <input style={input} placeholder="Package, e.g. 6 LPA" value={form.packageDisplay} maxLength={100}
               onChange={(e) => setForm({ ...form, packageDisplay: e.target.value })} />
-            <input style={input} placeholder="Package (LPA, number)" inputMode="decimal" value={form.packageOffered}
-              onChange={(e) => setForm({ ...form, packageOffered: e.target.value })} />
             <input style={input} type="date" value={form.placedAt} max={new Date().toISOString().slice(0, 10)}
               onChange={(e) => setForm({ ...form, placedAt: e.target.value })} aria-label="Placement date" />
           </div>

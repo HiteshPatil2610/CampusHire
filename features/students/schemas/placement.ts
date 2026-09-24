@@ -6,19 +6,19 @@ import { z } from "zod";
  * CampusHire drive are created by selecting the application instead.
  *
  * Only facts are taken from the client. Who recorded it, when, and which
- * department the student belongs to are decided on the server.
+ * department the student belongs to are decided on the server. There is one
+ * Package field, not two: the admin types it as text (e.g. "6 LPA"), and the
+ * server derives the numeric `packageOffered` column from it — see
+ * `parsePackageFromDisplay` in `recordManualPlacement`. A second, independent
+ * numeric input used to exist here and could disagree with the text; nothing
+ * in the app ever read it (every list, export and the drive-placement tab
+ * render `packageDisplay` only), so it was dropped as input.
  */
 export const recordPlacementSchema = z.object({
   studentId: z.string().min(1, "Student is required"),
   companyName: z.string().trim().min(1, "Company is required").max(200, "Company name too long"),
   roleName: z.string().trim().min(1, "Role is required").max(200, "Role too long"),
   packageDisplay: z.string().trim().max(100, "Package text too long").optional().or(z.literal("")),
-  /** LPA, as the drives record it. */
-  packageOffered: z
-    .number()
-    .min(0, "Package cannot be negative")
-    .max(10_000, "Package looks wrong")
-    .optional(),
   placedAt: z
     .string()
     .refine((value) => !Number.isNaN(new Date(value).getTime()), "Invalid placement date")

@@ -358,7 +358,9 @@ export const NOTIFICATION_EVENTS: Record<NotificationEvent, NotificationEventDef
     label: "Skill review",
     category: "SYSTEM",
     priority: "ACTION_REQUIRED",
-    audience: SUPER,
+    // The master list is shared, but the student who typed it belongs to one
+    // department — its admins are the ones told, not every department's.
+    audience: ADMIN,
     optional: false,
     legacyType: "SYSTEM",
     description: "A student typed a skill that is not yet on the master list",

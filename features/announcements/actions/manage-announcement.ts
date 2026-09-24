@@ -133,6 +133,10 @@ export async function saveAnnouncement(
               expiresAt,
               attachmentUrl: data.attachmentUrl ?? null,
               attachmentName: data.attachmentName ?? null,
+              // Only a real edit sets this — never create, publish or
+              // archive, which is why it lives here and not on the model's
+              // own `@updatedAt`.
+              editedAt: new Date(),
               ...(live
                 ? {}
                 : {

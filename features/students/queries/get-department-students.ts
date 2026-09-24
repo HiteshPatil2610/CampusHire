@@ -11,10 +11,15 @@ import {
   resolvePlacementState,
   type PlacementState,
 } from "../utils/placement-status";
-import { passoutYearForLevel } from "../domain/academic-year";
+import { academicCycle, passoutYearForLevel } from "../domain/academic-year";
 
-/** The year filter on the roster: everyone, or one year's batch. */
-export type RosterYearFilter = "all" | "third" | "fourth";
+/**
+ * One category in the roster's batch filter. "graduated" is not one passout
+ * year but everyone whose batch has already crossed the July 1 cutover — an
+ * open-ended range, unlike "third"/"fourth" which each mean exactly one
+ * batch this academic cycle.
+ */
+export type RosterYearCategory = "third" | "fourth" | "graduated";
 
 export type StudentRosterItem = Student & {
   academic: StudentAcademic | null;
@@ -39,10 +44,12 @@ export interface GetDepartmentStudentsParams {
   // unplaced = registered, opted in, no SELECTED application
   status?: "all" | "placed" | "unplaced" | "pending" | "opted-out";
   /**
-   * "third" / "fourth" = the batch in that year this academic cycle. The year
-   * level is derived, so this filters on the one passout year it means.
+   * Zero or more categories, OR'd together; empty or omitted = every batch.
+   * The year level is derived (never stored), so each category resolves to
+   * the one passout year — or, for "graduated", the range — it currently
+   * means.
    */
-  year?: RosterYearFilter;
+  years?: RosterYearCategory[];
 }
 
 export interface DepartmentStudentsResult {
@@ -83,25 +90,37 @@ export async function getDepartmentStudents(
             ? { isPending: false, optedIn: false }
             : {};
 
-  const year = params.year ?? "all";
-  const yearFilter: Prisma.StudentWhereInput =
-    year === "third"
-      ? { expectedPassoutYear: passoutYearForLevel("THIRD_YEAR") }
-      : year === "fourth"
-        ? { expectedPassoutYear: passoutYearForLevel("FOURTH_YEAR") }
-        : {};
+  // Each selected category becomes one OR branch; a category picked more
+  // than once just repeats a branch, which is harmless.
+  const years = params.years ?? [];
+  const yearOrClauses: Prisma.StudentWhereInput[] = years.map((category) =>
+    category === "graduated"
+      ? { expectedPassoutYear: { lt: academicCycle().finalYearPassout } }
+      : {
+          expectedPassoutYear: passoutYearForLevel(
+            category === "third" ? "THIRD_YEAR" : "FOURTH_YEAR"
+          ),
+        }
+  );
 
   const where: Prisma.StudentWhereInput = {
     ...statusFilter,
-    ...yearFilter,
+    // A top-level `OR` for the year categories; the search clause below nests
+    // its own OR inside `AND` instead, so the two never collide as the same
+    // Prisma key.
+    ...(yearOrClauses.length > 0 ? { OR: yearOrClauses } : {}),
     ...(search
       ? {
-          OR: [
-            { name: { contains: search, mode: "insensitive" as const } },
-            { rollNumber: { contains: search, mode: "insensitive" as const } },
-            { misNumber: { contains: search, mode: "insensitive" as const } },
-            { prnNumber: { contains: search, mode: "insensitive" as const } },
-            { email: { contains: search, mode: "insensitive" as const } },
+          AND: [
+            {
+              OR: [
+                { name: { contains: search, mode: "insensitive" as const } },
+                { rollNumber: { contains: search, mode: "insensitive" as const } },
+                { misNumber: { contains: search, mode: "insensitive" as const } },
+                { prnNumber: { contains: search, mode: "insensitive" as const } },
+                { email: { contains: search, mode: "insensitive" as const } },
+              ],
+            },
           ],
         }
       : {}),

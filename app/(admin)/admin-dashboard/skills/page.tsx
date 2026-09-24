@@ -1,4 +1,4 @@
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireDepartmentAdmin } from "@/lib/auth";
 import { getPendingSkills } from "@/features/skills/queries/get-pending-skills";
 import { SkillsReviewClient } from "./skills-review-client";
 
@@ -9,9 +9,13 @@ export const dynamic = "force-dynamic";
  * matched nothing already shows on their profile, tagged pending — nothing
  * here gates that. What is decided here is only whether it joins the shared
  * list every other student's autocomplete offers.
+ *
+ * The list is shared across the whole institution, not owned by one
+ * department, so any active department admin may review it — not just the
+ * department the requesting student belongs to.
  */
 export default async function SkillsReviewPage() {
-  await requireSuperAdmin();
+  await requireDepartmentAdmin();
   const pending = await getPendingSkills();
 
   return (

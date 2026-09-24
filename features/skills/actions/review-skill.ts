@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireSuperAdmin, AuthorizationError } from "@/lib/auth";
+import { requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AuditAction, AuditEntityType, createAuditLogInTransaction } from "@/lib/audit";
 import { skillIdSchema, rejectSkillSchema } from "../schemas/skill";
@@ -20,19 +20,20 @@ import { skillIdSchema, rejectSkillSchema } from "../schemas/skill";
  * forget. There is no REJECTED status to leave behind: the name is free to
  * be typed and reviewed again, from nothing.
  *
- * Authorization: SUPER_ADMIN only, matching the master list being the one
- * shared catalogue rather than a per-department one.
+ * Authorization: any active department admin. The master list is one shared
+ * catalogue, not owned by a single department, so review is not restricted
+ * to the department the requesting student belongs to.
  */
 
 export type ReviewSkillResult = { success: true; message: string } | { success: false; error: string };
 
 function revalidateSkillViews() {
-  revalidatePath("/super-admin-dashboard/skills");
+  revalidatePath("/admin-dashboard/skills");
 }
 
 export async function approveSkill(input: { skillId: string }): Promise<ReviewSkillResult> {
   try {
-    const superAdmin = await requireSuperAdmin();
+    const { user: reviewer } = await requireDepartmentAdmin();
     const validated = skillIdSchema.safeParse(input);
     if (!validated.success) return { success: false, error: "Invalid input" };
 
@@ -47,7 +48,7 @@ export async function approveSkill(input: { skillId: string }): Promise<ReviewSk
       // Compare-and-set: a concurrent approve/reject only lets one through.
       const claim = await tx.skill.updateMany({
         where: { id: skill.id, status: "PENDING" },
-        data: { status: "APPROVED", approvedById: superAdmin.id, approvedAt: now },
+        data: { status: "APPROVED", approvedById: reviewer.id, approvedAt: now },
       });
       if (claim.count === 0) throw new Error("changed");
 
@@ -59,7 +60,7 @@ export async function approveSkill(input: { skillId: string }): Promise<ReviewSk
           entityId: skill.id,
           metadata: { name: skill.name, skillType: skill.skillType },
         },
-        superAdmin.id
+        reviewer.id
       );
     });
 
@@ -77,7 +78,7 @@ export async function approveSkill(input: { skillId: string }): Promise<ReviewSk
 
 export async function rejectSkill(input: { skillId: string; reason?: string }): Promise<ReviewSkillResult> {
   try {
-    const superAdmin = await requireSuperAdmin();
+    const { user: reviewer } = await requireDepartmentAdmin();
     const validated = rejectSkillSchema.safeParse(input);
     if (!validated.success) return { success: false, error: "Invalid input" };
 
@@ -108,7 +109,7 @@ export async function rejectSkill(input: { skillId: string; reason?: string }): 
             profilesAffected: affected,
           },
         },
-        superAdmin.id
+        reviewer.id
       );
 
       // Refused only if it is still the same pending row — a concurrent

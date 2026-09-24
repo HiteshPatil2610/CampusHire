@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { requireDepartmentAdmin } from '@/lib/auth';
-import { getDepartmentStudents } from '@/features/students/queries/get-department-students';
+import {
+  getDepartmentStudents,
+  type RosterYearCategory,
+} from '@/features/students/queries/get-department-students';
 import { DepartmentScopeBanner } from '@/components/shared/department-scope-banner';
 import { StudentRosterClient } from '@/components/admin/students/student-roster-client';
 
@@ -10,10 +13,12 @@ interface AdminStudentsPageProps {
   searchParams: Promise<{
     search?: string;
     status?: string;
-    year?: string;
+    years?: string;
     page?: string;
   }>;
 }
+
+const YEAR_CATEGORIES: readonly RosterYearCategory[] = ['third', 'fourth', 'graduated'];
 
 /**
  * Admin Student Roster Page
@@ -33,15 +38,18 @@ export default async function AdminStudentsPage({
   const status =
     (params.status as 'all' | 'placed' | 'unplaced' | 'pending' | 'opted-out') ||
     'all';
-  // Anything but the two year filters means everyone.
-  const year = params.year === 'third' || params.year === 'fourth' ? params.year : 'all';
+  // Zero or more categories, comma-separated; anything unrecognized is
+  // dropped rather than widening the filter to everyone by accident.
+  const years = (params.years?.split(',') ?? []).filter((value): value is RosterYearCategory =>
+    YEAR_CATEGORIES.includes(value as RosterYearCategory)
+  );
   const page = params.page ? parseInt(params.page, 10) : 1;
 
   // Fetch students
   const studentsResult = await getDepartmentStudents({
     search,
     status,
-    year,
+    years,
     page,
     pageSize: 25,
   });

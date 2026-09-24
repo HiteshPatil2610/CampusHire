@@ -1,6 +1,6 @@
 "use server";
 
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireDepartmentAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export interface PendingSkillRow {
@@ -15,12 +15,14 @@ export interface PendingSkillRow {
 }
 
 /**
- * The Super Admin's review queue (Item 3): every PENDING skill, oldest
+ * The department admin's review queue (Item 3): every PENDING skill, oldest
  * first — first typed, first reviewed — with who asked for it and how many
- * students already picked it up while it waited.
+ * students already picked it up while it waited. The master list is shared
+ * across the institution, so this is the same queue for every department
+ * admin, not filtered to their own department's requesters.
  */
 export async function getPendingSkills(): Promise<PendingSkillRow[]> {
-  await requireSuperAdmin();
+  await requireDepartmentAdmin();
 
   const skills = await prisma.skill.findMany({
     where: { status: "PENDING" },

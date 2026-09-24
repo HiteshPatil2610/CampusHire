@@ -482,7 +482,6 @@ describe("recording a placement", () => {
     companyName: "Offcampus Ltd",
     roleName: "Analyst",
     packageDisplay: "6 LPA",
-    packageOffered: 6,
     placedAt: "2026-09-10",
   };
 
@@ -505,6 +504,22 @@ describe("recording a placement", () => {
       studentId: "student-1",
       source: "MANUAL",
       recordedById: "admin-cse",
+      // The one Package field the admin typed; the number is derived from it
+      // (Phase 8, Items 14/15) rather than taken as a second, independent input.
+      packageDisplay: "6 LPA",
+      packageOffered: 6,
+    });
+  });
+
+  it("derives no number from package text that has none, rather than storing a false zero", async () => {
+    vi.mocked(prisma.student.findUnique).mockResolvedValue({ id: "student-1", departmentId: CSE } as never);
+
+    await recordManualPlacement({ ...input, packageDisplay: "Competitive" });
+
+    const [call] = vi.mocked(prisma.studentPlacement.create).mock.calls;
+    expect((call[0] as { data: Record<string, unknown> }).data).toMatchObject({
+      packageDisplay: "Competitive",
+      packageOffered: null,
     });
   });
 

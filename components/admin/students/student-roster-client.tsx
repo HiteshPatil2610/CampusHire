@@ -18,12 +18,12 @@ type RosterStatusFilter =
   | 'pending'
   | 'opted-out';
 
-type RosterYear = 'all' | 'third' | 'fourth';
+type RosterYearCategory = 'third' | 'fourth' | 'graduated';
 
-const YEAR_FILTERS: { value: RosterYear; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'third', label: '3rd Year' },
+const YEAR_FILTERS: { value: RosterYearCategory; label: string }[] = [
   { value: 'fourth', label: '4th Year' },
+  { value: 'third', label: '3rd Year' },
+  { value: 'graduated', label: 'Graduated' },
 ];
 
 interface StudentRosterClientProps {
@@ -53,7 +53,7 @@ export function StudentRosterClient({
 
   const currentStatus =
     (searchParams.get('status') as RosterStatusFilter) || 'all';
-  const currentYear = (searchParams.get('year') as RosterYear) || 'all';
+  const currentYears = (searchParams.get('years')?.split(',').filter(Boolean) ?? []) as RosterYearCategory[];
 
   // Handle search with debounce
   function handleSearchChange(value: string) {
@@ -85,14 +85,25 @@ export function StudentRosterClient({
     router.push(`${pathname}?${params.toString()}`);
   }
 
-  function handleYearFilter(year: RosterYear) {
+  function handleYearToggle(category: RosterYearCategory) {
+    const next = currentYears.includes(category)
+      ? currentYears.filter((value) => value !== category)
+      : [...currentYears, category];
+
     const params = new URLSearchParams(searchParams.toString());
-    if (year === 'all') {
-      params.delete('year');
+    if (next.length === 0) {
+      params.delete('years');
     } else {
-      params.set('year', year);
+      params.set('years', next.join(','));
     }
     params.delete('page'); // Reset to page 1
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  function handleYearClear() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('years');
+    params.delete('page');
     router.push(`${pathname}?${params.toString()}`);
   }
 
@@ -160,14 +171,23 @@ export function StudentRosterClient({
 
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Year:</span>
+          <button
+            type="button"
+            className={`btn btn-sm ${currentYears.length === 0 ? 'btn-primary' : 'btn-outline'}`}
+            style={{ fontSize: 11, padding: '4px 8px' }}
+            aria-pressed={currentYears.length === 0}
+            onClick={handleYearClear}
+          >
+            All
+          </button>
           {YEAR_FILTERS.map((filter) => (
             <button
               key={filter.value}
               type="button"
-              className={`btn btn-sm ${currentYear === filter.value ? 'btn-primary' : 'btn-outline'}`}
+              className={`btn btn-sm ${currentYears.includes(filter.value) ? 'btn-primary' : 'btn-outline'}`}
               style={{ fontSize: 11, padding: '4px 8px' }}
-              aria-pressed={currentYear === filter.value}
-              onClick={() => handleYearFilter(filter.value)}
+              aria-pressed={currentYears.includes(filter.value)}
+              onClick={() => handleYearToggle(filter.value)}
             >
               {filter.label}
             </button>

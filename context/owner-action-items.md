@@ -8,27 +8,29 @@ make it work for real people.
 Tick an item by changing `[ ]` to `[x]`. When a new phase adds one, it is
 added here.
 
-_Last updated: 2026-09-24 (after Phase 7)._
+_Last updated: 2026-09-24 (after Phase 8)._
 
 ---
 
 ## 1. Must do before real users use it
 
-- [ ] **Apply the Phase 7 migration**, from the repo folder:
+- [x] **Apply the Phase 7 migration** — done; confirmed live on production
+  (`Skill` table, `StudentSkill.skillId`, `SKILL_PENDING_REVIEW` all present).
+
+- [ ] **Apply the Phase 8 migration**, from the repo folder:
 
   ```bash
   npx prisma migrate deploy
   ```
-  *Helps with:* the master skill list (Item 3) — adds the `Skill` table and
-  the reference from `StudentSkill`. Rehearsed on production in a forced
-  rollback; nothing else is touched. A backup branch is recommended first,
-  as with earlier phases (ask if you want one taken).
+  *Helps with:* the announcement "edited" timestamp (Item 19) — adds one
+  nullable column, `Announcement.editedAt`. Rehearsed on production in a
+  forced rollback; nothing else is touched.
 
 - [ ] **Run the production build once and fix anything it reports.**
   `npx next build` from the repo folder, or let the test deployment build the
   `test` branch and read its build log.
   *Helps with:* everything since Phase 4 — the code passes type checks,
-  lint and 1308 tests, but no full build has been run since Phase 3.
+  lint and 1330 tests, but no full build has been run since Phase 3.
 
 - [ ] **Import students with MIS, PRN and BATCH filled in** (Students → Bulk
   Import, per department).
@@ -90,12 +92,27 @@ These cannot be tested in code — they need a real inbox and browser.
   departments, and one department) and as a department admin; confirm the
   Super Admin's drive reaches each department to configure, and the dates
   save as the days you picked.
-- [ ] **Skill review** (Phase 7, Item 3): as a student, type a skill name
-  that doesn't exist yet — it should appear on your profile tagged
-  "pending" right away. As Super Admin, open **Skill Review**, approve it —
-  it should now suggest itself to other students typing the same name.
-  Try rejecting one on a second student's profile too, and confirm it
-  disappears from their skills list.
+- [ ] **Skill review** (Phase 7, Item 3 — moved to the admin panel after):
+  as a student, type a skill name that doesn't exist yet — it should appear
+  on your profile tagged "pending" right away, and your department's admin
+  should get a notification. As a department admin, open **Skill Review**
+  (now on the admin dashboard, not Super Admin's), approve it — it should
+  now suggest itself to other students typing the same name. Try rejecting
+  one on a second student's profile too, and confirm it disappears from
+  their skills list.
+- [ ] **Off-campus placement, one Package field** (Phase 8, Items 14/15): on
+  a student's profile, record an off-campus placement with just "6 LPA" in
+  the one Package box — confirm it shows correctly everywhere it did before
+  (student roster, drive placements tab, Super Admin's placements page/CSV).
+- [ ] **Batch filter, multi-select** (Phase 8, Item 17): on the admin
+  Students page, select 4th Year and Graduated together and confirm both
+  show at once; confirm "All" clears back to everyone.
+- [ ] **Announcements** (Phase 8, Item 19): write one with **bold**, a
+  bullet list and a `[link](https://...)` using the new toolbar buttons —
+  confirm it renders correctly (not as raw `**`/`[]()` text) on the
+  student/admin feed. Edit a published one and confirm "edited" appears.
+  As Super Admin, try the new department filter and the newest/oldest sort
+  on the manager list.
 - [ ] **Student sees a drive** (Phase 5): as a final-year student with a
   batch and semesters 1–6 uploaded, the drive appears on Drives and a "New
   Drive Available" notification arrives once; saving the profile again does

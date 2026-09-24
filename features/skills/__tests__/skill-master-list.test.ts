@@ -1,15 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /**
- * Phase 7, Item 3 — the master skill list.
+ * Phase 7, Item 3 — the master skill list. Review moved from the Super
+ * Admin's panel to the department admin's panel afterward, since the list
+ * is shared institution-wide but the office that actually curates it is the
+ * placement department admins, not the Super Admin.
  *
  *   student types a name
  *   → matched against the list (case/edge-space-insensitive), or
- *   → created PENDING, visible on their profile at once, Super Admins told
- *   → Super Admin approves (lists it for everyone) or rejects (deletes it,
- *     which cascades to every profile that had picked it up — a database
- *     constraint, verified against production in the migration rehearsal,
- *     not something a mocked Prisma client can prove)
+ *   → created PENDING, visible on their profile at once, their department's
+ *     admins told
+ *   → a department admin approves (lists it for everyone) or rejects
+ *     (deletes it, which cascades to every profile that had picked it up —
+ *     a database constraint, verified against production in the migration
+ *     rehearsal, not something a mocked Prisma client can prove)
  */
 
 vi.mock("react", async (importOriginal) => ({
@@ -42,7 +46,7 @@ vi.mock("@/lib/auth", () => {
   class AuthorizationError extends Error {}
   return {
     requireStudent: vi.fn(),
-    requireSuperAdmin: vi.fn(),
+    requireDepartmentAdmin: vi.fn(),
     AuthorizationError,
   };
 });
@@ -51,7 +55,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireStudent, requireSuperAdmin, AuthorizationError } from "@/lib/auth";
+import { requireStudent, requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
 import { primeDeliveryMocks } from "@/features/notifications/__tests__/delivery-test-helpers";
 import { normalizeSkillName } from "../domain/normalize";
 import { matchOrCreateSkill } from "../domain/match-or-create-skill";
@@ -59,8 +63,8 @@ import { searchSkills } from "../queries/search-skills";
 import { approveSkill, rejectSkill } from "../actions/review-skill";
 import { addSkill } from "@/features/students/actions/profile-skills";
 
-const STUDENT = { id: "student-1", userId: "user-1" };
-const SUPER_ADMIN = { id: "super-1" };
+const STUDENT = { id: "student-1", userId: "user-1", departmentId: "dept-1" };
+const REVIEWER = { id: "admin-1" };
 
 /** A Skill row as Prisma would return it. */
 function skillRow(over: Partial<Record<string, unknown>> = {}) {
@@ -82,7 +86,11 @@ function skillRow(over: Partial<Record<string, unknown>> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(requireStudent).mockResolvedValue({ user: { id: STUDENT.userId }, student: STUDENT } as never);
-  vi.mocked(requireSuperAdmin).mockResolvedValue(SUPER_ADMIN as never);
+  vi.mocked(requireDepartmentAdmin).mockResolvedValue({
+    user: REVIEWER,
+    admin: { departmentId: "dept-1" },
+    department: { id: "dept-1", code: "CSE" },
+  } as never);
   (prisma.$transaction as unknown as ReturnType<typeof vi.fn>).mockImplementation(
     async (fn: (tx: unknown) => unknown) => fn(prisma)
   );
@@ -247,20 +255,23 @@ describe("addSkill", () => {
     });
   });
 
-  it("5. tells the Super Admins once, when — and only when — the name is new", async () => {
+  it("5. tells the student's own department admins once, when — and only when — the name is new", async () => {
     vi.mocked(prisma.skill.findUnique).mockResolvedValue(null as never);
     vi.mocked(prisma.skill.create).mockResolvedValue(skillRow({ name: "Rust" }) as never);
     vi.mocked(prisma.studentSkill.create).mockResolvedValue({} as never);
-    vi.mocked(prisma.user.findMany).mockResolvedValue([{ id: SUPER_ADMIN.id }] as never);
+    vi.mocked(prisma.departmentAdmin.findMany).mockResolvedValue([{ userId: REVIEWER.id }] as never);
 
     await addSkill({ skillName: "Rust", skillType: "TECHNICAL" });
 
+    expect(prisma.departmentAdmin.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ departmentId: STUDENT.departmentId }) })
+    );
     expect(prisma.notification.createMany).toHaveBeenCalledTimes(1);
     const [call] = vi.mocked(prisma.notification.createMany).mock.calls;
     const rows = (call[0] as { data: Record<string, unknown>[] }).data;
     expect(rows).toEqual([
       expect.objectContaining({
-        userId: SUPER_ADMIN.id,
+        userId: REVIEWER.id,
         event: "SKILL_PENDING_REVIEW",
         dedupeKey: "skill-pending:skill-1",
         resourceType: "Skill",
@@ -293,7 +304,7 @@ describe("addSkill", () => {
     vi.mocked(prisma.skill.findUnique).mockResolvedValue(null as never);
     vi.mocked(prisma.skill.create).mockResolvedValue(skillRow({ name: "Rust" }) as never);
     vi.mocked(prisma.studentSkill.create).mockResolvedValue({} as never);
-    vi.mocked(prisma.user.findMany).mockRejectedValueOnce(new Error("db hiccup"));
+    vi.mocked(prisma.departmentAdmin.findMany).mockRejectedValueOnce(new Error("db hiccup"));
 
     const result = await addSkill({ skillName: "Rust", skillType: "TECHNICAL" });
 
@@ -302,7 +313,7 @@ describe("addSkill", () => {
 });
 
 // ---------------------------------------------------------------------------
-// approveSkill / rejectSkill — the Super Admin's decision
+// approveSkill / rejectSkill — a department admin's decision
 // ---------------------------------------------------------------------------
 
 describe("approveSkill", () => {
@@ -315,7 +326,7 @@ describe("approveSkill", () => {
     expect(result).toEqual({ success: true, message: expect.stringContaining("React") });
     expect(prisma.skill.updateMany).toHaveBeenCalledWith({
       where: { id: "skill-1", status: "PENDING" },
-      data: { status: "APPROVED", approvedById: SUPER_ADMIN.id, approvedAt: expect.any(Date) },
+      data: { status: "APPROVED", approvedById: REVIEWER.id, approvedAt: expect.any(Date) },
     });
   });
 
@@ -329,10 +340,10 @@ describe("approveSkill", () => {
     expect(raced).toEqual({ success: false, error: "This skill was just reviewed by someone else." });
   });
 
-  it("only a Super Admin may approve", async () => {
-    vi.mocked(requireSuperAdmin).mockRejectedValueOnce(new AuthorizationError("Super Admin only"));
+  it("only an active department admin may approve", async () => {
+    vi.mocked(requireDepartmentAdmin).mockRejectedValueOnce(new AuthorizationError("Department admin only"));
 
-    expect(await approveSkill({ skillId: "skill-1" })).toEqual({ success: false, error: "Super Admin only" });
+    expect(await approveSkill({ skillId: "skill-1" })).toEqual({ success: false, error: "Department admin only" });
     expect(prisma.skill.findUnique).not.toHaveBeenCalled();
   });
 });

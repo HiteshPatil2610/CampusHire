@@ -1,7 +1,9 @@
 /**
- * The central drive form collects package as free text ("14 – 22 LPA") while
- * the Drive table stores a numeric packageOffered used for sorting and display
- * fallbacks. This extracts the first number from the text so both stay in sync.
+ * Recovers the numeric package a display string implies (e.g. "6 LPA" → 6,
+ * "14 – 22 LPA" → 14), for a form that collects package as free text but
+ * still wants a numeric column behind it — see `recordManualPlacement`,
+ * which derives `StudentPlacement.packageOffered` from `packageDisplay` this
+ * way rather than asking the admin to type the number a second time.
  *
  * Rounded to 2 decimal places to match the NUMERIC(10,2) column, so the value
  * the application holds is the value Postgres stores rather than something it
