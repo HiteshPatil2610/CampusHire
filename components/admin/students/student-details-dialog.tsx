@@ -24,6 +24,11 @@ import { StudentProfileSections } from './student-profile-sections';
 interface StudentDetailsDialogProps {
   studentId: string | null; // null = closed
   onClose: () => void;
+  /** The Super Admin's directory (Phase 9, Item 21) opens this read-only:
+   *  no recording a placement, no opt-in toggle, no drop/undo — those stay
+   *  the owning department admin's actions. Revoking a placement is still
+   *  available; the server already allows the Super Admin there. */
+  readOnly?: boolean;
 }
 
 /**
@@ -45,6 +50,7 @@ interface StudentDetailsDialogProps {
 export function StudentDetailsDialog({
   studentId,
   onClose,
+  readOnly = false,
 }: StudentDetailsDialogProps) {
   const [profile, setProfile] = useState<CompleteProfile | null>(null);
   const [loading, setLoading] = useState(false);
@@ -250,13 +256,14 @@ export function StudentDetailsDialog({
             {/* Academic standing — year level, batch and drops */}
             <StudentAcademicPanel
               studentId={studentId}
+              canManage={!readOnly}
               onChanged={() => setReloadKey((key) => key + 1)}
             />
 
             {/* Placement — the source of the Placed state */}
             <StudentPlacementPanel
               studentId={studentId}
-              canRecord
+              canRecord={!readOnly}
               onChanged={() => setReloadKey((key) => key + 1)}
             />
 
@@ -292,7 +299,7 @@ export function StudentDetailsDialog({
                   className={`btn btn-sm ${
                     optedIn ? 'btn-primary' : 'btn-outline'
                   }`}
-                  disabled={isSavingOptIn}
+                  disabled={isSavingOptIn || readOnly}
                   onClick={() => handleOptInChange(true, optedInLocked)}
                 >
                   Participating
@@ -302,29 +309,31 @@ export function StudentDetailsDialog({
                   className={`btn btn-sm ${
                     !optedIn ? 'btn-primary' : 'btn-outline'
                   }`}
-                  disabled={isSavingOptIn}
+                  disabled={isSavingOptIn || readOnly}
                   onClick={() => handleOptInChange(false, optedInLocked)}
                 >
                   Opted Out
                 </button>
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    fontSize: 12,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={optedInLocked}
-                    disabled={isSavingOptIn}
-                    onChange={(e) =>
-                      handleOptInChange(optedIn, e.target.checked)
-                    }
-                  />
-                  Lock
-                </label>
+                {!readOnly && (
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 12,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={optedInLocked}
+                      disabled={isSavingOptIn}
+                      onChange={(e) =>
+                        handleOptInChange(optedIn, e.target.checked)
+                      }
+                    />
+                    Lock
+                  </label>
+                )}
               </div>
             </div>
 

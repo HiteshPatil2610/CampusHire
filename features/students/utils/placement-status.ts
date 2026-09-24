@@ -51,11 +51,64 @@ export const UNPLACED_STUDENT_FILTER = {
 } satisfies Prisma.StudentWhereInput;
 
 /**
+ * The three-category placement filter the Super Admin's student directory
+ * uses (Phase 9, Item 21): Placed / Not placed / Not yet eligible. "Not
+ * placed" is the roster's ELIGIBLE state (registered, opted in, no offer);
+ * "not yet eligible" collapses PENDING and OPTED_OUT into one bucket, since
+ * from a placement standpoint neither is currently in the running.
+ */
+/**
+ * One Prisma filter per `PlacementState`, mirroring `resolvePlacementState`'s
+ * precedence exactly (pending, then placed, then opted out, else eligible) —
+ * so filtering by a state returns precisely the students whose badge shows
+ * it, and every student falls in exactly one. Without the precedence a
+ * student placed and then opted out matched both "placed" and "opted out",
+ * and a placement recorded before registration showed under "placed" beside
+ * a Pending badge (caught by tests/integration/student-directory).
+ */
+export const PLACEMENT_STATE_FILTERS = {
+  PENDING: { isPending: true },
+  PLACED: { isPending: false, ...PLACED_STUDENT_FILTER },
+  OPTED_OUT: { isPending: false, optedIn: false, ...UNPLACED_STUDENT_FILTER },
+  ELIGIBLE: { isPending: false, optedIn: true, ...UNPLACED_STUDENT_FILTER },
+} satisfies Record<PlacementState, Prisma.StudentWhereInput>;
+
+export const NOT_PLACED_STUDENT_FILTER = PLACEMENT_STATE_FILTERS.ELIGIBLE;
+
+export const NOT_YET_ELIGIBLE_STUDENT_FILTER = {
+  OR: [PLACEMENT_STATE_FILTERS.PENDING, PLACEMENT_STATE_FILTERS.OPTED_OUT],
+} satisfies Prisma.StudentWhereInput;
+
+/**
  * The same test as SQL, for raw queries: `<alias>` is the Student row's
  * alias. Kept here so the raw reports cannot drift from the Prisma filters.
  */
 export function placedStudentSql(alias: string): string {
   return `EXISTS (SELECT 1 FROM "StudentPlacement" sp WHERE sp."studentId" = ${alias}."id" AND sp."revokedAt" IS NULL)`;
+}
+
+/**
+ * The pool every placement rate is measured against — the one definition of
+ * "Placement Rate" on every screen. A student is in it once they have
+ * registered and are either taking part in placement or already placed (an
+ * offer is a fact even if they opted out afterwards). Students not yet
+ * registered, or who opted out without an offer, were never in the running,
+ * so counting them would understate the rate.
+ *
+ * Count the numerator as "placed AND in the pool", not "placed": nothing stops
+ * an off-campus placement being recorded for a student who has not registered
+ * yet, and the rate must never exceed 100%.
+ */
+export function eligiblePoolSql(alias: string): string {
+  return `(${alias}."isPending" = false AND (${alias}."optedIn" = true OR ${placedStudentSql(alias)}))`;
+}
+
+/**
+ * A count within the eligible pool as a whole percentage of it — Placement
+ * Rate (placed) and Participation Rate (applied). 0 for an empty pool.
+ */
+export function percentOfPool(countInPool: number, eligiblePool: number): number {
+  return eligiblePool > 0 ? Math.round((countInPool / eligiblePool) * 100) : 0;
 }
 
 /**

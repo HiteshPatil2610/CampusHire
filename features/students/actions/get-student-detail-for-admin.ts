@@ -1,34 +1,39 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
+import { requireAnyRole, getActiveDepartmentAdmin, AuthorizationError } from "@/lib/auth";
 import { getStudentProfile } from "../queries/get-profile";
 
 /**
- * Get full student profile details for department admin.
- * Enforces department scope - admin can only view students from their own department.
- * 
+ * Get full student profile details for an admin.
+ *
+ * A department admin can only view students from their own department; a
+ * Super Admin can view any student (Phase 9, Item 21's "Student detail
+ * link" on the institution-wide directory) — read-only oversight, since the
+ * dialog's editing actions (recording a placement, dropping a student) stay
+ * gated to the owning department admin at their own action, not here.
+ *
  * @param studentId - ID of the student to fetch
  * @returns Full student profile with all related data
- * @throws AuthorizationError if student is not in admin's department
+ * @throws AuthorizationError if a department admin requests another department's student
  * @throws Error if student not found
  */
 export async function getStudentDetailForAdmin(studentId: string) {
-  // 1. Auth: dept admin only
-  const { department } = await requireDepartmentAdmin();
+  const user = await requireAnyRole(["DEPT_ADMIN", "SUPER_ADMIN"]);
 
-  // 2. Verify the student belongs to this admin's department
-  const student = await prisma.student.findUnique({
-    where: { id: studentId },
-    select: { departmentId: true },
-  });
+  if (user.role === "DEPT_ADMIN") {
+    const admin = await getActiveDepartmentAdmin(user.id);
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { departmentId: true },
+    });
 
-  // Not found and not in your department read the same, so an admin cannot
-  // use this to discover which student ids exist in other departments.
-  if (!student || student.departmentId !== department.id) {
-    throw new AuthorizationError("Student not found in your department");
+    // Not found and not in your department read the same, so an admin cannot
+    // use this to discover which student ids exist in other departments.
+    if (!student || !admin || student.departmentId !== admin.departmentId) {
+      throw new AuthorizationError("Student not found in your department");
+    }
   }
 
-  // 3. Return full profile (now safe — ownership verified)
   return getStudentProfile(studentId);
 }

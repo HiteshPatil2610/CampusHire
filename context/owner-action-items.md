@@ -8,7 +8,7 @@ make it work for real people.
 Tick an item by changing `[ ]` to `[x]`. When a new phase adds one, it is
 added here.
 
-_Last updated: 2026-09-24 (after Phase 8)._
+_Last updated: 2026-09-24 (after Phase 9)._
 
 ---
 
@@ -26,11 +26,13 @@ _Last updated: 2026-09-24 (after Phase 8)._
   (already in your `.env`) via `directUrl`; the app's own queries are
   untouched and still use the pooled connection.
 
-- [ ] **Run the production build once and fix anything it reports.**
+- [x] **Run the production build once and fix anything it reports.** Done
+  in Phase 10 — `next build` passes. (Build with `NODE_ENV` unset; a shell
+  that sets it to `development` breaks the build.)
   `npx next build` from the repo folder, or let the test deployment build the
   `test` branch and read its build log.
   *Helps with:* everything since Phase 4 — the code passes type checks,
-  lint and 1330 tests, but no full build has been run since Phase 3.
+  lint and 1360 tests, but no full build has been run since Phase 3.
 
 - [ ] **Import students with MIS, PRN and BATCH filled in** (Students → Bulk
   Import, per department).
@@ -120,6 +122,21 @@ These cannot be tested in code — they need a real inbox and browser.
 - [ ] **Drop and undo** (Phase 2): on the admin Students page, Drop a
   final-year student → they move to the next batch and stop seeing
   final-year drives → Undo within 48 hours brings them back.
+- [ ] **Department Insights** (Phase 9, Item 20): on the admin dashboard's
+  Reports tab, check the Eligible/Applied/Placed numbers against what you'd
+  count by hand for one department, then try the Batch and Semester filters
+  and confirm every number on the page moves together.
+- [ ] **All Students filters** (Phase 9, Item 21): on the Super Admin's
+  Institution Student Directory, combine Department + Batch + "Not Placed"
+  and confirm only matching students show; add **Has backlogs** and confirm
+  it narrows further; click a row to open the read-only detail view; export
+  the CSV and check it matches what's on screen.
+- [ ] **Placement Rate matches everywhere** (Phase 10): for one department,
+  the rate on the admin Overview card, the admin Reports tab, the Super
+  Admin home table and Global Reports should be the same number.
+- [ ] **Global Reports comparison** (Phase 10, Item 20): as Super Admin, open
+  Global Reports and check the per-department Eligible / Applied / Placed
+  bars and the Active Drives by Department chart.
 
 ## 4. Once a year
 
@@ -135,6 +152,14 @@ These cannot be tested in code — they need a real inbox and browser.
   Safe to run more than once.
 
 ## 5. Housekeeping
+
+- [ ] **Know the `integration-tests` Neon branch exists.** It is a copy of
+  production that `npm run test:integration` writes test data into (and
+  cleans up). Leave it in place — the tests need it. It counts toward the 10
+  branches on the free plan (4 used now). If it ever drifts from production's
+  schema after a new migration, reset it from its parent in Neon (Branches →
+  integration-tests → Reset from parent). The tests refuse to run against
+  production.
 
 - [ ] **Delete the Neon backup branches once the site has run fine for a
   while** (Neon → Branches): `pre-drop-lifecycle-backup-20260929` (taken
@@ -153,9 +178,16 @@ These cannot be tested in code — they need a real inbox and browser.
   card can be changed.
 - [ ] **Item 4 — calendar bug:** which field the calendar belongs to, and a
   screenshot of the problem.
-- [ ] **Item 17 — batch filter:** the Students page has All / 3rd Year /
-  4th Year. The tracker also asks for **Graduated** and for picking several
-  at once — say if you still want those.
+- [x] **Item 17 — batch filter:** done in Phase 8 — Graduated added, and any
+  combination of 3rd/4th/Graduated can be selected at once.
+- [x] **One definition of "Placement Rate"** — decided: placed ÷ eligible
+  (registered, and opted in or already placed). Every dashboard now uses it.
+- [x] **Item 20 — department comparison** — decided: it lives on the Super
+  Admin's Global Reports (Eligible/Applied/Placed per department, and active
+  drives per department). Department admins still see only their own.
+- [x] **Super Admin directory filters** — decided: a separate **Has backlogs**
+  toggle, combinable with the three statuses. Pending and Opted Out stay
+  folded into Not yet eligible.
 
 ---
 

@@ -28,9 +28,13 @@ import { batchLabel, formatBatch } from '@/features/students/utils/batch';
 export function StudentAcademicPanel({
   studentId,
   onChanged,
+  canManage = true,
 }: {
   studentId: string;
   onChanged?: () => void;
+  /** Dropping is the owning department admin's action alone (Phase 9, Item
+   *  21) — false hides Mark as Drop / Undo for a Super Admin's read-only view. */
+  canManage?: boolean;
 }) {
   const { toast } = useToast();
   const [record, setRecord] = useState<StudentAcademicRecord | null | undefined>(undefined);
@@ -100,7 +104,7 @@ export function StudentAcademicPanel({
         <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
           Academic standing · {record.academicYear}
         </div>
-        {!dropOpen && preview.ok && !droppedThisYear && (
+        {canManage && !dropOpen && preview.ok && !droppedThisYear && (
           <button
             type="button"
             className="btn btn-outline btn-sm"
@@ -128,7 +132,7 @@ export function StudentAcademicPanel({
         <div className="text-muted" style={{ fontSize: 11 }}>{alreadyDroppedMessage()}</div>
       )}
 
-      {undoableDrop && undoing !== undoableDrop.id && (
+      {canManage && undoableDrop && undoing !== undoableDrop.id && (
         <div
           style={{
             display: 'flex',

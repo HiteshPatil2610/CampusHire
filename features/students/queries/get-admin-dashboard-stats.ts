@@ -2,7 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireDepartmentAdmin } from "@/lib/auth";
-import { UNPLACED_STUDENT_FILTER, placedStudentSql } from "../utils/placement-status";
+import {
+  UNPLACED_STUDENT_FILTER,
+  eligiblePoolSql,
+  percentOfPool,
+  placedStudentSql,
+} from "../utils/placement-status";
 import { Prisma } from "@prisma/client";
 import { openApplicationSql } from "@/features/drives/utils/drive-status";
 
@@ -12,7 +17,9 @@ export interface AdminDashboardStats {
   optedOutStudents: number; // registered but not participating in placement
   pendingStudents: number; // bulk-imported, not yet registered
   openDrivesCount: number; // drives with deadline in the future
-  placementRate: number; // percentage (0–100)
+  /** Placed ÷ eligible pool (`eligiblePoolSql`), 0–100 — the same Placement
+   *  Rate as Department Insights and the Super Admin's reports. */
+  placementRate: number;
   studentsNeedingAttention: Array<{
     id: string;
     name: string;
@@ -50,11 +57,16 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
         optedOutStudents: bigint;
         pendingStudents: bigint;
         openDrivesCount: bigint;
+        eligibleStudents: bigint;
+        placedInPool: bigint;
       }>
     >`
       SELECT
         COUNT(*)                                                       AS "totalStudents",
         COUNT(*) FILTER (WHERE ${Prisma.raw(placedStudentSql('s'))}) AS "placedStudents",
+        COUNT(*) FILTER (WHERE ${Prisma.raw(eligiblePoolSql('s'))}) AS "eligibleStudents",
+        COUNT(*) FILTER (WHERE ${Prisma.raw(eligiblePoolSql('s'))}
+                           AND ${Prisma.raw(placedStudentSql('s'))}) AS "placedInPool",
         COUNT(*) FILTER (WHERE s."isPending" = false
                            AND s."optedIn" = false)                    AS "optedOutStudents",
         COUNT(*) FILTER (WHERE s."isPending" = true)                   AS "pendingStudents",
@@ -86,8 +98,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   const totalStudents = n(counts.totalStudents);
   const placedStudents = n(counts.placedStudents);
 
-  const placementRate =
-    totalStudents > 0 ? Math.round((placedStudents / totalStudents) * 100) : 0;
+  const placementRate = percentOfPool(n(counts.placedInPool), n(counts.eligibleStudents));
 
   return {
     totalStudents,

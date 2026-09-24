@@ -1,21 +1,22 @@
 import { requireSuperAdmin } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 import { getDepartments } from "@/features/departments/queries/get-departments";
-import { SuperAdminStudentsClient } from "./super-admin-students-client";
 import {
-  ACTIVE_PLACEMENT_WHERE,
-  PLACED_STUDENT_FILTER,
-  UNPLACED_STUDENT_FILTER,
-  resolvePlacementState,
-} from "@/features/students/utils/placement-status";
+  getAllStudents,
+  getAllStudentsBatches,
+  type AllStudentsPlacementFilter,
+} from "@/features/students/queries/get-all-students";
+import { SuperAdminStudentsClient } from "./super-admin-students-client";
 
 interface SearchParams {
   deptId?: string;
   status?: string;
+  batch?: string;
+  backlogs?: string;
   search?: string;
   page?: string;
 }
+
+const STATUS_VALUES: AllStudentsPlacementFilter[] = ["placed", "not-placed", "not-yet-eligible"];
 
 export default async function SuperAdminStudentsPage({
   searchParams,
@@ -24,81 +25,33 @@ export default async function SuperAdminStudentsPage({
 }) {
   await requireSuperAdmin();
 
-  const awaitedParams = await searchParams;
-  const page = Number(awaitedParams.page) || 1;
-  const pageSize = 50;
-  const deptId = awaitedParams.deptId;
-  const status = awaitedParams.status || 'all';
-  const search = awaitedParams.search || '';
+  const params = await searchParams;
+  const page = Number(params.page) || 1;
+  const deptId = params.deptId || undefined;
+  const status: AllStudentsPlacementFilter = STATUS_VALUES.includes(
+    params.status as AllStudentsPlacementFilter
+  )
+    ? (params.status as AllStudentsPlacementFilter)
+    : "all";
+  const batchYear = params.batch ? Number.parseInt(params.batch, 10) : null;
+  const search = params.search || "";
+  const hasBacklogs = params.backlogs === "1";
 
-  // Typed, so a filter key that does not exist on Student is a compile error
-  // rather than a clause Postgres ignores. The Super Admin sees every
-  // department, so `deptId` narrows this listing and can never widen it.
-  // Placement is derived from applications, not stored on Student.
-  const statusFilter: Prisma.StudentWhereInput =
-    status === 'placed'
-      ? PLACED_STUDENT_FILTER
-      : status === 'eligible'
-        ? { ...UNPLACED_STUDENT_FILTER, isPending: false, optedIn: true }
-        : status === 'pending'
-          ? { isPending: true }
-          : status === 'opted-out'
-            ? { isPending: false, optedIn: false }
-            : status === 'attention'
-              ? {
-                  ...UNPLACED_STUDENT_FILTER,
-                  optedIn: true,
-                  academic: { activeBacklogs: { gt: 0 } },
-                }
-              : {};
-
-  const where: Prisma.StudentWhereInput = {
-    ...statusFilter,
-    ...(deptId ? { departmentId: deptId } : {}),
-    ...(search
-      ? {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' as const } },
-            { rollNumber: { contains: search, mode: 'insensitive' as const } },
-            { misNumber: { contains: search, mode: 'insensitive' as const } },
-            { prnNumber: { contains: search, mode: 'insensitive' as const } },
-            { email: { contains: search, mode: 'insensitive' as const } },
-          ],
-        }
-      : {}),
-  };
-
-  const [students, totalCount, departments] = await Promise.all([
-    prisma.student.findMany({
-      where,
-      take: pageSize,
-      skip: (page - 1) * pageSize,
-      orderBy: [{ department: { code: 'asc' } }, { rollNumber: 'asc' }],
-      include: {
-        department: true,
-        academic: true,
-        // Active placements — company as recorded.
-        placements: {
-          where: ACTIVE_PLACEMENT_WHERE,
-          select: { companyName: true },
-        },
-      },
+  const [result, departments, availableBatches] = await Promise.all([
+    getAllStudents({
+      page,
+      pageSize: 50,
+      search,
+      deptId,
+      batchYear: Number.isFinite(batchYear) ? batchYear : null,
+      status,
+      hasBacklogs,
     }),
-    prisma.student.count({ where }),
     getDepartments({ page: 1, pageSize: 100, includeInactive: false }),
+    getAllStudentsBatches(),
   ]);
 
-  const totalPages = Math.ceil(totalCount / pageSize);
-
-  const studentRows = students.map(({ placements, ...student }) => ({
-    ...student,
-    placementState: resolvePlacementState({
-      isPending: student.isPending,
-      optedIn: student.optedIn,
-      isPlaced: placements.length > 0,
-    }),
-    placedCompanies: placements.map((placement) => placement.companyName),
-  }));
+  const totalPages = Math.ceil(result.totalCount / result.pageSize);
 
   return (
     <div>
@@ -107,14 +60,17 @@ export default async function SuperAdminStudentsPage({
       </div>
 
       <SuperAdminStudentsClient
-        students={studentRows}
-        currentPage={page}
+        students={result.data}
+        currentPage={result.page}
         totalPages={totalPages}
-        totalCount={totalCount}
+        totalCount={result.totalCount}
         departments={departments.data}
+        availableBatches={availableBatches}
         filters={{
           deptId: deptId || '',
           status,
+          batch: batchYear !== null && Number.isFinite(batchYear) ? String(batchYear) : '',
+          hasBacklogs,
           search,
         }}
       />

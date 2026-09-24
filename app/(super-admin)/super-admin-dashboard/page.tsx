@@ -74,6 +74,7 @@ export default async function SuperAdminDashboardPage() {
               <tr>
                 <th>Department</th>
                 <th>Students</th>
+                <th>Eligible</th>
                 <th>Placed</th>
                 <th>Placement %</th>
                 <th>Status</th>
@@ -91,7 +92,8 @@ export default async function SuperAdminDashboardPage() {
                     </div>
                   </td>
                   <td>{dept.totalStudents}</td>
-                  <td>{dept.placedStudents}</td>
+                  <td>{dept.eligibleStudents}</td>
+                  <td>{dept.placedInPool}</td>
                   <td>
                     <strong style={{ color: 'var(--teal)' }}>
                       {dept.placementRate}%

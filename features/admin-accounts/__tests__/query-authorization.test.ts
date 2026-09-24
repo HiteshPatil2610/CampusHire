@@ -12,7 +12,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  * Also here: a refusal must not tell the caller anything a permitted answer
  * would not have. `getStudentDetailForAdmin` must say the same thing about a
  * student id that does not exist and a student id in another department, or
- * an admin can use it to enumerate the other departments' rosters.
+ * an admin can use it to enumerate the other departments' rosters. Since
+ * Phase 9 (Item 21), a Super Admin may read any student here too — the
+ * institution-wide directory's "Student detail" link — without that
+ * loosening what a department admin may reach.
  */
 
 vi.mock("@/lib/prisma", () => ({
@@ -26,6 +29,8 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/auth", () => ({
   requireSuperAdmin: vi.fn(),
   requireDepartmentAdmin: vi.fn(),
+  requireAnyRole: vi.fn(),
+  getActiveDepartmentAdmin: vi.fn(),
   AuthorizationError: class AuthorizationError extends Error {
     constructor(message = "Insufficient permissions") {
       super(message);
@@ -39,7 +44,12 @@ vi.mock("../../students/queries/get-profile", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { requireSuperAdmin, requireDepartmentAdmin, AuthorizationError } from "@/lib/auth";
+import {
+  requireSuperAdmin,
+  requireAnyRole,
+  getActiveDepartmentAdmin,
+  AuthorizationError,
+} from "@/lib/auth";
 import { getAvailableUsers } from "../queries/get-available-users";
 import { getStudentDetailForAdmin } from "@/features/students/actions/get-student-detail-for-admin";
 
@@ -110,11 +120,8 @@ describe("getAvailableUsers", () => {
 describe("getStudentDetailForAdmin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    asMock(requireDepartmentAdmin).mockResolvedValue({
-      user: { id: "user-1", role: "DEPT_ADMIN" },
-      department: { id: "dept-cse", code: "CSE" },
-      admin: { departmentId: "dept-cse", status: "ACTIVE" },
-    });
+    asMock(requireAnyRole).mockResolvedValue({ id: "user-1", role: "DEPT_ADMIN" });
+    asMock(getActiveDepartmentAdmin).mockResolvedValue({ departmentId: "dept-cse", status: "ACTIVE" });
   });
 
   it("says the same thing about an id that does not exist and one in another department", async () => {
@@ -138,13 +145,30 @@ describe("getStudentDetailForAdmin", () => {
   });
 
   it("refuses a disabled admin before it reads the student", async () => {
-    asMock(requireDepartmentAdmin).mockRejectedValue(
+    asMock(requireAnyRole).mockRejectedValue(
       new AuthorizationError("Your department admin access has been disabled.")
     );
 
     await expect(getStudentDetailForAdmin("student-cse")).rejects.toThrow(
       AuthorizationError
     );
+    expect(prisma.student.findUnique).not.toHaveBeenCalled();
+  });
+
+  // Phase 9, Item 21: the Super Admin's institution-wide "Student detail" link.
+  it("a Super Admin may read a student in any department, without the department check", async () => {
+    asMock(requireAnyRole).mockResolvedValue({ id: "super-1", role: "SUPER_ADMIN" });
+    asMock(prisma.student.findUnique).mockResolvedValue({ departmentId: "dept-it" });
+
+    await expect(getStudentDetailForAdmin("student-it")).resolves.toEqual({ id: "student-it" });
+    // Never even looked at the student's department for a Super Admin.
+    expect(prisma.student.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("refuses anyone who is neither a department admin nor a Super Admin", async () => {
+    asMock(requireAnyRole).mockRejectedValue(new AuthorizationError());
+
+    await expect(getStudentDetailForAdmin("student-cse")).rejects.toThrow(AuthorizationError);
     expect(prisma.student.findUnique).not.toHaveBeenCalled();
   });
 });

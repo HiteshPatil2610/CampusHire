@@ -180,16 +180,48 @@ export function StudentPlacementPanel({
       ))}
 
       {formOpen && (
-        <div style={{ display: 'grid', gap: 6, borderTop: '0.5px solid var(--border)', paddingTop: 8 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            <input style={input} placeholder="Company *" value={form.companyName} maxLength={200}
-              onChange={(e) => setForm({ ...form, companyName: e.target.value })} />
-            <input style={input} placeholder="Role *" value={form.roleName} maxLength={200}
-              onChange={(e) => setForm({ ...form, roleName: e.target.value })} />
-            <input style={input} placeholder="Package, e.g. 6 LPA" value={form.packageDisplay} maxLength={100}
-              onChange={(e) => setForm({ ...form, packageDisplay: e.target.value })} />
-            <input style={input} type="date" value={form.placedAt} max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setForm({ ...form, placedAt: e.target.value })} aria-label="Placement date" />
+        <div style={{ display: 'grid', gap: 12, borderTop: '0.5px solid var(--border)', paddingTop: 12 }}>
+          <div className="field-row">
+            <div className="field">
+              <label htmlFor={`placement-company-${studentId}`}>Company *</label>
+              <input
+                id={`placement-company-${studentId}`}
+                value={form.companyName}
+                maxLength={200}
+                onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor={`placement-role-${studentId}`}>Role *</label>
+              <input
+                id={`placement-role-${studentId}`}
+                value={form.roleName}
+                maxLength={200}
+                onChange={(e) => setForm({ ...form, roleName: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="field-row">
+            <div className="field">
+              <label htmlFor={`placement-package-${studentId}`}>Package</label>
+              <input
+                id={`placement-package-${studentId}`}
+                placeholder="e.g. 6 LPA"
+                value={form.packageDisplay}
+                maxLength={100}
+                onChange={(e) => setForm({ ...form, packageDisplay: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor={`placement-date-${studentId}`}>Placement date *</label>
+              <input
+                id={`placement-date-${studentId}`}
+                type="date"
+                value={form.placedAt}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setForm({ ...form, placedAt: e.target.value })}
+              />
+            </div>
           </div>
           <div className="text-muted" style={{ fontSize: 11 }}>
             Recording a placement permanently excludes this student from new drives.

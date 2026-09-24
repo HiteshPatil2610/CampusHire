@@ -4413,3 +4413,158 @@ department admin in the institution.
 Verified: `tsc --noEmit` clean, `next lint` clean, all 1330 tests passing
 (`skill-master-list.test.ts` rewritten for the new authorization and
 recipients). Not clicked through in-browser.
+
+---
+
+## PHASE 9 — Department Insights + Super Admin Student Analytics (Items 20, 21)
+
+### Item 20 — Department Insights
+
+Redesigned the existing "Reports & Analytics" tab in place
+(`/admin-dashboard/reports`) — no new tab. The funnel: **eligible**
+(registered and opted in — the pool a department can place at all) →
+**applied** (of those, applied to ≥1 drive) → **placed** (of those, holds an
+active placement). Placement rate and participation rate are both fractions
+of the *eligible* pool, not the whole roster, so a pending or opted-out
+student doesn't silently drag a rate down.
+
+`getDepartmentInsights` (`features/students/queries/get-department-insights.ts`)
+is one `COUNT(*) FILTER` statement, reusing the same definitions everything
+else in the app uses — `placedStudentSql` and `openApplicationSql` — so
+nothing here re-derives "placed" or "open" its own way. Batch
+(`expectedPassoutYear`) and semester (`StudentAcademic.currentSemester`)
+filter every count together in the same query, so they can't disagree.
+No new index: `[departmentId, expectedPassoutYear]` already covers the batch
+filter, and a per-department semester scan (at most a few hundred rows) does
+not justify one.
+
+No charting library — two small dependency-free components,
+`components/shared/bar-chart.tsx` (`<div>` bars) and `donut-chart.tsx`
+(CSS `conic-gradient`), cover the bar (Eligible/Applied/Placed comparison)
+and donut (Placed / Not placed / Not yet eligible proportion) the tracker
+asked for. No line chart — there is no stored history to plot, and the
+tracker is explicit that history is never invented for one.
+
+### Item 21 — Super Admin's institution-wide student directory
+
+Added what was missing from the existing directory: a batch filter, and the
+placement-status vocabulary narrowed from six ad hoc buttons (placed/
+eligible/opted-out/pending/attention) to the tracker's exact three (Placed /
+Not placed / Not yet eligible), via two new named filters in
+`placement-status.ts` (`NOT_PLACED_STUDENT_FILTER`,
+`NOT_YET_ELIGIBLE_STUDENT_FILTER`) so the definition lives in the one module
+everything else in the app already reads "placed" from.
+
+The page's inline query was extracted to `features/students/queries/get-all-students.ts`
+(`getAllStudents`, `getAllStudentsBatches`) — the same shape as
+`getDepartmentStudents` (Item 17), and for the same reason: a testable
+function instead of logic embedded in an async page component. Department,
+batch and status combine with `AND`; a search term nests its own `OR` inside
+an explicit `AND` array so it can never collide with `not-yet-eligible`'s own
+top-level `OR`.
+
+**Student detail link**, new: opens the existing `StudentDetailsDialog` (the
+department admin's own dialog) in a new `readOnly` mode — no recording a
+placement, no opt-in toggle, no drop/undo, since those stay the owning
+department admin's actions; revoking a placement is still available, since
+the server already permitted the Super Admin there. Needed widening two
+read-only queries from department-admin-only to `requireAnyRole(["DEPT_ADMIN",
+"SUPER_ADMIN"])`, each keeping the exact same "not found and not yours read
+the same" refusal for a department admin's own request:
+`getStudentDetailForAdmin` and `getStudentAcademicRecord`.
+
+**Security**: `getAllStudents`/`getAllStudentsBatches` are `requireSuperAdmin`
+only; `getDepartmentStudents` (the department admin's own roster query) is
+untouched and still can't widen past their own department — there is no
+department-admin-reachable path to another department's students anywhere
+in this change.
+
+Verified: `tsc --noEmit` clean, `next lint` clean, 1360/1360 tests passing
+(30 new: department-insights funnel/rate math x9, all-students filter
+combinations x19, plus 2 new Super-Admin-detail-access authorization tests
+in the existing `query-authorization.test.ts`). Not clicked through in
+browser — the bar/donut charts, both filter bars, and the read-only student
+detail dialog are worth a manual pass.
+
+---
+
+## PHASE 10 — Final verification
+
+Verified all 23 tracker items against the code, database and tests; the full
+report was delivered in-session. Automated: `prisma validate` OK, `migrate
+status` up to date (20 migrations), a read-only `migrate diff` of the live DB
+against `schema.prisma` came back empty (no drift), `tsc` clean, `next lint`
+clean, 1360/1360 tests, and the first full `next build` since Phase 3 passed
+(built from an isolated copy with NODE_ENV unset, so the running dev server was
+untouched).
+
+Fixed during verification:
+- The sign-in/sign-up tile heading was near-black on the dark navy tile: the
+  global h1–h6 colour rule beat the tile's inherited white. Added
+  `color: inherit` to `.auth-oxford-tile-copy h2` (checked in the browser: now
+  rgb(255,255,255)).
+- Phase 9 had duplicated the existing batch-year helpers: `getAllStudentsBatches`
+  now wraps `getInstitutionBatchYears`, and `getDepartmentInsights` uses
+  `getDepartmentBatchYears`.
+
+### Follow-up fixes (owner's decisions after the report)
+
+- **One Placement Rate.** It had three definitions (Overview placed ÷ all
+  students, Insights placed ÷ eligible, Super Admin matrix + system stats
+  placed ÷ registered). Owner chose placed ÷ eligible. Now defined once in
+  `placement-status.ts` — `eligiblePoolSql` (registered, and opted in or
+  already placed) and `percentOfPool` — and used by all four queries. The
+  numerator is placed *within* the pool, so a placement recorded for an
+  unregistered student can't push a rate past 100%. `placement-rate.test.ts`
+  feeds the same counts to all four and requires one answer. The pool SQL was
+  also run read-only against production to confirm it executes (COMP: 4
+  registered, 4 eligible, 1 applied, 0 placed).
+- **Item 20 comparison → Super Admin Global Reports** (owner's choice; dept
+  admins still see only their own department). `getDepartmentMatrix` now
+  returns eligible/applied/placed-in-pool per department; Global Reports shows
+  an Eligible/Applied/Placed bar group per department on one shared scale
+  (`BarChart` gained an optional `max`), Active Drives by Department, and new
+  Eligible/Applied columns. The Super Admin home table shows Eligible/Placed
+  beside the rate so the numbers add up. The client now imports the query
+  types instead of re-declaring them.
+- **Has backlogs toggle** on the Super Admin directory (`?backlogs=1`,
+  `getAllStudents({ hasBacklogs })`), combinable with the three statuses —
+  Not placed + Has backlogs is the old Needs Attention view.
+- **Item 14 layout:** the off-campus placement form now uses labelled
+  `.field` / `.field-row` inputs like the rest of the admin interface.
+- Removed `drives-list-client.tsx` (no importer anywhere).
+
+Verified: `tsc` clean, `next lint` clean, 1370/1370 tests (10 new), and the
+production build passes again. Not clicked through signed in — the new
+Global Reports charts and the placement form are in the owner's manual list.
+Still open: Items 4 and 13 (need owner input), NOT NULL on MIS/batch (needs
+real data imported).
+
+### Database integration tests
+
+`npm run test:integration` — 26 tests in `tests/integration/`, run against a
+dedicated Neon branch `integration-tests` (`br-spring-sky-b3e366zs`, copied
+from production) whose URL lives in the gitignored `.env.integration.local`.
+`vitest.integration.setup.ts` points `DATABASE_URL` at it before `lib/prisma`
+loads, and refuses to start if that endpoint is production's. `npm test`
+excludes `tests/integration/**`, so the unit suite still needs no database.
+Each test builds its own department under a random code and deletes
+everything it created afterwards (checked: zero leftovers on the branch).
+
+Covered for real, where the unit tests only mock: the eligible-pool SQL and
+Placement Rate across all four queries (edge cases: placed-then-opted-out,
+placement recorded before registration, revoked placement), Insights batch /
+semester filters, the directory and roster filters through the real Prisma
+query builder, and the database's own guarantees — MIS shape and uniqueness,
+batch range, drive origin and window CHECKs, the StudentPlacement history
+trigger, the manual-placement reference CHECK, the Skill name CHECK, and the
+skill-reject cascade through the real `rejectSkill` action.
+
+**Bug found by them and fixed:** the placement-status filters overlapped. A
+student placed and then opted out matched both "Placed" and "Not yet
+eligible" / "Opted Out", and a placement recorded before registration showed
+under "Placed" beside a Pending badge. Added `PLACEMENT_STATE_FILTERS` (one
+Prisma filter per `PlacementState`, mirroring `resolvePlacementState`'s
+precedence); the Super Admin directory and the department roster's status
+buttons both use it, so every student matches exactly one filter — the one
+their badge shows.

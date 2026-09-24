@@ -6,8 +6,7 @@ import { Prisma } from "@prisma/client";
 import type { Student, StudentAcademic, Department } from "@prisma/client";
 import {
   ACTIVE_PLACEMENT_WHERE,
-  PLACED_STUDENT_FILTER,
-  UNPLACED_STUDENT_FILTER,
+  PLACEMENT_STATE_FILTERS,
   resolvePlacementState,
   type PlacementState,
 } from "../utils/placement-status";
@@ -79,15 +78,17 @@ export async function getDepartmentStudents(
   // Typed, so a filter key that does not exist on Student is a compile error
   // rather than a clause Postgres ignores. departmentId is ALWAYS fixed to the
   // admin's own department and is written first so nothing below can reach it.
+  // One filter per badge state, so a status button returns exactly the
+  // students showing that badge (see PLACEMENT_STATE_FILTERS).
   const statusFilter: Prisma.StudentWhereInput =
     status === "placed"
-      ? PLACED_STUDENT_FILTER
+      ? PLACEMENT_STATE_FILTERS.PLACED
       : status === "unplaced"
-        ? { ...UNPLACED_STUDENT_FILTER, isPending: false, optedIn: true }
+        ? PLACEMENT_STATE_FILTERS.ELIGIBLE
         : status === "pending"
-          ? { isPending: true }
+          ? PLACEMENT_STATE_FILTERS.PENDING
           : status === "opted-out"
-            ? { isPending: false, optedIn: false }
+            ? PLACEMENT_STATE_FILTERS.OPTED_OUT
             : {};
 
   // Each selected category becomes one OR branch; a category picked more

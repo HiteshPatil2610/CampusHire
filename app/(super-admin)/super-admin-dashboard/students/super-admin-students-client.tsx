@@ -6,19 +6,16 @@ import StatusBadge from "@/components/ui/status-badge";
 import Pagination from "@/components/ui/pagination";
 import { exportToCsv } from "@/lib/csv-export";
 import { YEAR_LEVEL_LABELS, yearLevelFor } from "@/features/students/domain/academic-year";
-import type { Student, Department, StudentAcademic } from "@prisma/client";
+import { batchLabel } from "@/features/students/utils/batch";
+import type { Department } from "@prisma/client";
+import type { AllStudentsRow } from "@/features/students/queries/get-all-students";
 import {
   PLACEMENT_STATE_BADGES,
   type PlacementState,
 } from "@/features/students/utils/placement-status";
+import { StudentDetailsDialog } from "@/components/admin/students/student-details-dialog";
 
-interface StudentWithRelations extends Student {
-  department: Department;
-  academic: StudentAcademic | null;
-  /** Derived server-side from the student's applications. */
-  placementState: PlacementState;
-  placedCompanies: string[];
-}
+type StudentWithRelations = AllStudentsRow;
 
 /** StatusBadge variant for each derived placement state. */
 const PLACEMENT_BADGE_VARIANTS: Record<
@@ -37,13 +34,23 @@ interface Props {
   totalPages: number;
   totalCount: number;
   departments: Department[];
+  availableBatches: number[];
   filters: {
     deptId: string;
     status: string;
+    batch: string;
+    hasBacklogs: boolean;
     search: string;
   };
 }
 
+/** The three placement statuses Item 21 asks for, plus "all". */
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'placed', label: 'Placed' },
+  { value: 'not-placed', label: 'Not Placed' },
+  { value: 'not-yet-eligible', label: 'Not Yet Eligible' },
+] as const;
 
 /** Year level, derived from the batch and the academic cycle. */
 function formatYear(expectedPassoutYear: number | null): string {
@@ -57,10 +64,12 @@ export function SuperAdminStudentsClient({
   totalPages,
   totalCount,
   departments,
+  availableBatches,
   filters,
 }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState(filters.search);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
   function updateFilter(key: string, value: string) {
     const url = new URL(window.location.href);
@@ -127,17 +136,27 @@ export function SuperAdminStudentsClient({
           ))}
         </div>
 
+        {/* Batch Filter */}
+        <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          Batch:{' '}
+          <select
+            value={filters.batch}
+            onChange={(e) => updateFilter('batch', e.target.value)}
+            style={{ fontSize: 12, padding: '4px 6px' }}
+          >
+            <option value="">All batches</option>
+            {availableBatches.map((year) => (
+              <option key={year} value={year}>
+                {batchLabel(year)}
+              </option>
+            ))}
+          </select>
+        </label>
+
         {/* Status Filter */}
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
           <span className="text-muted" style={{ fontSize: 12 }}>Status:</span>
-          {[
-            { value: 'all', label: 'All' },
-            { value: 'placed', label: 'Placed' },
-            { value: 'eligible', label: 'Eligible' },
-            { value: 'opted-out', label: 'Opted Out' },
-            { value: 'attention', label: 'Needs Attention' },
-            { value: 'pending', label: 'Pending' },
-          ].map((st) => (
+          {STATUS_FILTERS.map((st) => (
             <button
               key={st.value}
               type="button"
@@ -148,6 +167,17 @@ export function SuperAdminStudentsClient({
               {st.label}
             </button>
           ))}
+          {/* Independent of the status buttons: "Not Placed" + this is the
+              old Needs Attention view. */}
+          <button
+            type="button"
+            className={filters.hasBacklogs ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'}
+            onClick={() => updateFilter('backlogs', filters.hasBacklogs ? '' : '1')}
+            aria-pressed={filters.hasBacklogs}
+            style={{ fontSize: 11, padding: '4px 8px', marginLeft: 6 }}
+          >
+            Has backlogs
+          </button>
         </div>
       </div>
 
@@ -187,18 +217,23 @@ export function SuperAdminStudentsClient({
               <th>CGPA</th>
               <th>Backlogs</th>
               <th>Status</th>
+              <th style={{ textAlign: 'right' }}>Detail</th>
             </tr>
           </thead>
           <tbody>
             {students.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: 40 }}>
+                <td colSpan={8} style={{ textAlign: 'center', padding: 40 }}>
                   <div className="text-muted">No students found</div>
                 </td>
               </tr>
             ) : (
               students.map((student) => (
-                <tr key={student.id}>
+                <tr
+                  key={student.id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setSelectedStudentId(student.id)}
+                >
                   <td>
                     <strong>{student.name}</strong>
                     <div className="text-muted" style={{ fontSize: 11 }}>
@@ -247,12 +282,33 @@ export function SuperAdminStudentsClient({
                       </div>
                     )}
                   </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      style={{ fontSize: 11, padding: '3px 8px' }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedStudentId(student.id);
+                      }}
+                    >
+                      View Details ↗
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Student detail — read-only oversight; editing stays the owning
+          department admin's own action (Phase 9, Item 21). */}
+      <StudentDetailsDialog
+        studentId={selectedStudentId}
+        onClose={() => setSelectedStudentId(null)}
+        readOnly
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (

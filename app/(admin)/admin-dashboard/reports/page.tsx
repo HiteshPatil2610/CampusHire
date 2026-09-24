@@ -1,160 +1,109 @@
 import { requireDepartmentAdmin } from "@/lib/auth";
-import { getAdminDashboardStats } from "@/features/students/queries/get-admin-dashboard-stats";
-import { prisma } from "@/lib/prisma";
+import { getDepartmentInsights } from "@/features/students/queries/get-department-insights";
+import { InsightsFilters } from "@/features/students/components/insights-filters";
+import BarChart from "@/components/shared/bar-chart";
+import DonutChart from "@/components/shared/donut-chart";
+import KpiCard from "@/components/shared/kpi-card";
 
 // Every query here is scoped to the signed-in admin's department, so this
 // page can never be prerendered - it has no meaning without a session.
 export const dynamic = 'force-dynamic';
 
+interface ReportsPageProps {
+  searchParams: Promise<{ batch?: string; semester?: string }>;
+}
 
-export default async function ReportsPage() {
+/**
+ * Department Insights (Phase 9, Item 20) — the same "Reports & Analytics"
+ * tab, redesigned rather than replaced. Eligible/Applied/Placed is a funnel:
+ * each rate is a fraction of the eligible pool, not of the whole roster, so a
+ * student who never registered or opted out doesn't silently drag a rate
+ * down. Batch and semester filter every metric together (one query, so
+ * nothing can disagree). No line chart: there is no stored history to plot,
+ * and the tracker is explicit that history is never invented for one.
+ */
+export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const { department } = await requireDepartmentAdmin();
+  const params = await searchParams;
+  const batchYear = params.batch ? Number.parseInt(params.batch, 10) : null;
+  const semester = params.semester ? Number.parseInt(params.semester, 10) : null;
 
-  // Get dashboard stats
-  const stats = await getAdminDashboardStats();
-
-  // Derived stats. "Unplaced" is everyone registered and still seeking:
-  // total, minus those with an offer, minus those not yet registered, minus
-  // those who opted out of placement entirely.
-  const optedOutStudents = stats.optedOutStudents;
-  const unplacedStudents =
-    stats.totalStudents -
-    stats.placedStudents -
-    stats.pendingStudents -
-    optedOutStudents;
-
-  // Get total drives
-  const totalDrives = await prisma.drive.count({
-    where: { departmentId: department.id },
+  const insights = await getDepartmentInsights({
+    batchYear: Number.isFinite(batchYear) ? batchYear : null,
+    semester: Number.isFinite(semester) ? semester : null,
   });
 
-  const placementRate = stats.placementRate;
+  const notYetEligible = insights.totalStudents - insights.eligibleStudents;
+  const notPlaced = insights.eligibleStudents - insights.placedStudents;
 
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Reports & Analytics</h1>
+        <h1 className="page-title" style={{ margin: 0 }}>Department Insights</h1>
         <p className="text-secondary" style={{ fontSize: 13, margin: "4px 0 0" }}>
-          Placement statistics for {department.name} department
+          Placement funnel for {department.name} department.
         </p>
       </div>
 
-      {/* KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <div className="card" style={{ padding: "16px 20px" }}>
-          <div className="text-muted" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
-            Total Students
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: "var(--text-primary)", marginTop: 4 }}>
-            {stats.totalStudents}
-          </div>
-          <div className="text-secondary" style={{ fontSize: 11 }}>Registered in {department.code}</div>
-        </div>
+      <InsightsFilters
+        availableBatches={insights.availableBatches}
+        availableSemesters={insights.availableSemesters}
+      />
 
-        <div className="card" style={{ padding: "16px 20px" }}>
-          <div className="text-muted" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
-            Placed
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: "var(--teal)", marginTop: 4 }}>
-            {stats.placedStudents}
-          </div>
-          <div className="text-secondary" style={{ fontSize: 11 }}>Students with offers</div>
-        </div>
+      {/* Priority metrics */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 16,
+          marginBottom: 24,
+        }}
+      >
+        <KpiCard value={insights.eligibleStudents} label="Eligible Students" />
+        <KpiCard value={insights.appliedStudents} label="Applied Students" />
+        <KpiCard value={insights.placedStudents} label="Placed Students" />
+        <KpiCard value={`${insights.placementRate}%`} label="Placement Rate" />
+        <KpiCard value={`${insights.participationRate}%`} label="Participation Rate" />
+      </div>
 
-        <div className="card" style={{ padding: "16px 20px" }}>
-          <div className="text-muted" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
-            Unplaced
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: "var(--amber)", marginTop: 4 }}>
-            {unplacedStudents}
-          </div>
-          <div className="text-secondary" style={{ fontSize: 11 }}>Seeking placement</div>
-        </div>
-
-        <div className="card" style={{ padding: "16px 20px" }}>
-          <div className="text-muted" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
-            Placement Rate
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: "var(--purple)", marginTop: 4 }}>
-            {placementRate}%
-          </div>
-          <div className="text-secondary" style={{ fontSize: 11 }}>
-            {stats.placedStudents}/{stats.totalStudents} placed
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+        <div className="card">
+          <h3 className="section-title">Eligible vs. Applied vs. Placed</h3>
+          <div style={{ marginTop: 16 }}>
+            <BarChart
+              data={[
+                { label: "Eligible", value: insights.eligibleStudents, color: "var(--purple)" },
+                { label: "Applied", value: insights.appliedStudents, color: "var(--accent)" },
+                { label: "Placed", value: insights.placedStudents, color: "var(--teal)" },
+              ]}
+            />
           </div>
         </div>
 
-        <div className="card" style={{ padding: "16px 20px" }}>
-          <div className="text-muted" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
-            Posted Drives
+        <div className="card">
+          <h3 className="section-title">Roster Breakdown</h3>
+          <div style={{ marginTop: 16 }}>
+            <DonutChart
+              data={[
+                { label: "Placed", value: insights.placedStudents, color: "var(--teal)" },
+                { label: "Not placed", value: notPlaced, color: "var(--amber)" },
+                { label: "Not yet eligible", value: notYetEligible, color: "var(--text-muted)" },
+              ]}
+            />
           </div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>
-            {totalDrives}
-          </div>
-          <div className="text-secondary" style={{ fontSize: 11 }}>Active & past drives</div>
-        </div>
-
-        <div className="card" style={{ padding: "16px 20px" }}>
-          <div className="text-muted" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
-            Opted Out
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: "var(--text-muted)", marginTop: 4 }}>
-            {optedOutStudents}
-          </div>
-          <div className="text-secondary" style={{ fontSize: 11 }}>Not seeking placement</div>
         </div>
       </div>
 
-      {/* Placement Breakdown */}
-      <div className="card">
-        <h3 className="section-title">Placement Summary</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16, marginTop: 16 }}>
-          <div
-            style={{
-              padding: "14px 16px",
-              background: "var(--teal-light)",
-              border: "1px solid var(--teal)",
-              borderRadius: 8,
-            }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--teal)", marginBottom: 4 }}>
-              ✓ Placed Students
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "var(--teal)" }}>
-              {stats.placedStudents}
-            </div>
-          </div>
-
-          <div
-            style={{
-              padding: "14px 16px",
-              background: "var(--amber-light)",
-              border: "1px solid var(--amber)",
-              borderRadius: 8,
-            }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--amber)", marginBottom: 4 }}>
-              ⏳ Unplaced & Seeking
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "var(--amber)" }}>
-              {unplacedStudents}
-            </div>
-          </div>
-
-          <div
-            style={{
-              padding: "14px 16px",
-              background: "var(--surface-1)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-            }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>
-              ○ Opted Out
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "var(--text-muted)" }}>
-              {optedOutStudents}
-            </div>
-          </div>
+      {/* Secondary metric */}
+      <div className="card" style={{ padding: "16px 20px", maxWidth: 260 }}>
+        <div className="text-muted" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
+          Active Drives
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>
+          {insights.activeDrivesCount}
+        </div>
+        <div className="text-secondary" style={{ fontSize: 11 }}>
+          Currently taking applications for {department.code}
         </div>
       </div>
     </div>

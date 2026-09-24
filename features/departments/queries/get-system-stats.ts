@@ -2,7 +2,11 @@
 
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { placedStudentSql } from "@/features/students/utils/placement-status";
+import {
+  eligiblePoolSql,
+  percentOfPool,
+  placedStudentSql,
+} from "@/features/students/utils/placement-status";
 import { requireSuperAdmin } from "@/lib/auth";
 import { openApplicationSql } from "@/features/drives/utils/drive-status";
 
@@ -17,7 +21,9 @@ export interface SystemStats {
   openDrives:        number;  // taking applications now (openApplicationSql)
   placedStudents:    number;  // holds an active placement
   optedOutStudents:  number;  // registered but not participating in placement
-  overallPlacementRate: number; // percentage 0–100
+  /** Placed ÷ eligible pool (`eligiblePoolSql`), 0–100 — the same Placement
+   *  Rate the department dashboards show. */
+  overallPlacementRate: number;
 }
 
 /**
@@ -34,7 +40,12 @@ export async function getSystemStats(): Promise<SystemStats> {
   await requireSuperAdmin();
 
   const [row] = await prisma.$queryRaw<
-    Array<Record<keyof Omit<SystemStats, "pendingStudents" | "overallPlacementRate">, bigint>>
+    Array<
+      Record<keyof Omit<SystemStats, "pendingStudents" | "overallPlacementRate">, bigint> & {
+        eligibleStudents: bigint;
+        placedInPool: bigint;
+      }
+    >
   >`
     SELECT
       (SELECT COUNT(*) FROM "Student")                                    AS "totalStudents",
@@ -46,7 +57,12 @@ export async function getSystemStats(): Promise<SystemStats> {
       (SELECT COUNT(*) FROM "Drive" WHERE ${Prisma.raw(openApplicationSql())}) AS "openDrives",
       (SELECT COUNT(*) FROM "Student" s WHERE ${Prisma.raw(placedStudentSql('s'))}) AS "placedStudents",
       (SELECT COUNT(*) FROM "Student"
-        WHERE "isPending" = false AND "optedIn" = false)                  AS "optedOutStudents"
+        WHERE "isPending" = false AND "optedIn" = false)                  AS "optedOutStudents",
+      (SELECT COUNT(*) FROM "Student" s
+        WHERE ${Prisma.raw(eligiblePoolSql('s'))})                        AS "eligibleStudents",
+      (SELECT COUNT(*) FROM "Student" s
+        WHERE ${Prisma.raw(eligiblePoolSql('s'))}
+          AND ${Prisma.raw(placedStudentSql('s'))})                       AS "placedInPool"
   `;
 
   // COUNT() comes back as bigint over the wire; these are screen-sized numbers.
@@ -56,10 +72,7 @@ export async function getSystemStats(): Promise<SystemStats> {
   const registeredStudents = n(row.registeredStudents);
   const placedStudents = n(row.placedStudents);
 
-  const overallPlacementRate =
-    registeredStudents > 0
-      ? Math.round((placedStudents / registeredStudents) * 100)
-      : 0;
+  const overallPlacementRate = percentOfPool(n(row.placedInPool), n(row.eligibleStudents));
 
   return {
     totalStudents,
