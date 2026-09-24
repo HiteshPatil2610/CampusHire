@@ -266,7 +266,38 @@ All typography uses **Inter** (`font-family: 'Inter', system-ui, -apple-system, 
   - Digit Input (`.otp-box`): `44×52px`, `border: 0.5px solid var(--border-strong)`, `border-radius: 8px`, `font-size: 18px`, `font-weight: 600`, text-align center, background `--surface-2`.
   - Focus: Immediate browser outline / high-contrast border.
 
-### 4.3 Public Landing Feature Cards (`.icon-tile`)
+### 4.3 Oxford Auth Shell (Sign In / Sign Up only)
+
+> **Scope:** `/sign-in` and `/sign-up` only. This is a deliberate second
+> visual language, not a replacement for §1–3's terracotta/parchment system —
+> confirmed with the user when it was introduced. It never bleeds into the
+> rest of the app because every rule is scoped under `.auth-oxford-page`.
+
+- **Structure:** `components/auth/auth-split-shell.tsx` renders a full-viewport
+  dark chassis: a hairline-gridded, gold-bezelled outer frame (`conic-gradient`
+  sweep animation, disabled under `prefers-reduced-motion`) around a white
+  rounded card split 50/50 into a form panel and a navy info tile. `mode`
+  ("sign-in" | "sign-up") flips which side the tile sits on via CSS `order`,
+  so sign-up mirrors sign-in instead of needing separate markup.
+- **Auth logic stays Clerk's.** The form panel renders Clerk's own
+  `<SignIn>`/`<SignUp>` restyled through `getAuthOxfordAppearance()`
+  (`components/auth/clerk-appearance.ts`) — Clerk's header/footer are hidden
+  (the shell supplies its own heading; the tile's CTA supplies the
+  sign-in/sign-up cross-link) but Clerk still owns credentials, OAuth, OTP
+  and session. No custom password form was built here — see
+  `architecture.md`'s "session and identity always come from Clerk"
+  invariant.
+- **Local palette** (CSS custom properties on `.auth-oxford-page`, not the
+  app-wide tokens): `--gold` `#C39A67`, `--gold-deep` `#8A6A35`, `--navy`
+  `#002147`, `--navy-hover` `#012C5E`, dark ink `#0A0A0A`/`#0F0F0F` surfaces,
+  white `#FFFFFF` card.
+- **Tile CTA:** solid white pill button (`--radius-pill`), navy text, linking
+  to the other auth route (`/sign-up` from sign-in and vice versa).
+- **Responsive:** below `860px` the tile panel is hidden entirely and the
+  form panel goes full width — there is no mobile equivalent of the tile
+  copy/CTA; the two routes' own links serve that purpose on mobile.
+
+### 4.4 Public Landing Feature Cards (`.icon-tile`)
 - **Style:**
   - Feature Card: Background `--surface-2`, `0.5px solid var(--border)`, `14px` radius, `padding: 24px`.
   - Icon Tile (`.icon-tile`): `34×34px`, `8px` radius, flex centered, `font-size: 16px`, `margin-bottom: 12px`.

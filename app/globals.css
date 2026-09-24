@@ -256,6 +256,314 @@
   }
 
   /* ============================================================
+     Oxford auth shell — sign-in / sign-up only (ui-context.md §4.4).
+     A deliberately separate visual language (dark bezel, gold accent,
+     navy tile) scoped to .auth-oxford-page so it never leaks into the
+     rest of the app's terracotta/parchment system.
+     ============================================================ */
+
+  .auth-oxford-page {
+    --gold: #c39a67;
+    --gold-deep: #8a6a35;
+    --navy: #002147;
+    --navy-hover: #012c5e;
+    --navy-light: #548cd6;
+    --oxford-ink: #0a0a0a;
+    --oxford-card-ink: #0f0f0f;
+    --oxford-card-ink-hover: #141414;
+    --oxford-hairline: #ededed;
+    --oxford-muted: #8c8c8c;
+    --oxford-faint: #a6a6a6;
+
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 8px;
+    background-color: var(--oxford-ink);
+    background-image: linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    background-position: center;
+    font-family: var(--font-sans);
+  }
+
+  .auth-oxford-frame {
+    position: relative;
+    width: 100%;
+    max-width: 1040px;
+    height: calc(100vh - 16px);
+    min-height: 600px;
+    box-sizing: border-box;
+    padding: 2px;
+    border-radius: 22px;
+    overflow: hidden;
+    background: var(--oxford-ink);
+    box-shadow: inset 0 0 0 1px rgba(195, 154, 103, 0.35), 0 0 0 1px rgba(195, 154, 103, 0.12);
+  }
+
+  @property --auth-oxford-sweep {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
+  }
+
+  .auth-oxford-sweep {
+    position: absolute;
+    inset: -50%;
+    z-index: 0;
+    pointer-events: none;
+    background: conic-gradient(
+      from var(--auth-oxford-sweep),
+      transparent 0deg,
+      transparent 290deg,
+      rgba(195, 154, 103, 0.25) 320deg,
+      #e2c394 345deg,
+      rgba(195, 154, 103, 0.25) 355deg,
+      transparent 360deg
+    );
+    animation: auth-oxford-bezel-sweep 8s linear infinite;
+  }
+
+  @keyframes auth-oxford-bezel-sweep {
+    to {
+      --auth-oxford-sweep: 360deg;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .auth-oxford-sweep {
+      animation: none;
+      opacity: 0.35;
+    }
+  }
+
+  .auth-oxford-card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 596px;
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+  }
+
+  .auth-oxford-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 5;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 2px 6px rgba(0, 0, 0, 0.08);
+  }
+
+  .auth-oxford-grid {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    pointer-events: none;
+  }
+
+  .auth-oxford-grid > div {
+    border-right: 1px solid var(--oxford-hairline);
+  }
+
+  .auth-oxford-grid > div:last-child {
+    border-right: none;
+  }
+
+  .auth-oxford-panels {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    width: 100%;
+    height: 100%;
+  }
+
+  .auth-oxford-form-panel {
+    order: 1;
+    width: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 56px;
+    box-sizing: border-box;
+  }
+
+  .auth-oxford-tile {
+    order: 2;
+    width: 50%;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+
+  .auth-oxford-panels.is-signup .auth-oxford-form-panel {
+    order: 2;
+  }
+
+  .auth-oxford-panels.is-signup .auth-oxford-tile {
+    order: 1;
+  }
+
+  .auth-oxford-form-inner {
+    width: 100%;
+    max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 18px;
+  }
+
+  .auth-oxford-heading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .auth-oxford-eyebrow {
+    font-size: 11px;
+    font-style: italic;
+    color: var(--gold);
+  }
+
+  .auth-oxford-heading h1 {
+    margin: 0;
+    font-size: 36px;
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    color: #000;
+  }
+
+  .auth-oxford-heading p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--oxford-muted);
+    text-wrap: pretty;
+  }
+
+  .auth-oxford-tile-shell {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 14px;
+    overflow: hidden;
+    background: radial-gradient(90% 70% at 100% 100%, rgba(195, 154, 103, 0.85) 0%, rgba(195, 154, 103, 0) 60%),
+      radial-gradient(70% 60% at 0% 0%, rgba(38, 92, 160, 0.7) 0%, rgba(38, 92, 160, 0) 60%),
+      linear-gradient(160deg, #001532 0%, var(--navy) 55%, #0a2e5c 100%);
+  }
+
+  .auth-oxford-tile-brand {
+    position: absolute;
+    top: 24px;
+    left: 28px;
+    right: 28px;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+  }
+
+  .auth-oxford-tile-copy {
+    position: absolute;
+    inset: 0;
+    padding: 48px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #fff;
+  }
+
+  .auth-oxford-tile-copy h2 {
+    margin: 0;
+    font-size: 32px;
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    text-wrap: pretty;
+  }
+
+  .auth-oxford-tile-copy p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.9);
+    max-width: 300px;
+  }
+
+  .auth-oxford-tile-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 220px;
+    height: 52px;
+    padding: 0 36px;
+    border-radius: var(--radius-pill);
+    background: #ffffff;
+    color: var(--navy);
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    transition: transform 400ms cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 500ms ease;
+  }
+
+  .auth-oxford-tile-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Restyled Clerk form inside the shell */
+  .auth-oxford-form-inner .cl-rootBox,
+  .auth-oxford-form-inner .cl-cardBox,
+  .auth-oxford-form-inner .cl-card {
+    width: 100% !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+
+  @media (max-width: 860px) {
+    .auth-oxford-page {
+      padding: 0;
+    }
+
+    .auth-oxford-frame {
+      height: auto;
+      min-height: 100vh;
+      border-radius: 0;
+      padding: 0;
+    }
+
+    .auth-oxford-card {
+      border-radius: 0;
+      min-height: 100vh;
+    }
+
+    .auth-oxford-tile {
+      display: none;
+    }
+
+    .auth-oxford-form-panel,
+    .auth-oxford-panels.is-signup .auth-oxford-form-panel {
+      order: 1;
+      width: 100%;
+      padding: 40px 24px;
+    }
+  }
+
+  /* ============================================================
      Buttons, badges, pills, form fields — ui-context.md §5.1–5.3
      ============================================================ */
 
