@@ -362,7 +362,12 @@ describe("a profile save re-checks eligibility and notifies once", () => {
     primeDeliveryMocks(prisma as never);
     table = notificationsTable();
     vi.mocked(requireStudent).mockResolvedValue({ user: { id: USER_ID }, student: { id: STUDENT_ID } } as never);
-    vi.mocked(prisma.student.findUniqueOrThrow).mockResolvedValue({ entryType: "REGULAR" } as never);
+    // A semester-7 student (results for 1–6 allowed) whose CGPA matches the
+    // SGPAs saved below.
+    vi.mocked(prisma.student.findUniqueOrThrow).mockResolvedValue({
+      entryType: "REGULAR",
+      academic: { currentSemester: 7, currentCGPA: 8 },
+    } as never);
     vi.mocked(prisma.$transaction).mockResolvedValue([] as never);
   });
 

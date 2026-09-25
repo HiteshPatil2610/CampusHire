@@ -80,6 +80,8 @@ export default function DatePicker({
   onChange,
   placeholder = 'Select date',
   disabled = false,
+  minDate,
+  maxDate,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const parsed = value ? parseISO(value) : null;
@@ -143,6 +145,16 @@ export default function DatePicker({
     }
     setViewMonth(m);
     setViewYear(y);
+  }
+
+  /** Calendar-day comparison, so a time of day never excludes the bound itself. */
+  const dayKey = (date: Date) =>
+    date.getFullYear() * 10000 + date.getMonth() * 100 + date.getDate();
+  function isOutOfRange(date: Date): boolean {
+    return (
+      (minDate !== undefined && dayKey(date) < dayKey(minDate)) ||
+      (maxDate !== undefined && dayKey(date) > dayKey(maxDate))
+    );
   }
 
   function pick(day: number) {
@@ -242,6 +254,8 @@ export default function DatePicker({
                 value.getFullYear() === viewYear &&
                 value.getMonth() === viewMonth &&
                 value.getDate() === c.day;
+              const outOfRange =
+                !c.other && isOutOfRange(new Date(viewYear, viewMonth, c.day));
               return (
                 <button
                   key={i}
@@ -254,8 +268,9 @@ export default function DatePicker({
                   ]
                     .filter(Boolean)
                     .join(' ')}
-                  disabled={c.other}
-                  onClick={() => !c.other && pick(c.day)}
+                  disabled={c.other || outOfRange}
+                  style={outOfRange ? { opacity: 0.3, cursor: 'not-allowed' } : undefined}
+                  onClick={() => !c.other && !outOfRange && pick(c.day)}
                 >
                   {c.day}
                 </button>
@@ -276,6 +291,7 @@ export default function DatePicker({
             <button
               type="button"
               className="dp-today-btn"
+              disabled={isOutOfRange(new Date())}
               onClick={() => {
                 const t = new Date();
                 setViewYear(t.getFullYear());

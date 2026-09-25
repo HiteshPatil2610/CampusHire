@@ -179,16 +179,20 @@ export default function TabExperience({ profile }: TabExperienceProps) {
             <div className="field-row">
               <div className="field">
                 <label>Start Date</label>
+                {/* Experience already begun: never a future start. */}
                 <DatePicker
                   value={row.startDate}
                   onChange={(startDate) => updateRow(index, { startDate })}
+                  maxDate={new Date()}
                 />
               </div>
               <div className="field">
                 <label>End Date</label>
+                {/* May be ahead (running until next month), never before the start. */}
                 <DatePicker
                   value={row.endDate}
                   onChange={(endDate) => updateRow(index, { endDate })}
+                  minDate={row.startDate ?? undefined}
                 />
               </div>
             </div>

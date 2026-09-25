@@ -54,7 +54,8 @@ export interface SubmissionSnapshotInput {
   };
   /** The academic record eligibility was evaluated on. */
   academic: {
-    currentCGPA: number;
+    /** Null only for a student with no finished semester yet. */
+    currentCGPA: number | null;
     activeBacklogs: number;
     pastBacklogCount: number;
     tenthPercentage: number;

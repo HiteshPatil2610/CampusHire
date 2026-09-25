@@ -54,7 +54,7 @@ const studentColumns = (student: {
   rollNumber: string | null;
   email: string;
   expectedPassoutYear: number | null;
-  academic: { currentCGPA: number; activeBacklogs: number } | null;
+  academic: { currentCGPA: number | null; activeBacklogs: number } | null;
 }): Row => ({
   Name: student.name,
   "MIS number": student.misNumber,

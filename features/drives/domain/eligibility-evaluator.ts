@@ -52,7 +52,8 @@ export interface EligibilitySubject {
    */
   expectedPassoutYear: number | null;
   academic: {
-    currentCGPA: number;
+    /** Null until the student has a finished semester. */
+    currentCGPA: number | null;
     activeBacklogs: number;
     pastBacklogCount: number;
     tenthPercentage: number;
@@ -388,6 +389,9 @@ function evaluateRule(subject: EligibilitySubject, rule: EligibilityRuleInput): 
   switch (rule.ruleType) {
     case "CGPA": {
       const value = academic.currentCGPA;
+      if (value === null) {
+        return fail(null, `CGPA requirement: ${n} — add your current CGPA to your profile`);
+      }
       return value >= n!
         ? pass(String(value))
         : fail(String(value), `CGPA requirement: ${n} (You: ${value})`);

@@ -4644,3 +4644,142 @@ inert, no horizontal scroll at 390px, and `/accept-invitation` unaffected.
 **Not yet checked against a real Clerk instance** (no keys in the build
 environment): confirm the restyled Clerk forms, that Google is enabled, and
 that Google OAuth completes with hash routing (`/sign-in#/sso-callback`).
+
+## Oxford redesign — Step 1: foundation (2026-09-25) — AWAITING REVIEW
+
+The whole app moves to the Oxford design language used by the sign-in /
+sign-up shell. Owner decisions: Oxford Blue + gold (orange removed), grid
+lines on the page background only, foundation first then screen-by-screen
+review, pull before every push (a teammate is also pushing design work).
+
+Done in this step (restyles every screen at once through shared tokens and classes):
+- **Tokens** (`app/globals.css` `:root`): neutral surfaces/text/borders from
+  Oxford; `--accent` is now Oxford Blue `#002147` (+ `-hover`, `-dark`,
+  `-light`, `-glow`, `--focus-ring`); new `--gold`, `--gold-dark`,
+  `--gold-light`, `--field-border`, `--grid-line`, `--radius-shell`.
+  Every existing `var(--accent*)` use turned navy with no per-screen edits.
+- **Font:** Schibsted Grotesk via `next/font` (`app/layout.tsx`, `--font-sans`).
+  Tailwind `font-sans` now points at the variable (it pointed at a literal
+  "Inter", which next/font never registered under that name).
+- **Shared classes:** pill buttons (navy glow primary, hairline outline,
+  press scale), pill badges + new `badge-gold`, navy active filter pills,
+  8px fields with the navy focus ring, 14px hairline cards/tables, sunken
+  KPI/metric tiles with 30px stats, 500-weight tight headings, larger
+  `.page-title` (28px) / `.section-title` (18px), new `.eyebrow`, gold
+  scope-banner spine, 18px modals, global navy `:focus-visible` outline.
+- **App frame:** `.app-canvas` six-column grid background + gold inner
+  hairline (`app-shell.tsx`); sidebar active pills in Oxford Blue, gold
+  brand dot / group labels / unread dot, navy avatar (`sidebar.tsx`).
+- Accept-invitation Clerk `colorPrimary` orange → Oxford Blue.
+- `context/ui-context.md` §1.1–1.4, 3.1–3.2, 5.1–5.3, 7 rewritten for Oxford.
+
+Verified: source typecheck clean, lint clean, 1377/1377 unit tests. Visual:
+checked on a throwaway specimen page (shell, KPIs, buttons, pills, table,
+badges, fields) against the dev server's compiled CSS; specimen removed.
+**Not visually verified:** real signed-in dashboards (the browser pane is not
+signed in). The running dev server must be restarted to pick up the
+`tailwind.config.ts` font change. `.eyebrow` is defined but Tailwind only
+emits it once a component uses it (screen-by-screen step).
+
+Next (after the owner reviews): screen-by-screen polish — student →
+department admin → super admin → landing page; migrate leftover `0.5px`
+screen-specific borders; add `.eyebrow` to page headers.
+
+### Step 2 — student screens (2026-09-25) — AWAITING REVIEW
+
+Owner reviewed Step 1 ("looks nice") and said go ahead, design only.
+- `app/globals.css`, all screens: every `0.5px` hairline → `1px`;
+  `--radius-lg` 12 → 14px (Oxford card corner, also reaches inline
+  `var(--radius-lg)` uses); old `accent-light` focus rings → `--focus-ring`.
+- Student classes restyled (values only): dashboard stat cards (sunken,
+  34px/500 numbers, muted labels), quick-action tiles (navy hover border,
+  500 titles), drive cards (navy company avatar, 500 role, pill action
+  buttons with navy hover, thinner stepper, current stage in navy), gold
+  unread dots, profile panels / entry cards / semester cards (sunken
+  `--surface-0` panels holding white cards, gold hints), application
+  submission card (italic muted section labels, navy focus-ring on the
+  editable section/field, 500 weights, softer radii).
+- 11 inline headings on student pages: `fontWeight` 600/700 → 500 +
+  `letterSpacing: '-0.02em'` (diff confirmed: every changed TSX line is a
+  fontWeight line).
+- Found unused CSS (no page uses it): `.student-id-card`/`.sid-*`,
+  `.gauge*`. Restyled anyway, left in place.
+
+Verified: typecheck, lint, 1377/1377 tests. Visual: specimen page built
+from the real student classes at 592px and 1280px, then deleted. Real
+signed-in pages still not viewed (pane not signed in).
+
+### Step 3 — department admin screens (2026-09-25) — AWAITING REVIEW
+
+- Undefined tokens found and aliased in `:root` (they rendered
+  transparent/unstyled): `--surface-hover` → `--surface-0` (6 uses:
+  admin dashboard, student dialog, add-student form, skill picker, super
+  admin settings/reports), `--primary` → `--accent` (accept-invitation
+  submit button had no background), `--success`/`--green` → `--teal`.
+  Two `var(--green, #10b981)` fallbacks (bright emerald) → `var(--teal)`.
+- All 103 inline `0.5px solid` borders in TSX (54 files, every role) → `1px`.
+- 17 heading/number inline styles (admin dashboard, reports, students,
+  import, add student, student dialog, announcements, drive views/steps,
+  preview card, donut chart) → weight 500 + `-0.02em`.
+- Scope banner count chips: white-15% background (invisible on the light
+  banner) → white pill with a navy hairline, weight 500.
+- Admin CSS classes: pill tags in navy tint, segmented gender toggle as a
+  navy pill, 8px URL fields on `--field-border`, pill switches with a
+  knob shadow, sunken attach rows with pill buttons, 14px dropzone and
+  danger zone, white attention rows with round icons (info in navy).
+- Unused classes (Tailwind drops them): `.danger-zone`, `.btn-danger`.
+
+Verified: typecheck, lint, 1377/1377 tests; admin specimen (scope banner,
+KPIs, attention list, tags, toggles, URL field, switches, attach row,
+dropzone) rendered and deleted; TSX diff audited — every changed line is a
+style value. Real signed-in pages not viewed.
+
+Next: super admin screens, then the landing page.
+
+**Owner rule (2026-09-25): design only.** The redesign may change styling
+(CSS, tokens, class names, inline style values, fonts) but never page
+structure, text, fields, flows, data or logic. Anything that would need a
+markup change is asked about first.
+
+## Academic record logic fixes (2026-09-26) — DONE, production migration pending
+
+Owner reported the profile asking for marks a student cannot know yet;
+audit found 10 related problems, all fixed (separate from the redesign —
+the owner asked for these logic changes explicitly). Owner decisions: CGPA
+optional until results exist; "% or CGPA" per pre-college record (converted
+× 9.5); current semester limited to the batch's year.
+
+1. CGPA no longer required before a semester has finished (semester 1,
+   lateral semester 3). `currentCGPA` nullable; eligibility CGPA rule fails
+   with "add your current CGPA"; applying refused without one.
+2. 10th/12th/diploma "%" or "CGPA" switch; CGPA stored as percentage with
+   the original in new `tenthCgpa`/`twelfthCgpa`/`diplomaCgpa`; shown as
+   "9.2 CGPA (87.4%)" on the admin profile and application review.
+3. `updateSemesterMarks` refuses the current and future semesters server-side.
+4. Lowering the current semester flags unfinished-semester results on the
+   form; they are dropped on save (badge counts valid ones only).
+5. Semester-1 hint text fixed ("No semester has finished yet …").
+6. Current semester limited to the batch's year; last year's value flagged
+   (form + profile completion) and refused on save.
+7. CGPA must lie between lowest and highest SGPA once all finished
+   semesters have one (client + `updateSemesterMarks`).
+8. Dates: DOB not future, age 15–70; experience start not future, end ≥
+   start; certificate issue not future, expiry ≥ issue; project end ≥ start;
+   board years ≤ this year, 12th/diploma after 10th. Date picker now honours
+   `minDate`/`maxDate` (declared before but ignored).
+9. `updateAcademicInfo` reads entry type and batch from the DB, not the request.
+10. Semester max 8 everywhere (was 10 on the server).
+Also: profile actions return the first validation message instead of a
+ZodError JSON dump (`utils/action-error.ts`).
+
+Files: `domain/academic-standing.ts`, `utils/score-conversion.ts`,
+`utils/action-error.ts` (new); `schemas/profile.ts`, `actions/profile-academic.ts`,
+`actions/profile-semester-marks.ts`, sync/personal actions,
+`queries/profile-completion.ts`, `tab-academic-info.tsx`, experience /
+certification / personal tabs, `ui/date-picker.tsx`, eligibility evaluator,
+apply action, snapshot/export types, review fields, admin profile sections.
+Migration `20261004000000_academic_score_rules` (additive).
+
+Verified: typecheck, lint, 1412 unit tests (35 new), 27 integration tests on
+the Neon test branch (migration applied there). **Not visually verified**
+(pane not signed in). **Production migration not applied** — owner action.

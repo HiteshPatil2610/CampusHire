@@ -249,6 +249,7 @@ export default function TabPersonalInfo({ profile }: TabPersonalInfoProps) {
             value={form.dateOfBirth}
             onChange={(date) => setForm({ ...form, dateOfBirth: date })}
             placeholder="Select date of birth"
+            maxDate={new Date()}
           />
           {age !== null && (
             <div className="field-hint">Age: {age} years</div>
@@ -372,7 +373,7 @@ export default function TabPersonalInfo({ profile }: TabPersonalInfoProps) {
           display: 'flex',
           justifyContent: 'flex-end',
           paddingTop: 16,
-          borderTop: '0.5px solid var(--border)',
+          borderTop: '1px solid var(--border)',
         }}
       >
         <button

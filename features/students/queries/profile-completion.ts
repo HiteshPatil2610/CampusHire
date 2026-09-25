@@ -1,5 +1,6 @@
 import type { Student, StudentAcademic, StudentSkill, StudentProject, StudentExperience, StudentCertification, StudentPreferences, Department, SemesterMark, SkillStatus } from "@prisma/client";
 import { preCollegePercentage } from "../utils/entry-type";
+import { isCgpaExpected, isCurrentSemesterStale } from "../domain/academic-standing";
 
 /**
  * Complete profile data structure
@@ -72,8 +73,10 @@ export interface ProfileCompletion {
  *  - tenthPercentage
  *  - the pre-college record matching the student's entry type:
  *    twelfthPercentage for REGULAR, diplomaPercentage for DIPLOMA
- *  - currentCGPA
- *  - currentSemester
+ *  - currentCGPA — only once a semester has finished; before that there is
+ *    none, and it counts as filled
+ *  - currentSemester — must be one of the batch's current year's semesters
+ *    (a value from last year counts as unfilled)
  *  - activeBacklogs (defaults to 0, counts as filled)
  *
  * Skills (1 required):
@@ -97,7 +100,10 @@ export interface ProfileCompletion {
  * Item 5 dropped Preferred Job Location from here: the field is retired
  * (nobody sets it, so it can no longer complete or block completion).
  */
-export function calculateProfileCompletion(profile: CompleteProfile): ProfileCompletion {
+export function calculateProfileCompletion(
+  profile: CompleteProfile,
+  now: Date = new Date()
+): ProfileCompletion {
   const missingFields: string[] = [];
   let requiredFieldsFilled = 0;
   const totalRequiredFields = 16;
@@ -143,16 +149,34 @@ export function calculateProfileCompletion(profile: CompleteProfile): ProfileCom
       );
     }
     
-    if (profile.academic.currentCGPA !== null && profile.academic.currentCGPA !== undefined) {
+    // No CGPA exists before a semester has finished, so it is only missing
+    // once one has (domain/academic-standing.ts).
+    if (
+      (profile.academic.currentCGPA !== null && profile.academic.currentCGPA !== undefined) ||
+      !isCgpaExpected(profile.student.entryType, profile.academic.currentSemester)
+    ) {
       academicFieldsFilled++;
     } else {
       missingFields.push("Current CGPA");
     }
-    
-    if (profile.academic.currentSemester !== null && profile.academic.currentSemester !== undefined) {
+
+    // A semester saved last year stops matching the batch's year on July 1
+    // and must be updated — until then it does not count as filled.
+    if (
+      profile.academic.currentSemester !== null &&
+      profile.academic.currentSemester !== undefined &&
+      !isCurrentSemesterStale(
+        profile.student.entryType,
+        profile.student.expectedPassoutYear,
+        profile.academic.currentSemester,
+        now
+      )
+    ) {
       academicFieldsFilled++;
     } else {
-      missingFields.push("Current Semester");
+      missingFields.push(
+        profile.academic.currentSemester ? "Current Semester (update for this year)" : "Current Semester"
+      );
     }
     
     // activeBacklogs defaults to 0, so it's always filled

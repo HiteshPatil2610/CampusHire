@@ -161,7 +161,7 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
           padding: 20,
           marginBottom: 24,
           borderRadius: 12,
-          border: '0.5px solid var(--border)',
+          border: '1px solid var(--border)',
           background: 'var(--surface-2)',
           alignItems: 'center',
           borderTop: '3px solid var(--accent)',
@@ -188,7 +188,7 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
         </Link>
 
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>
+          <div style={{ fontSize: 18, fontWeight: 500, letterSpacing: '-0.02em', marginBottom: 4 }}>
             {studentWithProfile.name}
           </div>
           <div
@@ -205,7 +205,7 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
             {studentWithProfile.rollNumber && (
               <span>Roll {studentWithProfile.rollNumber}</span>
             )}
-            {studentWithProfile.academic && (
+            {studentWithProfile.academic?.currentCGPA != null && (
               <span>CGPA {studentWithProfile.academic.currentCGPA}</span>
             )}
             <span>{studentWithProfile.email}</span>
@@ -263,7 +263,7 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
               fontSize: 13,
               fontWeight: 500,
               borderRadius: 6,
-              border: '0.5px solid var(--border-strong)',
+              border: '1px solid var(--border-strong)',
               background: 'var(--surface-0)',
               color: 'var(--text-primary)',
               textDecoration: 'none',
@@ -277,7 +277,7 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
 
       {/* Page title */}
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, marginBottom: 4 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 500, letterSpacing: '-0.02em', margin: 0, marginBottom: 4 }}>
           Placement Drives
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
@@ -293,7 +293,7 @@ export default async function DrivesPage({ searchParams }: DrivesPageProps) {
             padding: '12px 16px',
             borderRadius: 8,
             background: 'var(--teal-light)',
-            border: '0.5px solid var(--teal)',
+            border: '1px solid var(--teal)',
             fontSize: 13,
             color: 'var(--teal)',
             marginBottom: 16,

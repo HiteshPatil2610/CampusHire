@@ -1,6 +1,7 @@
 import { parseJsonArray } from "@/lib/parse-json-array";
 import type { CompleteProfile } from "@/features/students/queries/profile-completion";
 import { preCollegePercentage } from "@/features/students/utils/entry-type";
+import { formatPreCollegeScore } from "@/features/students/utils/score-conversion";
 import {
   enabledFields,
   iconFor,
@@ -112,15 +113,24 @@ export function profileFieldValues(profile: ProfileForFields): Record<string, st
     email: student.email,
     personalEmail: student.personalEmail ?? "",
     phone: student.phoneNumber ?? "",
-    cgpa: academic ? `${academic.currentCGPA} / 10.0` : "",
+    cgpa: academic?.currentCGPA != null ? `${academic.currentCGPA} / 10.0` : "",
     backlogs: academic
       ? academic.activeBacklogs === 0
         ? "No Active"
         : `${academic.activeBacklogs} Active`
       : "",
     department: student.department.code,
-    tenthPct: academic ? `${academic.tenthPercentage}%` : "",
-    twelfthPct: preCollege === null ? "" : `${preCollege}%`,
+    // A board that graded in CGPA shows it as entered, with its percentage.
+    tenthPct: academic
+      ? formatPreCollegeScore(academic.tenthPercentage, academic.tenthCgpa) ?? ""
+      : "",
+    twelfthPct:
+      preCollege === null
+        ? ""
+        : formatPreCollegeScore(
+            preCollege,
+            student.entryType === "DIPLOMA" ? academic?.diplomaCgpa : academic?.twelfthCgpa
+          ) ?? "",
     skills: technicalSkills.join(", "),
     softSkills: softSkills.join(", "),
     github: student.githubUrl ?? "",

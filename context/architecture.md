@@ -617,7 +617,28 @@ AcademicCycleCutover { academicYear (PK), finalYearPassout, effectiveFrom,
   screen that shows a year reads `yearLevelFor` — the old "semester / 2"
   calculations on the student drives page, the profile header and the Super
   Admin directory were replaced — and `StudentAcademic.currentSemester` stays
-  a separate, student-reported fact.
+  a separate, student-reported fact, **limited to the two semesters of the
+  year the batch is in** (below).
+- **Academic record rules** (2026-09-26) live in one pure module,
+  `features/students/domain/academic-standing.ts`, read by the profile form,
+  both save actions and profile completion:
+  - Current semester ∈ `allowedCurrentSemesters(entryType, expectedPassoutYear)`
+    (1st year → 1/2 … 4th year → 7/8, graduated → 8, unknown batch → any).
+    A value saved last year is "stale" after July 1: flagged on the form,
+    counted as unfilled in profile completion, refused by the save action.
+  - Semester results only for finished semesters (first studied … current−1);
+    `updateSemesterMarks` enforces it against the stored current semester.
+  - `StudentAcademic.currentCGPA` is **nullable**: null until a semester has
+    finished (`isCgpaExpected`), required after. A CGPA rule fails a student
+    with none ("add your current CGPA"); applying is refused without one.
+  - Once every finished semester has an SGPA, the CGPA must lie between the
+    lowest and highest SGPA (`cgpaConsistencyProblem`).
+  - Pre-college scores: a board CGPA is stored as its percentage (× 9.5,
+    `utils/score-conversion.ts`) in `*Percentage`, with the entered CGPA in
+    `tenthCgpa` / `twelfthCgpa` / `diplomaCgpa` (null = entered as %).
+    Eligibility keeps comparing percentages.
+  - Entry type and batch are always read from the stored `Student`, never the
+    request (`updateAcademicInfo`).
 - **Annual promotion needs no write,** so it cannot run halfway and cannot
   promote anyone twice. The cutover is a ledger: `recordAcademicCutover` writes
   one `AcademicCycleCutover` row per cycle (the primary key makes a second run

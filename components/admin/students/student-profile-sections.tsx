@@ -4,6 +4,7 @@ import {
   preCollegePercentage,
   preCollegeQualificationLabel,
 } from '@/features/students/utils/entry-type';
+import { formatPreCollegeScore } from '@/features/students/utils/score-conversion';
 import { requiredMarkSemesters } from '@/features/drives/domain/eligibility-evaluator';
 import { parseJsonArray } from '@/lib/parse-json-array';
 
@@ -117,18 +118,22 @@ export function StudentProfileSections({ profile }: { profile: CompleteProfile }
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '8px 24px' }}>
             <Row label="Entry type">{ENTRY_TYPE_LABELS[student.entryType]}</Row>
-            <Row label="CGPA">{academic.currentCGPA}</Row>
+            <Row label="CGPA">{academic.currentCGPA ?? 'Not yet (no finished semester)'}</Row>
             <Row label="Active backlogs">{academic.activeBacklogs}</Row>
             <Row label="Past backlogs (cleared)">{academic.pastBacklogCount}</Row>
             <Row label="10th %">
-              {academic.tenthPercentage}%{academic.tenthBoard ? ` · ${academic.tenthBoard}` : ''}
+              {formatPreCollegeScore(academic.tenthPercentage, academic.tenthCgpa)}
+              {academic.tenthBoard ? ` · ${academic.tenthBoard}` : ''}
               {academic.tenthYear ? ` · ${academic.tenthYear}` : ''}
             </Row>
             <Row label="10th marksheet">
               <SafeLink href={academic.tenthMarksheetUrl}>View ↗</SafeLink>
             </Row>
             <Row label={`${preCollegeQualificationLabel(student.entryType)} %`}>
-              {preCollege === null ? '—' : `${preCollege}%`}
+              {formatPreCollegeScore(
+                preCollege,
+                student.entryType === 'DIPLOMA' ? academic.diplomaCgpa : academic.twelfthCgpa
+              ) ?? '—'}
               {student.entryType === 'DIPLOMA'
                 ? `${academic.diplomaBoard ? ` · ${academic.diplomaBoard}` : ''}${academic.diplomaYear ? ` · ${academic.diplomaYear}` : ''}`
                 : `${academic.twelfthBoard ? ` · ${academic.twelfthBoard}` : ''}${academic.twelfthYear ? ` · ${academic.twelfthYear}` : ''}`}
@@ -164,7 +169,7 @@ export function StudentProfileSections({ profile }: { profile: CompleteProfile }
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
             {projects.map((project) => (
-              <div key={project.id} style={{ fontSize: 12, borderTop: '0.5px solid var(--border)', paddingTop: 8 }}>
+              <div key={project.id} style={{ fontSize: 12, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <strong>{project.title}</strong>
                   <SafeLink href={project.projectUrl}>Link ↗</SafeLink>
@@ -188,7 +193,7 @@ export function StudentProfileSections({ profile }: { profile: CompleteProfile }
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
             {experiences.map((experience) => (
-              <div key={experience.id} style={{ fontSize: 12, borderTop: '0.5px solid var(--border)', paddingTop: 8 }}>
+              <div key={experience.id} style={{ fontSize: 12, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <strong>
                     {experience.role} · {experience.companyName}
@@ -213,7 +218,7 @@ export function StudentProfileSections({ profile }: { profile: CompleteProfile }
         ) : (
           <div style={{ display: 'grid', gap: 8 }}>
             {certifications.map((certification) => (
-              <div key={certification.id} style={{ ...row, borderTop: '0.5px solid var(--border)', paddingTop: 8 }}>
+              <div key={certification.id} style={{ ...row, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
                 <span>
                   <strong>{certification.certificationName}</strong>
                   <span style={muted}>

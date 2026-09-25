@@ -491,22 +491,33 @@ model StudentAcademic {
   // Which pre-college branch is required is decided by `Student.entryType`:
   // REGULAR -> 12th, DIPLOMA -> diploma. The unused branch is left null
   // rather than zero-filled.
+  // Each pre-college record is stored as a percentage — what eligibility
+  // compares. A board that grades in CGPA keeps the CGPA the student entered
+  // in the matching `*Cgpa` column, and the percentage is derived from it
+  // (features/students/utils/score-conversion.ts). Null `*Cgpa` = entered as %.
   tenthPercentage     Float
+  tenthCgpa           Float?
   tenthBoard          String?
   tenthYear           Int?
   tenthMarksheetUrl   String?
   // Null for a DIPLOMA student, who has no 12th record.
   twelfthPercentage   Float?
+  twelfthCgpa         Float?
   twelfthBoard        String?
   twelfthYear         Int?
   twelfthMarksheetUrl String?
   // Null for a REGULAR student. Board here is the diploma awarding body
   // (e.g. MSBTE), mirroring the 10th/12th shape.
   diplomaPercentage   Float?
+  diplomaCgpa         Float?
   diplomaBoard        String?
   diplomaYear         Int?
   diplomaMarksheetUrl String?
-  currentCGPA         Float
+  // Null until the student has a completed semester at this college: a
+  // semester-1 student, or a lateral-entry student in semester 3, has no CGPA.
+  currentCGPA         Float?
+  // Limited to the two semesters of the year the batch is in
+  // (features/students/domain/academic-standing.ts).
   currentSemester     Int
   activeBacklogs      Int      @default(0)
   // Backlogs cleared in the past, kept separately from active ones

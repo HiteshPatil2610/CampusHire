@@ -177,6 +177,7 @@ export default function TabCertifications({
                 <DatePicker
                   value={row.issueDate}
                   onChange={(issueDate) => updateRow(index, { issueDate })}
+                  maxDate={new Date()}
                 />
               </div>
               <div className="field" style={{ marginBottom: 0 }}>

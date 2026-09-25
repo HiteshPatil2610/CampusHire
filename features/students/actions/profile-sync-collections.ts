@@ -9,6 +9,7 @@ import {
   experienceSchema,
   projectSchema,
 } from "../schemas/profile";
+import { actionErrorMessage } from "../utils/action-error";
 
 export interface ActionResult {
   success: boolean;
@@ -99,10 +100,7 @@ export async function syncProjects(
     console.error("Sync projects error:", error);
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to save projects. Please try again.",
+      error: actionErrorMessage(error, "Failed to save projects. Please try again."),
     };
   }
 }
@@ -153,10 +151,7 @@ export async function syncExperiences(
     console.error("Sync experiences error:", error);
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to save experience. Please try again.",
+      error: actionErrorMessage(error, "Failed to save experience. Please try again."),
     };
   }
 }
@@ -209,10 +204,7 @@ export async function syncCertifications(
     console.error("Sync certifications error:", error);
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to save certifications. Please try again.",
+      error: actionErrorMessage(error, "Failed to save certifications. Please try again."),
     };
   }
 }

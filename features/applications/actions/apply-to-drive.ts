@@ -168,6 +168,15 @@ export async function applyToDrive(
       };
     }
 
+    // Applying needs finished semesters (final year), so a CGPA; a record
+    // without one is out of date, and a drive's CGPA rule cannot judge it.
+    if (studentWithAcademic.academic.currentCGPA === null) {
+      return {
+        success: false,
+        error: "Add your current CGPA in your profile before applying to a drive.",
+      };
+    }
+
     // A lateral-entry student may register before a roll number is issued.
     // It identifies them on every roster and export a recruiter sees, so an
     // application cannot be submitted without one.

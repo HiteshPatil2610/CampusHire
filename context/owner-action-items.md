@@ -8,11 +8,27 @@ make it work for real people.
 Tick an item by changing `[ ]` to `[x]`. When a new phase adds one, it is
 added here.
 
-_Last updated: 2026-09-25 (after Item 13 and the webhook fix)._
+_Last updated: 2026-09-26 (academic record logic fixes)._
 
 ---
 
 ## 1. Must do before real users use it
+
+- [ ] **Apply the academic-record migration to production**
+  (`20261004000000_academic_score_rules`). Run `npx prisma migrate deploy`.
+  Additive: `StudentAcademic.currentCGPA` may be empty (no row changes) and
+  three new empty columns `tenthCgpa`, `twelfthCgpa`, `diplomaCgpa`.
+  **Unlocks:** the fixed academic profile — no CGPA asked of semester-1 /
+  lateral semester-3 students, "% or CGPA" for 10th/12th/diploma. **Until
+  it runs, any page that loads a student's academic record fails with
+  "column … does not exist"** (profile, drives, applying, admin student
+  views) — the same as the `editedAt` error before the Phase 8 migration.
+  That includes `npm run dev`, which uses the production database. Run it
+  before (or together with) pulling this code. Already applied and tested
+  on the Neon test branch.
+  **After it runs:** students whose saved semester is from last year see a
+  red "please update" note on their academic tab, and profile completion
+  counts the semester as missing until they pick this year's.
 
 - [x] **Apply the Item 13 migration to production** — done; confirmed live
   (`Drive.coordinatorEmail`, `seatingAllocation`, `specialInstructions`;

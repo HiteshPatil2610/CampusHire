@@ -1,4 +1,36 @@
 import { z } from "zod";
+import { firstSemesterFor } from "../utils/entry-type";
+import { MAX_BOARD_CGPA } from "../utils/score-conversion";
+import { isCgpaExpected } from "../domain/academic-standing";
+
+/**
+ * Date rules shared by the profile sections. Dates arrive as "YYYY-MM-DD",
+ * which parses as midnight UTC; "not in the future" allows until the end of
+ * that day anywhere, so today is never refused in India's morning hours.
+ */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseDay(value: string | undefined): number | null {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function isNotFuture(value: string | undefined): boolean {
+  const time = parseDay(value);
+  return time === null || time <= Date.now() + DAY_MS;
+}
+
+/** True when both are set and `end` is before `start`. */
+function endsBeforeStart(start: string | undefined, end: string | undefined): boolean {
+  const from = parseDay(start);
+  const to = parseDay(end);
+  return from !== null && to !== null && to < from;
+}
+
+/** Youngest and oldest ages a registered student can plausibly be. */
+const MIN_STUDENT_AGE = 15;
+const MAX_STUDENT_AGE = 70;
 
 /**
  * Personal Information Schema
@@ -27,7 +59,17 @@ export const personalInfoSchema = z.object({
   gender: z
     .enum(["Male", "Female", "Other", "Prefer not to say"])
     .optional(),
-  dateOfBirth: z.string().optional(),
+  dateOfBirth: z
+    .string()
+    .optional()
+    .refine((val) => !val || parseDay(val) !== null, "Invalid date of birth")
+    .refine((val) => isNotFuture(val), "Date of birth cannot be in the future")
+    .refine((val) => {
+      const time = parseDay(val);
+      if (time === null) return true;
+      const years = (Date.now() - time) / (365.25 * DAY_MS);
+      return years >= MIN_STUDENT_AGE && years <= MAX_STUDENT_AGE;
+    }, `Please check your date of birth — a student is between ${MIN_STUDENT_AGE} and ${MAX_STUDENT_AGE} years old`),
   address: z.string().trim().optional(),
   personalEmail: z
     .string()
@@ -60,8 +102,20 @@ const boardYear = z
   .number()
   .int("Year must be a whole number")
   .min(1950, "Year looks too far in the past")
-  .max(2100, "Year looks too far in the future")
+  .refine(
+    (year) => year <= new Date().getFullYear(),
+    "A passing year cannot be in the future"
+  )
   .optional();
+
+/** A board CGPA out of 10, for a record entered as a CGPA. */
+const boardCgpa = (label: string) =>
+  z
+    .number()
+    .min(0, `${label} CGPA must be at least 0`)
+    .max(MAX_BOARD_CGPA, `${label} CGPA cannot exceed ${MAX_BOARD_CGPA}`)
+    .optional()
+    .nullable();
 
 const documentUrl = z
   .string()
@@ -83,31 +137,45 @@ const percentage = (label: string) =>
  * has no 12th at all and submits a diploma record instead. Both branches are
  * optional at the field level and required by `superRefine`, so the unused
  * branch stays null rather than being zero-filled.
+ *
+ * Each pre-college record is given either as a percentage or, when the board
+ * grades that way, as a CGPA (`tenthCgpa`, …); the action derives the stored
+ * percentage from a CGPA (utils/score-conversion.ts). `entryType` here is only
+ * the client's copy — the action re-parses with the stored value.
+ *
+ * `currentCGPA` is required only once a semester has finished
+ * (domain/academic-standing.ts); the semester being one of the batch's
+ * current year needs the batch and today, so the action checks that.
  */
 export const academicInfoSchema = z
   .object({
     entryType: z.enum(["REGULAR", "DIPLOMA"]).default("REGULAR"),
-    tenthPercentage: percentage("10th percentage"),
+    tenthPercentage: percentage("10th percentage").optional().nullable(),
+    tenthCgpa: boardCgpa("10th"),
     tenthBoard: z.string().trim().max(120).optional(),
     tenthYear: boardYear,
     tenthMarksheetUrl: documentUrl,
     twelfthPercentage: percentage("12th percentage").optional().nullable(),
+    twelfthCgpa: boardCgpa("12th"),
     twelfthBoard: z.string().trim().max(120).optional(),
     twelfthYear: boardYear,
     twelfthMarksheetUrl: documentUrl,
     diplomaPercentage: percentage("Diploma percentage").optional().nullable(),
+    diplomaCgpa: boardCgpa("Diploma"),
     diplomaBoard: z.string().trim().max(120).optional(),
     diplomaYear: boardYear,
     diplomaMarksheetUrl: documentUrl,
     currentCGPA: z
       .number()
       .min(0, "CGPA must be at least 0")
-      .max(10, "CGPA cannot exceed 10"),
+      .max(10, "CGPA cannot exceed 10")
+      .optional()
+      .nullable(),
     currentSemester: z
       .number()
       .int("Semester must be a whole number")
       .min(1, "Semester must be at least 1")
-      .max(10, "Semester cannot exceed 10"),
+      .max(8, "Semester cannot exceed 8"),
     activeBacklogs: z
       .number()
       .int("Backlogs must be a whole number")
@@ -119,39 +187,49 @@ export const academicInfoSchema = z
       .default(0),
   })
   .superRefine((data, ctx) => {
-    if (data.entryType === "DIPLOMA") {
-      if (
-        data.diplomaPercentage === null ||
-        data.diplomaPercentage === undefined
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["diplomaPercentage"],
-          message: "Diploma percentage is required for a lateral-entry student",
-        });
+    const has = (value: number | null | undefined) => value !== null && value !== undefined;
+    const issue = (path: string, message: string) =>
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+
+    if (!has(data.tenthPercentage) && !has(data.tenthCgpa)) {
+      issue("tenthPercentage", "10th percentage or CGPA is required");
+    }
+
+    // A later qualification cannot be passed before the 10th.
+    const after10th = (year: number | undefined, label: string, path: string) => {
+      if (year !== undefined && data.tenthYear !== undefined && year <= data.tenthYear) {
+        issue(path, `${label} passing year must be after your 10th (${data.tenthYear})`);
       }
+    };
+
+    if (data.entryType === "DIPLOMA") {
+      if (!has(data.diplomaPercentage) && !has(data.diplomaCgpa)) {
+        issue("diplomaPercentage", "Diploma percentage or CGPA is required for a lateral-entry student");
+      }
+      after10th(data.diplomaYear, "Diploma", "diplomaYear");
 
       // A lateral-entry student joins in the second year.
       if (data.currentSemester < 3) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["currentSemester"],
-          message:
-            "A lateral-entry student starts at semester 3 — semesters 1 and 2 do not apply",
-        });
+        issue(
+          "currentSemester",
+          "A lateral-entry student starts at semester 3 — semesters 1 and 2 do not apply"
+        );
       }
-      return;
+    } else {
+      if (!has(data.twelfthPercentage) && !has(data.twelfthCgpa)) {
+        issue("twelfthPercentage", "12th percentage or CGPA is required");
+      }
+      after10th(data.twelfthYear, "12th", "twelfthYear");
     }
 
+    // No finished semester, no CGPA: a semester-1 student (or a lateral-entry
+    // student in semester 3) is not asked for one. Once results exist it is.
     if (
-      data.twelfthPercentage === null ||
-      data.twelfthPercentage === undefined
+      data.currentSemester >= firstSemesterFor(data.entryType) &&
+      isCgpaExpected(data.entryType, data.currentSemester) &&
+      !has(data.currentCGPA)
     ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["twelfthPercentage"],
-        message: "12th percentage is required",
-      });
+      issue("currentCGPA", "Current CGPA is required once you have a semester result");
     }
   });
 
@@ -184,8 +262,14 @@ export const projectSchema = z.object({
     .trim()
     .optional()
     .refine((val) => !val || z.string().url().safeParse(val).success, "Invalid project URL"),
-  startDate: z.string().optional(),
+  startDate: z
+    .string()
+    .optional()
+    .refine((val) => isNotFuture(val), "A project's start date cannot be in the future"),
   endDate: z.string().optional(),
+}).refine((data) => !endsBeforeStart(data.startDate, data.endDate), {
+  message: "A project's end date cannot be before its start date",
+  path: ["endDate"],
 });
 
 export type ProjectInput = z.infer<typeof projectSchema>;
@@ -197,9 +281,17 @@ export const experienceSchema = z.object({
   companyName: z.string().min(1, "Company name is required").trim(),
   role: z.string().min(1, "Role is required").trim(),
   description: z.string().min(1, "Description is required").trim(),
-  startDate: z.string().min(1, "Start date is required"),
+  // The end date may be ahead (an internship running until next month); the
+  // start may not — this is experience the student has, not one planned.
+  startDate: z
+    .string()
+    .min(1, "Start date is required")
+    .refine((val) => isNotFuture(val), "An experience's start date cannot be in the future"),
   endDate: z.string().optional(),
   certificateUrl: documentUrl,
+}).refine((data) => !endsBeforeStart(data.startDate, data.endDate), {
+  message: "An experience's end date cannot be before its start date",
+  path: ["endDate"],
 });
 
 export type ExperienceInput = z.infer<typeof experienceSchema>;
@@ -210,13 +302,19 @@ export type ExperienceInput = z.infer<typeof experienceSchema>;
 export const certificationSchema = z.object({
   certificationName: z.string().min(1, "Certification name is required").trim(),
   issuingOrganization: z.string().min(1, "Issuing organization is required").trim(),
-  issueDate: z.string().min(1, "Issue date is required"),
+  issueDate: z
+    .string()
+    .min(1, "Issue date is required")
+    .refine((val) => isNotFuture(val), "A certificate's issue date cannot be in the future"),
   expiryDate: z.string().optional(),
   credentialUrl: z
     .string()
     .trim()
     .optional()
     .refine((val) => !val || z.string().url().safeParse(val).success, "Invalid credential URL"),
+}).refine((data) => !endsBeforeStart(data.issueDate, data.expiryDate), {
+  message: "A certificate cannot expire before it was issued",
+  path: ["expiryDate"],
 });
 
 export type CertificationInput = z.infer<typeof certificationSchema>;

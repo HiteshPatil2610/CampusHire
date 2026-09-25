@@ -4,6 +4,7 @@ import { afterStudentProfileSave } from "../domain/after-profile-save";
 import { requireStudent } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { personalInfoSchema, type PersonalInfoInput } from "../schemas/profile";
+import { actionErrorMessage } from "../utils/action-error";
 
 export interface ActionResult {
   success: boolean;
@@ -75,17 +76,9 @@ export async function updatePersonalInfo(input: PersonalInfoInput): Promise<Acti
     return { success: true };
   } catch (error) {
     console.error("Update personal info error:", error);
-
-    if (error instanceof Error) {
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-
     return {
       success: false,
-      error: "Failed to update personal information. Please try again.",
+      error: actionErrorMessage(error, "Failed to update personal information. Please try again."),
     };
   }
 }
