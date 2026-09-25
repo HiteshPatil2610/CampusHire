@@ -173,7 +173,7 @@ export function DepartmentLogisticsBox({
             fontSize: 12,
             marginTop: 10,
             paddingTop: 8,
-            borderTop: "0.5px solid var(--teal)",
+            borderTop: "1px solid var(--teal)",
           }}
         >
           <strong>Instructions:</strong> {logistics.specialInstructions}
@@ -263,7 +263,7 @@ function LockedRecords({
             style={{
               padding: "8px 12px",
               borderRadius: 8,
-              border: "0.5px solid var(--border)",
+              border: "1px solid var(--border)",
               background: "var(--surface-1)",
             }}
           >
@@ -312,7 +312,7 @@ function EditableRecords({
               gap: 12,
               padding: "9px 12px",
               borderRadius: 8,
-              border: "0.5px solid var(--border)",
+              border: "1px solid var(--border)",
               background: "var(--surface-2)",
             }}
           >
@@ -360,7 +360,7 @@ function EditableRecords({
               gap: 12,
               padding: "9px 12px",
               borderRadius: 8,
-              border: "0.5px solid var(--border)",
+              border: "1px solid var(--border)",
               background: "var(--surface-1)",
             }}
           >
@@ -409,7 +409,7 @@ export function StudentApplicationReviewCard({
     <div
       style={{
         background: "var(--surface-2)",
-        border: "0.5px solid var(--border)",
+        border: "1px solid var(--border)",
         borderRadius: 14,
         padding: 18,
       }}
@@ -459,7 +459,7 @@ export function StudentApplicationReviewCard({
           flexWrap: "wrap",
           marginTop: 18,
           paddingTop: 14,
-          borderTop: "0.5px solid var(--border)",
+          borderTop: "1px solid var(--border)",
         }}
       >
         <span className="text-secondary" style={{ fontSize: 12 }}>
@@ -533,7 +533,7 @@ export function StudentApplicationPreviewModal({
             flexWrap: "wrap",
             padding: "10px 14px",
             borderRadius: 10,
-            border: "0.5px solid var(--border)",
+            border: "1px solid var(--border)",
             background: "var(--surface-1)",
           }}
         >
@@ -544,7 +544,7 @@ export function StudentApplicationPreviewModal({
                 height: 34,
                 borderRadius: 8,
                 background: "var(--surface-2)",
-                border: "0.5px solid var(--border)",
+                border: "1px solid var(--border)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -600,7 +600,7 @@ export function StudentApplicationPreviewModal({
             justifyContent: "flex-end",
             marginTop: 16,
             paddingTop: 14,
-            borderTop: "0.5px solid var(--border)",
+            borderTop: "1px solid var(--border)",
           }}
         >
           <button

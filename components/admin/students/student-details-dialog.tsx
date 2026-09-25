@@ -203,7 +203,7 @@ export function StudentDetailsDialog({
                 padding: '14px 16px',
                 borderRadius: 8,
                 background: 'var(--surface-hover)',
-                border: '0.5px solid var(--border)',
+                border: '1px solid var(--border)',
                 flexWrap: 'wrap',
                 gap: 12,
               }}
@@ -219,14 +219,14 @@ export function StudentDetailsDialog({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontWeight: 700,
+                    fontWeight: 500, letterSpacing: '-0.02em',
                     fontSize: 16,
                   }}
                 >
                   {initials}
                 </div>
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 700 }}>
+                  <div style={{ fontSize: 16, fontWeight: 500, letterSpacing: '-0.02em' }}>
                     {student.name}
                   </div>
                   <div
@@ -361,7 +361,7 @@ export function StudentDetailsDialog({
                 <div
                   style={{
                     fontSize: 20,
-                    fontWeight: 700,
+                    fontWeight: 500, letterSpacing: '-0.02em',
                     color: 'var(--accent)',
                     marginTop: 2,
                   }}
@@ -389,11 +389,11 @@ export function StudentDetailsDialog({
                 <div
                   style={{
                     fontSize: 20,
-                    fontWeight: 700,
+                    fontWeight: 500, letterSpacing: '-0.02em',
                     color:
                       (academic?.activeBacklogs ?? 0) > 0
                         ? 'var(--red, #ef4444)'
-                        : 'var(--green, #10b981)',
+                        : 'var(--teal)',
                     marginTop: 2,
                   }}
                 >
@@ -422,7 +422,7 @@ export function StudentDetailsDialog({
                 <div
                   style={{
                     fontSize: 20,
-                    fontWeight: 700,
+                    fontWeight: 500, letterSpacing: '-0.02em',
                     color: 'var(--accent)',
                     marginTop: 2,
                   }}
@@ -496,7 +496,7 @@ export function StudentDetailsDialog({
                       style={{
                         color: isPending
                           ? 'var(--amber, #f59e0b)'
-                          : 'var(--green, #10b981)',
+                          : 'var(--teal)',
                         fontWeight: 600,
                       }}
                     >
@@ -598,7 +598,7 @@ export function StudentDetailsDialog({
                           padding: '3px 8px',
                           borderRadius: 4,
                           background: isPending ? 'var(--amber-light)' : 'var(--surface-hover)',
-                          border: `0.5px solid ${isPending ? 'var(--amber)' : 'var(--border)'}`,
+                          border: `1px solid ${isPending ? 'var(--amber)' : 'var(--border)'}`,
                           fontWeight: 500,
                         }}
                       >

@@ -156,7 +156,7 @@ export function CentralDrivesView({
             <div className="text-secondary" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em" }}>
               {label}
             </div>
-            <div style={{ fontSize: 22, fontWeight: 600, color: tone, margin: "4px 0 0" }}>
+            <div style={{ fontSize: 22, fontWeight: 500, letterSpacing: '-0.02em', color: tone, margin: "4px 0 0" }}>
               {value}
             </div>
           </div>
@@ -198,7 +198,7 @@ export function CentralDrivesView({
                   padding: "8px 12px",
                   fontSize: 13,
                   borderRadius: 8,
-                  border: "0.5px solid var(--border-strong)",
+                  border: "1px solid var(--border-strong)",
                   background: "var(--surface-2)",
                 }}
               />
@@ -212,7 +212,7 @@ export function CentralDrivesView({
                 onChange={(e) =>
                   setFilters({ ...filters, status: e.target.value as DriveFilterInput["status"] })
                 }
-                style={{ padding: "5px 8px", fontSize: 12, borderRadius: 8, border: "0.5px solid var(--border-strong)" }}
+                style={{ padding: "5px 8px", fontSize: 12, borderRadius: 8, border: "1px solid var(--border-strong)" }}
               >
                 <option value="">Any status</option>
                 <option value="DRAFT">Draft</option>
@@ -224,7 +224,7 @@ export function CentralDrivesView({
                 aria-label="Department"
                 value={filters.departmentId}
                 onChange={(e) => setFilters({ ...filters, departmentId: e.target.value })}
-                style={{ padding: "5px 8px", fontSize: 12, borderRadius: 8, border: "0.5px solid var(--border-strong)" }}
+                style={{ padding: "5px 8px", fontSize: 12, borderRadius: 8, border: "1px solid var(--border-strong)" }}
               >
                 <option value="">Any department</option>
                 {departments.map((department) => (
@@ -238,14 +238,14 @@ export function CentralDrivesView({
                 aria-label="Next stage date from"
                 value={filters.from}
                 onChange={(e) => setFilters({ ...filters, from: e.target.value })}
-                style={{ padding: "4px 6px", fontSize: 12, borderRadius: 8, border: "0.5px solid var(--border-strong)" }}
+                style={{ padding: "4px 6px", fontSize: 12, borderRadius: 8, border: "1px solid var(--border-strong)" }}
               />
               <input
                 type="date"
                 aria-label="Next stage date to"
                 value={filters.to}
                 onChange={(e) => setFilters({ ...filters, to: e.target.value })}
-                style={{ padding: "4px 6px", fontSize: 12, borderRadius: 8, border: "0.5px solid var(--border-strong)" }}
+                style={{ padding: "4px 6px", fontSize: 12, borderRadius: 8, border: "1px solid var(--border-strong)" }}
               />
               {filtering && (
                 <button
@@ -285,7 +285,7 @@ export function CentralDrivesView({
                         padding: "12px 14px",
                         borderRadius: 10,
                         background: isSelected ? "var(--accent-light)" : "var(--surface-2)",
-                        border: `0.5px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
+                        border: `1px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
                         borderLeft: `3px solid ${isSelected ? "var(--accent)" : "transparent"}`,
                       }}
                     >

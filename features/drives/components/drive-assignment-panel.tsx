@@ -282,7 +282,7 @@ export function DriveAssignmentPanel({
             marginBottom: 12,
             padding: 12,
             borderRadius: 8,
-            border: "0.5px solid var(--border-strong)",
+            border: "1px solid var(--border-strong)",
             background: "var(--surface-1)",
           }}
         >
@@ -300,7 +300,7 @@ export function DriveAssignmentPanel({
                 type="datetime-local"
                 value={newDeadline}
                 onChange={(e) => setNewDeadline(e.target.value)}
-                style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "0.5px solid var(--border-strong)", maxWidth: 260 }}
+                style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "1px solid var(--border-strong)", maxWidth: 260 }}
               />
             </label>
           )}
@@ -314,7 +314,7 @@ export function DriveAssignmentPanel({
                 : "Why is this drive cancelled? Applicants are told this reason."
             }
             onChange={(e) => setReason(e.target.value)}
-            style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "0.5px solid var(--border-strong)" }}
+            style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "1px solid var(--border-strong)" }}
           />
           <div style={{ display: "flex", gap: 6 }}>
             <button
@@ -465,7 +465,7 @@ export function DriveAssignmentPanel({
                       background: selected.includes(row.departmentId)
                         ? "var(--accent-light)"
                         : "var(--surface-1)",
-                      border: "0.5px solid var(--border)",
+                      border: "1px solid var(--border)",
                       borderRadius: 6,
                       cursor: "pointer",
                       fontSize: 13,

@@ -99,7 +99,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         <div className="text-muted" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
           Active Drives
         </div>
-        <div style={{ fontSize: 28, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>
+        <div style={{ fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em', color: "var(--accent)", marginTop: 4 }}>
           {insights.activeDrivesCount}
         </div>
         <div className="text-secondary" style={{ fontSize: 11 }}>

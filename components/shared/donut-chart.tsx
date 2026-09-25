@@ -46,7 +46,7 @@ export default function DonutChart({ data }: { data: DonutSlice[] }) {
             alignItems: "center",
             justifyContent: "center",
             fontSize: 18,
-            fontWeight: 700,
+            fontWeight: 500, letterSpacing: '-0.02em',
           }}
         >
           {total}

@@ -51,10 +51,11 @@ export function DepartmentScopeBanner({
         <span
           style={{
             fontSize: 11,
-            padding: '3px 8px',
-            borderRadius: 12,
-            background: 'rgba(255,255,255,0.15)',
-            fontWeight: 600,
+            padding: '3px 10px',
+            borderRadius: 999,
+            background: 'var(--surface-2)',
+            border: '1px solid rgba(0, 33, 71, 0.12)',
+            fontWeight: 500,
           }}
         >
           👥 {studentCount} {studentCount === 1 ? 'Student' : 'Students'}
@@ -64,10 +65,11 @@ export function DepartmentScopeBanner({
           <span
             style={{
               fontSize: 11,
-              padding: '3px 8px',
-              borderRadius: 12,
-              background: 'rgba(255,255,255,0.15)',
-              fontWeight: 600,
+              padding: '3px 10px',
+              borderRadius: 999,
+              background: 'var(--surface-2)',
+              border: '1px solid rgba(0, 33, 71, 0.12)',
+              fontWeight: 500,
             }}
           >
             💼 {driveCount} {driveCount === 1 ? 'Drive' : 'Drives'}

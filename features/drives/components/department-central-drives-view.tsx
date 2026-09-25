@@ -85,7 +85,7 @@ function KpiTile({
       >
         {label}
       </div>
-      <div style={{ fontSize: 24, fontWeight: 600, color, margin: "6px 0 4px" }}>
+      <div style={{ fontSize: 24, fontWeight: 500, letterSpacing: '-0.02em', color, margin: "6px 0 4px" }}>
         {value}
       </div>
       <div className="text-muted" style={{ fontSize: 11 }}>
@@ -286,7 +286,7 @@ export function DepartmentCentralDrivesView({
                 padding: "7px 10px",
                 fontSize: 12,
                 borderRadius: 8,
-                border: "0.5px solid var(--border-strong)",
+                border: "1px solid var(--border-strong)",
                 marginBottom: 10,
               }}
             />
@@ -327,7 +327,7 @@ export function DepartmentCentralDrivesView({
                 justifyContent: "space-between",
                 fontSize: 11,
                 padding: "6px 0 10px",
-                borderBottom: "0.5px solid var(--border)",
+                borderBottom: "1px solid var(--border)",
                 marginBottom: 10,
               }}
             >
@@ -371,7 +371,7 @@ export function DepartmentCentralDrivesView({
                         background: selected
                           ? "var(--accent-light)"
                           : "var(--surface-2)",
-                        border: `0.5px solid ${
+                        border: `1px solid ${
                           selected ? "var(--accent)" : "var(--border)"
                         }`,
                       }}

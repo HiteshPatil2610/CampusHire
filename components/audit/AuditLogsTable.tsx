@@ -293,7 +293,7 @@ export function AuditLogsTable({ initialData }: AuditLogsTableProps) {
                               padding: '10px 12px',
                               background: 'var(--surface-1)',
                               borderRadius: 'var(--radius)',
-                              border: '0.5px solid var(--border)',
+                              border: '1px solid var(--border)',
                               fontSize: 11,
                               overflowX: 'auto',
                               color: 'var(--text-secondary)',

@@ -98,7 +98,7 @@ export default function AccessRequestsPanel({
           key={request.id}
           style={{
             padding: '14px 18px',
-            borderBottom: '0.5px solid var(--border)',
+            borderBottom: '1px solid var(--border)',
             display: 'flex',
             gap: 14,
             alignItems: 'flex-start',
@@ -159,7 +159,7 @@ export default function AccessRequestsPanel({
                 maxWidth: 420,
                 padding: '6px 9px',
                 fontSize: 12,
-                border: '0.5px solid var(--border-strong)',
+                border: '1px solid var(--border-strong)',
                 borderRadius: 8,
                 background: 'var(--surface)',
                 color: 'var(--text-primary)',

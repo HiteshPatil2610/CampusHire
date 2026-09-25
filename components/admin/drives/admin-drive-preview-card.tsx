@@ -130,7 +130,7 @@ export function AdminDrivePreviewCard({
                 <div style={{ flex: 1 }}>
                   <div
                     className="drive-role"
-                    style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}
+                    style={{ fontSize: 15, fontWeight: 500, letterSpacing: '-0.02em', color: "var(--text-primary)" }}
                   >
                     {drive.roleName || "Role"}
                   </div>

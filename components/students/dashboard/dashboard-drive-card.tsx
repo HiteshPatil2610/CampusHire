@@ -216,7 +216,7 @@ export default function DashboardDriveCard({
             padding: '12px 14px',
             borderRadius: 8,
             background: 'var(--surface-1)',
-            border: '0.5px solid var(--border)',
+            border: '1px solid var(--border)',
             fontSize: 12,
             display: 'flex',
             flexDirection: 'column',
@@ -325,7 +325,7 @@ export default function DashboardDriveCard({
         style={{
           marginTop: 'auto',
           paddingTop: 10,
-          borderTop: '0.5px solid var(--border)',
+          borderTop: '1px solid var(--border)',
         }}
       >
         {isApplied ? (

@@ -153,7 +153,7 @@ export function EligibilityRulesEditor({
     padding: "7px 10px",
     fontSize: 12,
     borderRadius: 8,
-    border: "0.5px solid var(--border-strong)",
+    border: "1px solid var(--border-strong)",
     background: "var(--surface-2)",
   };
 

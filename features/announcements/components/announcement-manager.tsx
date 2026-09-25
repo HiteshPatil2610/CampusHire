@@ -168,7 +168,7 @@ export function AnnouncementManager({
                 style={{
                   padding: "12px 14px",
                   background: "var(--surface-1)",
-                  border: "0.5px solid var(--border)",
+                  border: "1px solid var(--border)",
                   borderRadius: 8,
                 }}
               >

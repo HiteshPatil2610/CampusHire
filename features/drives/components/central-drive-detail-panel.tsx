@@ -263,7 +263,7 @@ function ApplicationsTab({ drive }: { drive: CentralDriveListItem }) {
           ].map(({ label, value, tone }) => (
             <div key={label} style={{ padding: "12px 16px", borderRadius: 10, background: "var(--surface-1)" }}>
               <div className="text-secondary" style={{ fontSize: 11, fontWeight: 500 }}>{label}</div>
-              <div style={{ fontSize: 22, fontWeight: 600, color: tone, margin: "4px 0 0" }}>{value}</div>
+              <div style={{ fontSize: 22, fontWeight: 500, letterSpacing: '-0.02em', color: tone, margin: "4px 0 0" }}>{value}</div>
             </div>
           ))}
         </div>
@@ -422,7 +422,7 @@ export function CentralDriveDetailPanel({
         style={{
           display: "flex",
           gap: 4,
-          borderBottom: "0.5px solid var(--border)",
+          borderBottom: "1px solid var(--border)",
           marginBottom: 16,
           overflowX: "auto",
         }}

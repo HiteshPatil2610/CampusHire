@@ -138,7 +138,7 @@ export default function SkillPicker({
           <span
             className="tag"
             key={tag.name}
-            style={tag.pending ? { background: 'var(--amber-light)', border: '0.5px solid var(--amber)' } : undefined}
+            style={tag.pending ? { background: 'var(--amber-light)', border: '1px solid var(--amber)' } : undefined}
           >
             {tag.name}
             {tag.pending && (
@@ -185,7 +185,7 @@ export default function SkillPicker({
             right: 0,
             marginTop: 4,
             background: 'var(--surface-0)',
-            border: '0.5px solid var(--border-strong)',
+            border: '1px solid var(--border-strong)',
             borderRadius: 8,
             boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
             maxHeight: 220,
@@ -225,7 +225,7 @@ export default function SkillPicker({
                 fontSize: 12,
                 color: 'var(--text-secondary)',
                 border: 'none',
-                borderTop: suggestions.length > 0 ? '0.5px solid var(--border)' : undefined,
+                borderTop: suggestions.length > 0 ? '1px solid var(--border)' : undefined,
                 background: 'transparent',
                 cursor: 'pointer',
               }}

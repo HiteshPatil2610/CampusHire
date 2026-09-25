@@ -169,7 +169,7 @@ export function DrivePlacementTab({ driveId, data }: { driveId: string; data: Dr
                               onChange={(e) => setReason(e.target.value)}
                               placeholder="Why is this being revoked? (required)"
                               aria-label="Revocation reason"
-                              style={{ padding: "4px 6px", fontSize: 12, borderRadius: 6, border: "0.5px solid var(--border-strong)" }}
+                              style={{ padding: "4px 6px", fontSize: 12, borderRadius: 6, border: "1px solid var(--border-strong)" }}
                             />
                             <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                               <button

@@ -64,7 +64,7 @@ export function NotificationPreferences({ role, mutedEvents }: NotificationPrefe
                 alignItems: 'flex-start',
                 gap: 10,
                 padding: '10px 12px',
-                border: '0.5px solid var(--border)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
                 background: 'var(--surface-1)',
                 cursor: isPending ? 'progress' : 'pointer',

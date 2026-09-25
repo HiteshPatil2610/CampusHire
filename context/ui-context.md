@@ -7,12 +7,13 @@
 
 ## 1. Global Page Design Language & Core Foundation
 
-### 1.1 Aesthetic Philosophy
-CampusHire uses a **warm, paper-like aesthetic** rather than sterile SaaS white. 
-- **Base Canvas:** The page background uses a warm off-white parchment tone (`#FAF9F5`), preventing eye fatigue.
-- **Elevation:** Content containers and cards lift slightly off the background using pure white surfaces (`#FFFFFF`) with crisp, hairline borders (`0.5px solid #E6E4DA`) instead of heavy, muddy drop shadows.
-- **Brand Accent:** A terracotta / warm coral accent (`#D85A30`) injects energy and warmth while remaining grounded and trustworthy.
-- **Hierarchy:** High data density is kept legible and calm through disciplined spacing, subtle status tinting, and structured hairline separators.
+### 1.1 Aesthetic Philosophy — Oxford design language
+Since 2026-09-25 the whole app follows the **Oxford design system** (the same language as the sign-in / sign-up shell, §4.3; source: `context/Oxford Design System-handoff.zip`, never committed).
+- **Frame:** a black chassis (sidebar + bezels) around an 18px-rounded white canvas with a faint gold inner hairline.
+- **Grid:** the canvas background carries six faint vertical grid lines (`--grid-line` `#EDEDED`). **Page background only** — cards, tables and panels keep their own surfaces on top.
+- **Elevation:** hairlines (`1px solid #E6E6E6`), not shadows. Only modals and the primary button's glow cast a shadow. No gradients except the primary button's top glow.
+- **Brand colours:** **Oxford Blue** `#002147` for every action, active state and link; **gold** `#C39A67` only as a small accent (eyebrows, the brand dot, the scope-banner spine, unread dots, sidebar group labels). The old terracotta/orange is gone.
+- **Hierarchy:** medium-weight (500) headlines with tight tracking (`-0.025em`), muted-grey metadata, pill-shaped controls.
 
 ---
 
@@ -21,21 +22,33 @@ CampusHire uses a **warm, paper-like aesthetic** rather than sterile SaaS white.
 #### Surface & Text Hierarchy
 | Token | Hex | Role & Application |
 |---|---|---|
-| `--surface-0` | `#FAF9F5` | Global body & page background (warm off-white) |
-| `--surface-1` | `#F1EFE7` | Sunken / recessed areas, metric card backgrounds, hover fills |
-| `--surface-2` | `#FFFFFF` | Elevated surfaces: cards, modals, sidebar, topbar |
-| `--text-primary` | `#1C1C1A` | Headings, primary labels, main body text |
-| `--text-secondary` | `#6B6A63` | Subheadings, navigation links, table headers, metadata |
-| `--text-muted` | `#9B9A92` | Placeholders, timestamps, subtle hints, inactive indicators |
-| `--border` | `#E6E4DA` | Default hairline boundary for cards, dividers, and list rows |
-| `--border-strong` | `#D2D0C4` | High-emphasis borders: table header baselines, input borders, OTP boxes |
+| `--surface-0` | `#FAFAFA` | Sunken fills: KPI / metric tiles, table header row, row hover, public page body |
+| `--surface-1` | `#F2F2F2` | Hover fills, grey badges, progress tracks |
+| `--surface-2` | `#FFFFFF` | Canvas, cards, modals, inputs |
+| `--text-primary` | `#0F0F0F` | Headings, primary labels, main body text |
+| `--text-secondary` | `#4A4A4A` | Body copy, form labels, navigation, metadata |
+| `--text-muted` | `#8C8C8C` | Table headers, KPI labels, timestamps, hints |
+| `--border` | `#E6E6E6` | Hairline for cards, tables, dividers, rows |
+| `--border-strong` | `#D2D2D2` | Outline buttons, higher-emphasis dividers |
+| `--field-border` | `#E2E2E2` | Input / select / textarea borders |
+| `--grid-line` | `#EDEDED` | The canvas's vertical grid lines |
 
-#### Brand Terracotta Accent
+#### Oxford Blue (primary) & Gold (secondary)
 | Token | Hex | Role & Application |
 |---|---|---|
-| `--accent` | `#D85A30` | Primary action buttons, active indicators, gauge fills, brand dot |
-| `--accent-dark` | `#712B13` | Hover states on primary buttons, high-contrast active text |
-| `--accent-light` | `#FAECE7` | Active link background, unread notification tint, icon tile base |
+| `--accent` | `#002147` | Primary buttons, active nav / pills / tabs, links, gauge & progress fills |
+| `--accent-hover` | `#012C5E` | Primary button hover |
+| `--accent-dark` | `#001736` | Pressed / high-contrast navy text |
+| `--accent-light` | `#EEF1F7` | Active tints, unread row tint, `badge-accent`, scope banner |
+| `--accent-glow` | `84, 140, 214` (rgb) | Primary button's top glow and hover halo |
+| `--focus-ring` | `0 0 0 3px rgba(0,33,71,.22)` | Field focus ring |
+| `--gold` | `#C39A67` | Small accents only: brand dot, sidebar group labels, unread dots, activity dots, scope-banner spine |
+| `--gold-dark` | `#8A6A35` | Gold text on white (eyebrows, `badge-gold`) — readable contrast |
+| `--gold-light` | `#F7F1E7` | `badge-gold` background, text selection |
+
+Legacy names keep working: all existing `var(--accent*)` uses turned navy automatically. Never re-introduce the old terracotta (`#D85A30`).
+
+Aliases (names some components used without them ever being defined): `--surface-hover` = `--surface-0`, `--primary` = `--accent`, `--success` = `--green` = `--teal`. Prefer the real token names in new code.
 
 #### Semantic Status Clusters
 Status colors are strictly categorized into semantic pairs (soft background tint + strong foreground text):
@@ -49,21 +62,22 @@ Status colors are strictly categorized into semantic pairs (soft background tint
 
 ---
 
-### 1.3 Global Typography (Inter)
-All typography uses **Inter** (`font-family: 'Inter', system-ui, -apple-system, sans-serif`).
+### 1.3 Global Typography (Schibsted Grotesk)
+All typography uses **Schibsted Grotesk** (400–700, normal + italic), loaded by `next/font` in `app/layout.tsx` as `--font-sans`; Tailwind's `font-sans` points at the same variable. Headings (`h1`–`h6`) default to weight `500` with `letter-spacing: -0.025em`.
 
 | Level | Size | Weight | Line Height | Color | Usage |
 |---|---|---|---|---|---|
-| **Display / Page Title** | `19–20px` | `600` (SemiBold) | `1.3` | `--text-primary` | Top-level screen headings |
-| **Section Title** | `15–16px` | `600` (SemiBold) | `1.4` | `--text-primary` | Card titles, group headers |
+| **Eyebrow (`.eyebrow`)** | `12px` italic | `400` | — | `--gold-dark` (`.eyebrow-muted`: `--text-muted`) | Small kicker above a page title ("Welcome back") |
+| **Display / Page Title (`.page-title`)** | `28px` | `500`, tracking `-0.025em` | `1.15` | `--text-primary` | Top-level screen headings |
+| **Section Title (`.section-title`)** | `18px` | `500`, tracking `-0.015em` | `1.3` | `--text-primary` | Card titles, group headers |
 | **Card Header / Subhead** | `13–14px` | `500` / `600` | `1.4` | `--text-primary` | Sub-section labels, modal titles |
 | **Body Copy** | `14px` | `400` (Regular) | `1.6` | `--text-primary` | Descriptive paragraphs, explanations |
 | **UI & Form Text** | `13px` | `400` (Regular) | `1.4` | `--text-primary` | Input values, table body cells, nav links |
-| **Form Labels** | `12px` | `500` (Medium) | `1.3` | `--text-primary` | Input field labels, filter labels |
-| **Table Column Headers** | `12px` | `500` (Medium) | `1.3` | `--text-secondary` | Uppercase/title case table headers |
+| **Form Labels** | `12px` | `500` (Medium) | `1.3` | `--text-secondary` | Input field labels, filter labels |
+| **Table Column Headers** | `12px` | `500` (Medium) | `1.3` | `--text-muted` | Title case table headers on a `--surface-0` row |
 | **Captions & Hints** | `11–12px` | `400` (Regular) | `1.4` | `--text-muted` | Input hints, timestamps, secondary meta |
 | **Badges & Pills** | `11px` | `500` / `600` | `1.2` | Semantic token | Status badges, category tags |
-| **KPI Metrics (Large)** | `20–24px` | `600` (SemiBold) | `1.2` | `--text-primary` | Metric counters, summary statistics |
+| **KPI Metrics (`.kpi-value`)** | `30px` | `500`, tracking `-0.025em` | `1.15` | `--text-primary` | Metric counters, summary statistics |
 
 ---
 
@@ -72,11 +86,11 @@ All typography uses **Inter** (`font-family: 'Inter', system-ui, -apple-system, 
 #### Core Layout Shells
 1. **Authenticated App Shell (Admin, Student, Super Admin) — "Chassis & Floating Screen"**
    - **Chassis:** `components/shared/app-shell.tsx`. Full-viewport `flex bg-black`; the sidebar and the bezels share one black background so they read as a single frame.
-   - **Canvas:** the page sits in a rounded (`20px`) white canvas inset `py-2.5 pr-2.5 pl-0` — bezels on top, right and bottom, none on the left where it meets the sidebar. The canvas scrolls internally; the shell itself never scrolls.
+   - **Canvas (`.app-canvas`):** the page sits in a rounded (`18px`) white canvas with a faint gold inner hairline and the six-column Oxford grid background, inset `py-2.5 pr-2.5 pl-0` — bezels on top, right and bottom, none on the left where it meets the sidebar. The canvas scrolls internally (the grid stays put); the shell itself never scrolls. `.app-content` pads pages `32px 40px`.
    - **No header bar.** There is no topbar; notifications, settings, search and sign-out live in the sidebar.
    - **Sidebar (`components/shared/sidebar.tsx`)** has two states, remembered in `localStorage` (`campushire.sidebar.collapsed`):
-     - *Dock* (`w-14`): brand button (opens the sidebar), then every nav section as an icon only — same icons and order as the expanded view, groups split by a hairline, active page highlighted, right-anchored tooltips (fixed-position so the scrolling dock can't clip them), unread dot on Notifications — and the user's initials pinned to the bottom, opening an account menu (Settings, Log out).
-     - *Expanded* (`w-[260px]`): brand + search toggle + collapse; grouped nav (`text-neutral-200`, `rounded-xl`, 16px icons, active row `bg-neutral-900`); a bottom account card with avatar, name, role label and a Settings link. There is no "New …" primary-action button.
+     - *Dock* (`w-14`): brand button (opens the sidebar), then every nav section as a round icon button — same icons and order as the expanded view, groups split by a hairline, active page in an Oxford Blue circle, right-anchored tooltips (fixed-position so the scrolling dock can't clip them), gold unread dot on Notifications — and the user's initials (on navy) pinned to the bottom, opening an account menu (Settings, Log out).
+     - *Expanded* (`w-[260px]`): glowing gold brand dot + search toggle + collapse; grouped nav as pills (`text-neutral-300`, `rounded-full`, 16px icons, hover `#141414`, active pill Oxford Blue with a light-blue inner hairline); group titles are italic gold eyebrows; unread count is a `badge-gold`; a bottom account card with avatar, name, role label and a Settings link. There is no "New …" primary-action button.
    - Page content keeps `--surface-*` tokens and hairline cards inside the white canvas.
 
 2. **Public & Authentication Shell**
@@ -85,15 +99,15 @@ All typography uses **Inter** (`font-family: 'Inter', system-ui, -apple-system, 
    - **Auth Card:** `--surface-2` background, `0.5px solid var(--border)`, `border-radius: 12px`, `padding: 32px`.
 
 #### Standard Dimensions & Radii
-- **Hairline Borders:** `0.5px solid var(--border)` throughout (except dropzone: `1.5px dashed`).
-- **Corner Radii Scale:**
-  - `4px`: Mini chart bars, progress fills.
-  - `8px` (`--radius`): Buttons, input fields, badges, sidebar links, tag chips, alert tiles.
-  - `10px`: Company avatars.
-  - `12px`: Standard content cards, auth panels, modal dialogs, metric tiles.
-  - `14px`: Drive cards, feature cards.
-  - `20px` / `999px`: Status pills, filter chips.
-  - `50%`: Circular user avatars, gauge progress tracks, notification dots, toggle knobs.
+- **Hairline Borders:** `1px solid var(--border)` everywhere (no `0.5px` left in `globals.css`; dropzone: `1.5px dashed`). Sunken containers (`.panel`, `.kpi-card`, `.dash-stat-card`, locked sections) use `--surface-0` and hold white inner cards.
+- **Headings set inline** (`style={{ fontSize, fontWeight }}`) use weight `500` and `letterSpacing: '-0.02em'`, never 600/700.
+- **Corner Radii Scale (Oxford):**
+  - `999px` (`--radius-pill`): Buttons, badges, filter pills, sidebar links, progress bars.
+  - `8px` (`--radius`): Input fields, scope banner, small tiles.
+  - `10px` (`--radius-md`): Attention items, company avatars.
+  - `14px` (`--radius-xl`): Cards, tables, KPI / metric tiles, drive & feature cards.
+  - `18px` (`--radius-shell`): App canvas, modal dialogs.
+  - `50%`: Circular avatars, dock icons, dots, toggle knobs.
 
 ---
 
@@ -185,22 +199,22 @@ All typography uses **Inter** (`font-family: 'Inter', system-ui, -apple-system, 
 ### 3.1 Data Tables (`table`, `th`, `td`)
 - **Structure:** Full-width responsive tabular views for student lists, drive registrations, user accounts, and audit trails.
 - **Style:**
-  - Container: `--surface-2` (white), `0.5px solid var(--border)`, `border-radius: 12px`, overflow hidden.
+  - Container: `--surface-2` (white), `1px solid var(--border)`, `border-radius: 14px`, overflow hidden.
   - Table: `width: 100%`, `border-collapse: collapse`, `font-size: 13px`.
-  - Header Row (`th`): `padding: 10px 8px`, `--text-secondary`, `font-weight: 500`, `font-size: 12px`, text-align left, baseline `0.5px solid var(--border-strong)`.
-  - Data Cells (`td`): `padding: 10px 8px`, `--text-primary`, border-bottom `0.5px solid var(--border)`, vertical-align middle. Last row has no bottom border.
+  - Header Row (`th`): `padding: 11px 10px`, background `--surface-0`, `--text-muted`, `font-weight: 500`, `font-size: 12px`, text-align left, baseline `1px solid var(--border)`.
+  - Data Cells (`td`): `padding: 11px 10px`, `--text-primary`, border-bottom `1px solid var(--border)`, vertical-align middle. Last row has no bottom border.
   - Row Hover: Background tint `--surface-0` for immediate row tracking.
   - Action Links (`.row-actions a`): `13px`, `--text-secondary`, inline icons, hover color `--accent`.
 
 ### 3.2 Admin KPI Summary Tiles (`.kpi-card`)
 - **Structure:** Top-of-dashboard performance summary cards (total placed, active drives, batch average readiness).
 - **Style:**
-  - Background: `--surface-2` (white)
-  - Border: `0.5px solid var(--border)`
-  - Radius: `12px`
-  - Padding: `14px 16px`
-  - Metric Value: `20px` bold (`font-weight: 600`), `--text-primary`.
-  - Label: `12px`, `--text-secondary`, `font-weight: 500`.
+  - Background: `--surface-0` (sunken `#FAFAFA`, the Oxford stat card)
+  - Border: `1px solid var(--border)` (keeps it legible over the canvas grid)
+  - Radius: `14px`
+  - Padding: `16px 18px`
+  - Metric Value: `30px`, `font-weight: 500`, tracking `-0.025em`, `--text-primary`.
+  - Label: `12px`, `--text-muted`, `font-weight: 400`.
   - Trend Badge: Sub-metric in green/red font indicating month-over-month delta.
 - **Motion:** `CampusMotion.scaleIn` (`scale(0.85) → 1`, `opacity 0 → 1`) + animated `countUp` on the numeric value.
 
@@ -323,27 +337,32 @@ All typography uses **Inter** (`font-family: 'Inter', system-ui, -apple-system, 
 ## 5. Universal Micro-Components & Interaction Elements
 
 ### 5.1 Buttons (`.btn`)
-All buttons share base styles: `display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none`.
+All buttons are Oxford pills: `display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 999px; padding: 9px 18px; font-size: 13px; font-weight: 500; border: 1px solid transparent`. Transitions `220ms`; press = `transform: scale(.985)`; disabled = `opacity .55`.
 
 | Variant | Class | Background | Text Color | Border | Hover State |
 |---|---|---|---|---|---|
-| **Primary** | `.btn.btn-primary` | `--accent` (`#D85A30`) | `#FFFFFF` | None | Background `--accent-dark` (`#712B13`) |
-| **Outline / Secondary** | `.btn.btn-outline` | `transparent` | `--text-primary` | `0.5px solid var(--border-strong)` | Background `--surface-1` |
-| **Small** | `.btn.btn-sm` | Contextual | Contextual | Contextual | `padding: 7px 12px; font-size: 12px` |
+| **Primary** | `.btn.btn-primary` | `--accent` (`#002147`) + soft top radial glow (`--accent-glow`), small navy drop shadow | `#FFFFFF` | `rgba(glow,.45)` | `--accent-hover`, brighter border, blue halo shadow |
+| **Outline / Secondary** | `.btn.btn-outline` | `--surface-2` | `--text-primary` | `1px solid var(--border-strong)` | Border and text turn `--accent` |
+| **Ghost** | `.btn.btn-ghost` | transparent | `--text-secondary` | none | Background `--surface-1`, text `--text-primary` |
+| **Danger** | `.btn.btn-danger` | `--red` | `#FFFFFF` | none | `#831f1f` |
+| **Small** | `.btn.btn-sm` | Contextual | Contextual | Contextual | `padding: 6px 13px; font-size: 12px` |
 
 ### 5.2 Status Badges & Filter Pills
-- **Standard Badges (`.badge-*`):** `padding: 2px 9px`, `border-radius: 8px`, `font-size: 11px`, `font-weight: 500`.
-  - `.badge-green`: Background `--teal-light`, text `--teal`.
+- **Standard Badges (`.badge-*`):** pills — `padding: 2px 10px`, `border-radius: 999px`, `font-size: 11px`, `font-weight: 500`.
+  - `.badge-green` / `.badge-teal`: Background `--teal-light`, text `--teal`.
   - `.badge-amber`: Background `--amber-light`, text `--amber`.
   - `.badge-red`: Background `--red-light`, text `--red`.
-- **Drive Status Badges (`.drive-status-badge`):** `padding: 4px 12px`, `border-radius: 20px`, `font-size: 11px`, `font-weight: 600`.
-- **Filter Pills (`.filter-pill`):** `padding: 6px 14px`, `border-radius: 16px`, `font-size: 12px`, `border: 0.5px solid var(--border-strong)`, background `--surface-2`.
-  - Active Filter Pill (`.filter-pill.active`): Background `--text-primary`, text `#FFFFFF`, border-color `--text-primary`.
+  - `.badge-accent`: Background `--accent-light`, text `--accent` (navy).
+  - `.badge-gold`: Background `--gold-light`, text `--gold-dark` (use sparingly — highlights, counts on black).
+- **Drive Status Badges (`.drive-status-badge`):** `padding: 4px 12px`, `border-radius: 999px`, `font-size: 11px`, `font-weight: 600`.
+- **Filter Pills (`.filter-pill`):** `padding: 6px 14px`, `border-radius: 999px`, `font-size: 12px`, `border: 1px solid var(--border)`, background `--surface-2`; hover darkens border and text.
+  - Active Filter Pill (`.filter-pill.active`): Background `--accent`, text `#FFFFFF`, border-color `--accent`.
 
 ### 5.3 Form Inputs & Fields (`.field`)
 - **Field Group (`.field`):** `margin-bottom: 16px`.
-- **Label:** `12px`, `font-weight: 500`, `--text-primary`, `margin-bottom: 6px`, `display: block`.
-- **Input / Select / Textarea:** `width: 100%`, `padding: 10px 12px`, `border: 0.5px solid var(--border-strong)`, `border-radius: 8px`, `font-size: 13px`, background `--surface-2`, `--text-primary`.
+- **Label:** `12px`, `font-weight: 500`, `--text-secondary`, `margin-bottom: 6px`, `display: block`.
+- **Input / Select / Textarea:** `width: 100%`, `padding: 10px 12px`, `border: 1px solid var(--field-border)`, `border-radius: 8px`, `font-size: 13px`, background `--surface-2`, `--text-primary`; placeholder `#A6A6A6`. Focus: border `--accent` + `--focus-ring`.
+- **Keyboard focus (everything else):** global `:focus-visible` outline `2px solid rgba(0,33,71,.45)`, offset `2px`.
 - **Field Row (`.field-row`):** Grid 2-column layout (`grid-template-columns: 1fr 1fr; gap: 14px`).
 - **Tag Input (`.tag-input`):** Flex wrap, `gap: 6px`, `padding: 8px`, `border: 0.5px solid var(--border-strong)`, `border-radius: 8px`.
   - Tag Chip (`.tag`): Background `--surface-1`, `padding: 3px 10px`, `border-radius: 8px`, `12px` font with remove handle `i`.
@@ -391,15 +410,16 @@ Every motion trigger verifies `window.matchMedia('(prefers-reduced-motion: reduc
 
 | Component | Default State | Hover State | Focus / Active State |
 |---|---|---|---|
-| **Primary Button** | Background `--accent`, text `#fff` | Background `--accent-dark` | Active press: opacity `0.95` |
-| **Outline Button** | Transparent, border `--border-strong` | Background `--surface-1` | Border `--text-primary` |
-| **Sidebar Link** | Transparent, text `--text-secondary` | Background `--surface-1` | `.active`: bg `--accent-light`, text `--accent-dark`, font `500` |
+| **Primary Button** | Navy pill with top glow, text `#fff` | `--accent-hover` + blue halo | Press: `scale(.985)`; focus outline navy |
+| **Outline Button** | `--surface-2`, border `--border-strong` | Border + text `--accent` | Press: `scale(.985)` |
+| **Sidebar Link (`.sidebar-link`, light surfaces)** | Transparent pill, text `--text-secondary` | Background `--surface-1` | `.active`: bg `--accent-light`, text `--accent`, font `500` |
+| **App sidebar (black)** | Pill, text `neutral-300` | Background `#141414` | Active: Oxford Blue pill, white text |
 | **Navbar Link** | Text `--text-secondary` | Text `--text-primary` | Link underline or bold state |
 | **Table Row** | Background `transparent` | Background `--surface-0` | Row select checkbox highlight |
 | **Profile Tab** | Transparent, text `--text-secondary` | Background `--surface-1` | `.active`: bg `--accent-light`, text `--accent-dark`, font `500` |
-| **Input Field** | Border `--border-strong`, bg `--surface-2` | Border `--border-strong` | Browser default outline ring |
+| **Input Field** | Border `--field-border`, bg `--surface-2` | — | Border `--accent` + `--focus-ring` |
 | **Toggle Switch** | Background `--border-strong` | Cursor pointer | `.on`: background `--accent` |
-| **Filter Pill** | Background `--surface-2`, border `--border-strong` | Background `--surface-1` | `.active`: bg `--text-primary`, text `#fff` |
+| **Filter Pill** | Background `--surface-2`, border `--border` | Border `--border-strong`, text `--text-primary` | `.active`: bg `--accent`, text `#fff` |
 
 ---
 
@@ -458,7 +478,7 @@ Every motion trigger verifies `window.matchMedia('(prefers-reduced-motion: reduc
   - Track (`.progress-track`): Background `--border`, height `6px`, `border-radius: 3px`, overflow hidden.
   - Fill (`.progress-fill`): Height `100%`, width `${value}%`, transition `width 0.3s ease`.
   - Variants:
-    - `primary`: Background `--accent` (terracotta).
+    - `primary`: Background `--accent` (Oxford Blue).
     - `success`: Background `--teal`.
     - `warning`: Background `--amber`.
     - `danger`: Background `--red`.

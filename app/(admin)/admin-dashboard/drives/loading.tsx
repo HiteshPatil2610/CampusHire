@@ -14,7 +14,7 @@ export default function Loading() {
           padding: "10px 14px",
           borderRadius: 8,
           background: "var(--surface-1)",
-          border: "0.5px solid var(--border)",
+          border: "1px solid var(--border)",
           marginBottom: 20,
           display: "flex",
           gap: 10,
@@ -29,7 +29,7 @@ export default function Loading() {
         style={{
           display: "flex",
           gap: 4,
-          borderBottom: "0.5px solid var(--border)",
+          borderBottom: "1px solid var(--border)",
           marginBottom: 20,
           paddingBottom: 2,
         }}

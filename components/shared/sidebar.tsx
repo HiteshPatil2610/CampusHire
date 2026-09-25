@@ -170,15 +170,15 @@ function DockLink({
       onMouseLeave={() => setTip(null)}
       onFocus={show}
       onBlur={() => setTip(null)}
-      className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500 ${
+      className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500 ${
         active
-          ? 'bg-neutral-900 text-white'
-          : 'text-neutral-300 hover:bg-neutral-900 hover:text-white'
+          ? 'bg-[var(--accent)] text-white shadow-[inset_0_0_0_1px_rgba(84,140,214,0.4)]'
+          : 'text-neutral-300 hover:bg-[#141414] hover:text-white'
       }`}
     >
       <Icon size={20} />
       {unread && (
-        <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--accent)]" />
+        <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--gold)]" />
       )}
       {tip && (
         <span
@@ -294,7 +294,7 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
         role="menuitem"
         href={settingsHref}
         onClick={() => setMenuOpen(false)}
-        className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-900 hover:text-white"
+        className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-neutral-200 hover:bg-[#141414] hover:text-white"
       >
         <Settings size={16} />
         Settings
@@ -303,7 +303,7 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
         role="menuitem"
         type="button"
         onClick={handleSignOut}
-        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-900 hover:text-white"
+        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-neutral-200 hover:bg-[#141414] hover:text-white"
       >
         <LogOut size={16} />
         Log out
@@ -315,7 +315,7 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
     // eslint-disable-next-line @next/next/no-img-element
     <img src={user.imageUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
   ) : (
-    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#6c858b] text-xs font-semibold text-white">
+    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-semibold text-white">
       {initials}
     </span>
   );
@@ -334,9 +334,9 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
               onClick={onToggle}
               aria-label="Open sidebar"
               title="Open sidebar"
-              className="mb-4 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl hover:bg-neutral-900"
+              className="mb-4 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl hover:bg-[#141414]"
             >
-              <span className="h-[18px] w-[18px] rounded-[5px] bg-[var(--accent)]" />
+              <span className="h-[18px] w-[18px] rounded-full bg-[var(--gold)] shadow-[0_0_10px_rgba(195,154,103,0.55)]" />
             </button>
 
             <nav
@@ -383,7 +383,7 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
               <Link href="/" className="flex items-center gap-2 text-base font-bold">
-                <span className="h-[18px] w-[18px] rounded-[5px] bg-[var(--accent)]" />
+                <span className="h-[18px] w-[18px] rounded-full bg-[var(--gold)] shadow-[0_0_10px_rgba(195,154,103,0.55)]" />
                 CampusHire
               </Link>
               <div className="flex items-center gap-0.5">
@@ -392,7 +392,7 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
                   onClick={() => (searching ? closeSearch() : setSearching(true))}
                   aria-label="Search navigation"
                   aria-pressed={searching}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-900 hover:text-white"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-[#141414] hover:text-white"
                 >
                   <Search size={16} />
                 </button>
@@ -400,7 +400,7 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
                   type="button"
                   onClick={onToggle}
                   aria-label="Collapse sidebar"
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-900 hover:text-white"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-[#141414] hover:text-white"
                 >
                   <PanelLeftClose size={16} />
                 </button>
@@ -434,7 +434,7 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
               {visibleGroups.map((group, groupIndex) => (
                 <div key={group.title ?? `group-${groupIndex}`} className="space-y-0.5">
                   {group.title && !trimmed && (
-                    <div className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                    <div className="px-3 pb-1 pt-3 text-[11px] italic text-[var(--gold)]">
                       {group.title}
                     </div>
                   )}
@@ -446,10 +446,10 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
                         key={item.href}
                         href={item.href}
                         aria-current={active ? 'page' : undefined}
-                        className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors ${
+                        className={`flex items-center justify-between rounded-full px-3 py-2 text-sm transition-colors duration-200 ${
                           active
-                            ? 'bg-neutral-900 font-medium text-white'
-                            : 'text-neutral-200 hover:bg-neutral-900 hover:text-white'
+                            ? 'bg-[var(--accent)] font-medium text-white shadow-[inset_0_0_0_1px_rgba(84,140,214,0.4)]'
+                            : 'text-neutral-300 hover:bg-[#141414] hover:text-white'
                         }`}
                       >
                         <span className="flex items-center gap-2.5">
@@ -458,7 +458,7 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
                         </span>
                         <span className="flex items-center gap-2">
                           {item.badge && unreadCount > 0 && (
-                            <span className="badge badge-accent">{unreadCount}</span>
+                            <span className="badge badge-gold">{unreadCount}</span>
                           )}
                           <NavPendingSpinner />
                         </span>
@@ -483,7 +483,7 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
                 aria-label="Account options"
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
-                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left hover:bg-neutral-900"
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left hover:bg-[#141414]"
               >
                 {avatar}
                 <span className="min-w-0">
@@ -494,7 +494,7 @@ export default function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
               <Link
                 href={settingsHref}
                 aria-label="Settings"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-900 hover:text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-[#141414] hover:text-white"
               >
                 <Settings size={16} />
               </Link>

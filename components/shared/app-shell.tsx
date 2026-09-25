@@ -13,7 +13,8 @@ const COLLAPSED_KEY = 'campushire.sidebar.collapsed';
 /**
  * Chassis & floating screen: a black frame that holds the sidebar and bezels
  * the page on the top, right and bottom. The page scrolls inside the rounded
- * canvas; there is no header bar, so global actions live in the sidebar.
+ * canvas (Oxford grid background, `.app-canvas`); there is no header bar, so
+ * global actions live in the sidebar.
  */
 export default function AppShell({ role, children }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -44,7 +45,7 @@ export default function AppShell({ role, children }: AppShellProps) {
         onToggle={() => setAndRemember(!collapsed)}
       />
       <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-black py-2.5 pl-0 pr-2.5">
-        <div className="relative h-full w-full flex-1 overflow-hidden rounded-[20px] bg-white">
+        <div className="app-canvas relative h-full w-full flex-1 overflow-hidden rounded-[18px] shadow-[inset_0_0_0_1px_rgba(195,154,103,0.18)]">
           <div className="app-content page-enter h-full select-text overflow-y-auto">
             {children}
           </div>

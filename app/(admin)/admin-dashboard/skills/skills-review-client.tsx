@@ -115,9 +115,9 @@ export function SkillsReviewClient({ pending }: { pending: PendingSkillRow[] }) 
           </div>
 
           {rejecting === skill.id && (
-            <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", borderTop: "0.5px solid var(--border)", paddingTop: 12 }}>
+            <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: 12 }}>
               <input
-                style={{ flex: 1, minWidth: 220, padding: "7px 10px", fontSize: 12, borderRadius: 6, border: "0.5px solid var(--border-strong)" }}
+                style={{ flex: 1, minWidth: 220, padding: "7px 10px", fontSize: 12, borderRadius: 6, border: "1px solid var(--border-strong)" }}
                 placeholder="Reason (optional, kept in the audit log)"
                 value={reason}
                 maxLength={500}

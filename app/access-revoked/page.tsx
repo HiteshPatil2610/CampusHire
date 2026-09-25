@@ -53,7 +53,7 @@ export default async function AccessRevokedPage() {
             padding: '12px 14px',
             borderRadius: 8,
             background: 'var(--surface-1)',
-            border: '0.5px solid var(--border)',
+            border: '1px solid var(--border)',
             marginBottom: 18,
             textAlign: 'left',
           }}

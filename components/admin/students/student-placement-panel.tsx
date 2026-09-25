@@ -121,7 +121,7 @@ export function StudentPlacementPanel({
           style={{
             fontSize: 13,
             padding: '6px 0',
-            borderTop: '0.5px solid var(--border)',
+            borderTop: '1px solid var(--border)',
             opacity: placement.revokedAt ? 0.6 : 1,
           }}
         >
@@ -180,7 +180,7 @@ export function StudentPlacementPanel({
       ))}
 
       {formOpen && (
-        <div style={{ display: 'grid', gap: 12, borderTop: '0.5px solid var(--border)', paddingTop: 12 }}>
+        <div style={{ display: 'grid', gap: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
           <div className="field-row">
             <div className="field">
               <label htmlFor={`placement-company-${studentId}`}>Company *</label>

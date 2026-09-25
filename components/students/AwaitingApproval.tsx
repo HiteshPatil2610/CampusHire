@@ -55,7 +55,7 @@ export default function AwaitingApproval({
           {isRejected ? <ShieldCheck size={24} /> : <Clock size={24} />}
         </div>
 
-        <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 500, letterSpacing: '-0.02em', marginBottom: 8 }}>
           {isRejected
             ? 'Your access request was declined'
             : 'Waiting for admin confirmation'}
@@ -79,7 +79,7 @@ export default function AwaitingApproval({
 
         <div
           style={{
-            border: '0.5px solid var(--border)',
+            border: '1px solid var(--border)',
             borderRadius: 8,
             padding: '12px 14px',
             textAlign: 'left',

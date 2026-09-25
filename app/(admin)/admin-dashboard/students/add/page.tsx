@@ -20,7 +20,7 @@ export default async function AddStudentPage() {
       <div style={{ marginBottom: 20 }}>
         <h1
           className="page-title"
-          style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}
+          style={{ fontSize: 24, fontWeight: 500, letterSpacing: '-0.02em', marginBottom: 4 }}
         >
           Add Student
         </h1>

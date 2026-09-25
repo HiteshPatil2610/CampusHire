@@ -144,7 +144,7 @@ export function NotificationList({ initialNotifications }: NotificationListProps
                   key={n.id}
                   style={{
                     padding: '14px 18px',
-                    borderBottom: '0.5px solid var(--border)',
+                    borderBottom: '1px solid var(--border)',
                     background: n.isRead ? 'transparent' : 'var(--accent-light)',
                     display: 'flex',
                     gap: 12,

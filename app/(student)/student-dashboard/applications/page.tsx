@@ -325,7 +325,7 @@ export default async function ApplicationsPage({ searchParams }: ApplicationsPag
                 >
                   {stat.label}
                 </div>
-                <div style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)' }}>
+                <div style={{ fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
                   {stat.value}
                 </div>
               </div>

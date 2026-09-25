@@ -60,7 +60,7 @@ export function BatchTargetingPicker({
               padding: "6px 10px",
               borderRadius: 8,
               fontSize: 12,
-              border: `0.5px solid ${chosen.has(year) ? "var(--accent)" : "var(--border)"}`,
+              border: `1px solid ${chosen.has(year) ? "var(--accent)" : "var(--border)"}`,
               background: chosen.has(year) ? "var(--accent-surface, var(--surface-2))" : "var(--surface-1)",
               cursor: locked ? "default" : "pointer",
             }}

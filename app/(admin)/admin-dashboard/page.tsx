@@ -42,7 +42,7 @@ export default async function AdminDashboardPage() {
 
       <h1
         className="page-title"
-        style={{ fontSize: 24, fontWeight: 700, marginBottom: 20 }}
+        style={{ fontSize: 24, fontWeight: 500, letterSpacing: '-0.02em', marginBottom: 20 }}
       >
         Department Overview
       </h1>
@@ -200,7 +200,7 @@ export default async function AdminDashboardPage() {
                       padding: '8px 12px',
                       borderRadius: 6,
                       background: 'var(--surface-hover)',
-                      border: '0.5px solid var(--border)',
+                      border: '1px solid var(--border)',
                     }}
                   >
                     <div>

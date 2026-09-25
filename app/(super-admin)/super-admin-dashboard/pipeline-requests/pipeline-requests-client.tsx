@@ -108,7 +108,7 @@ export function PipelineRequestsClient({ requests }: { requests: PipelineRequest
                   maxLength={1000}
                   placeholder="Note (required to reject)"
                   onChange={(e) => setNotes({ ...notes, [request.id]: e.target.value })}
-                  style={{ flex: 1, minWidth: 200, padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "0.5px solid var(--border-strong)" }}
+                  style={{ flex: 1, minWidth: 200, padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "1px solid var(--border-strong)" }}
                 />
                 <button type="button" className="btn btn-primary btn-sm" style={{ fontSize: 12 }}
                   disabled={isPending || !request.current} onClick={() => decide(request.id, "APPROVE")}>

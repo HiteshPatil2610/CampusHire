@@ -143,7 +143,7 @@ export function StudentAcademicPanel({
             padding: '8px 10px',
             borderRadius: 8,
             background: 'var(--amber-light)',
-            border: '0.5px solid var(--amber)',
+            border: '1px solid var(--amber)',
             fontSize: 12,
           }}
         >
@@ -163,7 +163,7 @@ export function StudentAcademicPanel({
       )}
 
       {dropOpen && preview.ok && !droppedThisYear && (
-        <div style={{ display: 'grid', gap: 6, borderTop: '0.5px solid var(--border)', paddingTop: 8 }}>
+        <div style={{ display: 'grid', gap: 6, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
           <div style={{ fontSize: 12 }}>
             {YEAR_LEVEL_LABELS[preview.plan.previousLevel]} → <strong>{YEAR_LEVEL_LABELS[preview.plan.newLevel]}</strong>
             {' · '}batch {batchLabel(preview.plan.previousPassoutYear)} → <strong>{batchLabel(preview.plan.newPassoutYear)}</strong>
@@ -192,7 +192,7 @@ export function StudentAcademicPanel({
       {record.drops.map((entry) => (
         <div
           key={entry.id}
-          style={{ fontSize: 12, padding: '6px 0', borderTop: '0.5px solid var(--border)', opacity: entry.undoneAt ? 0.6 : 1 }}
+          style={{ fontSize: 12, padding: '6px 0', borderTop: '1px solid var(--border)', opacity: entry.undoneAt ? 0.6 : 1 }}
         >
           <div>
             <strong>Drop</strong> {YEAR_LEVEL_LABELS[entry.previousLevel]} → {YEAR_LEVEL_LABELS[entry.newLevel]}

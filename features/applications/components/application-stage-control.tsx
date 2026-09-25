@@ -131,7 +131,7 @@ export function ApplicationStageControl({
   const selectStyle: React.CSSProperties = {
     padding: "4px 6px",
     fontSize: 12,
-    border: "0.5px solid var(--border-strong)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 8,
     background: "var(--surface)",
     color: "var(--text-primary)",

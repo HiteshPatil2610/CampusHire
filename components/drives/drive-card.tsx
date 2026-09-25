@@ -203,7 +203,7 @@ export function DriveCard({
               borderRadius: 'var(--radius-pill)',
               background: 'var(--surface-1)',
               color: 'var(--text-secondary)',
-              border: '0.5px solid var(--border)',
+              border: '1px solid var(--border)',
             }}
           >
             📍 {venueShort}
@@ -218,7 +218,7 @@ export function DriveCard({
             padding: '12px 14px',
             borderRadius: 8,
             background: 'var(--surface-1)',
-            border: '0.5px solid var(--border)',
+            border: '1px solid var(--border)',
             fontSize: 12,
             display: 'flex',
             flexDirection: 'column',
@@ -259,7 +259,7 @@ export function DriveCard({
           )}
 
           {hasLogistics && (
-            <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 10 }}>
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
               <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
                 Venue &amp; Logistics
               </div>
@@ -318,7 +318,7 @@ export function DriveCard({
           gap: 8,
           marginTop: 'auto',
           paddingTop: 10,
-          borderTop: '0.5px solid var(--border)',
+          borderTop: '1px solid var(--border)',
           flexWrap: 'wrap',
         }}
       >

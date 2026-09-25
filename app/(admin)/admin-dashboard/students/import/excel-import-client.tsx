@@ -231,7 +231,7 @@ export function ExcelImportClient({ departmentCode }: ExcelImportClientProps) {
       <div>
         <div className="card" style={{ padding: 32, textAlign: "center", marginBottom: 16 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
-          <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 500, letterSpacing: '-0.02em', marginBottom: 8 }}>
             {result.count} student{result.count === 1 ? "" : "s"} imported
           </h2>
           <p className="text-secondary" style={{ fontSize: 13, marginBottom: 20 }}>

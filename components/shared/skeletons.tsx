@@ -125,7 +125,7 @@ export function SkeletonTable({
               gridTemplateColumns: `repeat(${columns}, 1fr)`,
               gap: 12,
               padding: "10px 0",
-              borderTop: "0.5px solid var(--border)",
+              borderTop: "1px solid var(--border)",
             }}
           >
             {Array.from({ length: columns }, (_, c) => (

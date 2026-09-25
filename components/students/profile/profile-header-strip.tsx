@@ -66,7 +66,7 @@ export default function ProfileHeaderStrip({
 
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <h2 style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>
+            <h2 style={{ fontSize: 17, fontWeight: 500, letterSpacing: '-0.02em', margin: 0 }}>
               {student.name}
             </h2>
             <span className="badge badge-gray" style={{ fontSize: 11 }}>

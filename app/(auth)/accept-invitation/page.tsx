@@ -10,9 +10,9 @@ interface AcceptInvitationPageProps {
 }
 
 const appearance = {
-  variables: { borderRadius: '8px', colorPrimary: '#D2622A', colorBackground: '#FFFFFF' },
+  variables: { borderRadius: '8px', colorPrimary: '#002147', colorBackground: '#FFFFFF' },
   elements: {
-    card: { boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '0.5px solid var(--border)' },
+    card: { boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid var(--border)' },
     formButtonPrimary: { backgroundColor: 'var(--primary)', color: 'white', fontWeight: 500, borderRadius: '8px' },
   },
 };

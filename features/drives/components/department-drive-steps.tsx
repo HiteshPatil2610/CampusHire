@@ -147,7 +147,7 @@ export function PipelineReviewStep({
             maxLength={1000}
             placeholder="Why this change is needed (required — the Super Admin sees this)"
             onChange={(e) => setReason(e.target.value)}
-            style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "0.5px solid var(--border-strong)" }}
+            style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "1px solid var(--border-strong)" }}
           />
           <div style={{ display: "flex", gap: 8 }}>
             <button
@@ -225,9 +225,9 @@ export function StudentPreviewStep({ driveId, dirty }: { driveId: string; dirty:
       {!preview && !error && <div className="skeleton" style={{ height: 240, borderRadius: 8 }} />}
 
       {preview && (
-        <div style={{ display: "grid", gap: 16, padding: 16, borderRadius: 10, border: "0.5px solid var(--border)" }}>
+        <div style={{ display: "grid", gap: 16, padding: 16, borderRadius: 10, border: "1px solid var(--border)" }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 600 }}>{preview.roleName}</div>
+            <div style={{ fontSize: 18, fontWeight: 500, letterSpacing: '-0.02em' }}>{preview.roleName}</div>
             <div className="text-secondary" style={{ fontSize: 14 }}>
               {preview.companyName} · {preview.packageText}
             </div>

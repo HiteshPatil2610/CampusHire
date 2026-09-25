@@ -163,7 +163,7 @@ export function StudentRosterClient({
             maxWidth: 360,
             flex: 1,
             padding: '9px 12px',
-            border: '0.5px solid var(--border-strong)',
+            border: '1px solid var(--border-strong)',
             borderRadius: 8,
             fontSize: 13,
           }}

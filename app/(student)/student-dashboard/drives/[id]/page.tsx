@@ -57,7 +57,7 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
     return (
       <div style={{ padding: '60px 32px', textAlign: 'center' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 500, letterSpacing: '-0.02em', marginBottom: 8 }}>
           Academic Profile Incomplete
         </h2>
         <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20 }}>
@@ -474,7 +474,7 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
         >
           {drive.jobDescriptionText && (
             <div>
-              <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>
+              <h2 style={{ fontSize: 16, fontWeight: 500, letterSpacing: '-0.02em', margin: '0 0 8px' }}>
                 About the role
               </h2>
               <p
@@ -493,7 +493,7 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
 
           {drive.requirements && (
             <div>
-              <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>
+              <h2 style={{ fontSize: 16, fontWeight: 500, letterSpacing: '-0.02em', margin: '0 0 8px' }}>
                 Requirements
               </h2>
               <p
@@ -512,7 +512,7 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
 
           {skills.length > 0 && (
             <div>
-              <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>
+              <h2 style={{ fontSize: 16, fontWeight: 500, letterSpacing: '-0.02em', margin: '0 0 8px' }}>
                 Skills
               </h2>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

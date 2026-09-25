@@ -38,7 +38,7 @@ export function AnnouncementDetail({
           )}
         </div>
 
-        <h1 style={{ fontSize: 20, fontWeight: 600, margin: "10px 0 4px" }}>
+        <h1 style={{ fontSize: 20, fontWeight: 500, letterSpacing: '-0.02em', margin: "10px 0 4px" }}>
           {announcement.title}
         </h1>
         <div className="text-muted" style={{ fontSize: 12, marginBottom: 16 }}>

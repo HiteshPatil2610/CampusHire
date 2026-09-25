@@ -23,7 +23,7 @@ export default function DrivesError({
       }}
     >
       <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 500, letterSpacing: '-0.02em', marginBottom: 8 }}>
         Could not load drives
       </h2>
       <p

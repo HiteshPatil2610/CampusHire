@@ -147,7 +147,7 @@ export function ApplicationFormEditor({
     padding: "5px 8px",
     fontSize: 12,
     borderRadius: 6,
-    border: "0.5px solid var(--border-strong)",
+    border: "1px solid var(--border-strong)",
     background: "var(--surface-2)",
   };
 
@@ -272,7 +272,7 @@ export function ApplicationFormEditor({
                   flexWrap: "wrap",
                   padding: "8px 10px",
                   borderRadius: 8,
-                  border: "0.5px solid var(--border)",
+                  border: "1px solid var(--border)",
                   background: field.isEnabled ? "var(--surface-1)" : "var(--surface-2)",
                   opacity: field.isEnabled ? 1 : 0.6,
                 }}

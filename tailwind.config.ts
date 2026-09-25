@@ -51,7 +51,7 @@ const config: Config = {
         sm: "6px",
       },
       fontFamily: {
-        sans: ["Inter", "sans-serif"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
       },
     },
   },

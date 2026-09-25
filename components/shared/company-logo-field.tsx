@@ -78,7 +78,7 @@ export default function CompanyLogoField({
             style={{
               borderRadius: 8,
               objectFit: 'contain',
-              border: '0.5px solid var(--border)',
+              border: '1px solid var(--border)',
               background: 'var(--surface)',
             }}
           />

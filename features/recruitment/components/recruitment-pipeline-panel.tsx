@@ -165,7 +165,7 @@ export function RecruitmentPipelinePanel({
               maxLength={1000}
               placeholder="Why this change is needed (required — the Super Admin sees this)"
               onChange={(e) => setReason(e.target.value)}
-              style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "0.5px solid var(--border-strong)" }}
+              style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "1px solid var(--border-strong)" }}
             />
           )}
           <div style={{ display: "flex", gap: 8 }}>

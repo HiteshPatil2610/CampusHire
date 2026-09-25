@@ -240,7 +240,7 @@ export function AnnouncementComposer({
             width: "100%",
             padding: "8px 12px",
             borderRadius: 6,
-            border: "0.5px solid var(--border-strong)",
+            border: "1px solid var(--border-strong)",
             fontSize: 13,
           }}
         />

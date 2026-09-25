@@ -180,7 +180,7 @@ export function DriveLogisticsCard({
         style={{
           marginTop: 18,
           paddingTop: 12,
-          borderTop: "0.5px solid var(--border)",
+          borderTop: "1px solid var(--border)",
           fontSize: 12,
           color: "var(--text-secondary)",
         }}

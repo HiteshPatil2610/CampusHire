@@ -136,7 +136,7 @@ export function AdminDrivesView({
         style={{
           display: "flex",
           gap: 4,
-          borderBottom: "0.5px solid var(--border)",
+          borderBottom: "1px solid var(--border)",
           marginBottom: 20,
         }}
       >

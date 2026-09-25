@@ -190,7 +190,7 @@ export default async function SuperAdminDriveApplicationsPage({
                 style={{
                   padding: "12px 16px",
                   cursor: "pointer",
-                  border: "0.5px solid var(--border)",
+                  border: "1px solid var(--border)",
                 }}
               >
                 <div

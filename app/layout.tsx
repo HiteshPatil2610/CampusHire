@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Schibsted_Grotesk } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
-const inter = Inter({
+// Oxford design language typeface (ui-context.md §3).
+const schibsted = Schibsted_Grotesk({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
   variable: "--font-sans",
 });
 
@@ -31,7 +33,7 @@ export default function RootLayout({
   return (
     <ClerkProvider localization={clerkLocalization}>
       <html lang="en">
-        <body className={`${inter.variable} antialiased`}>
+        <body className={`${schibsted.variable} antialiased`}>
           {children}
           <Toaster />
         </body>

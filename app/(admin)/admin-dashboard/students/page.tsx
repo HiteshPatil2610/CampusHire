@@ -74,7 +74,7 @@ export default async function AdminStudentsPage({
         }}
       >
         <div>
-          <h1 className="page-title" style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>
+          <h1 className="page-title" style={{ fontSize: 24, fontWeight: 500, letterSpacing: '-0.02em', margin: 0 }}>
             {department.code} Department Students
           </h1>
           <p

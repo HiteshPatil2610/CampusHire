@@ -294,7 +294,7 @@ export function AdminApplicationFieldsPanel({
           background: "var(--surface-0)",
           padding: 12,
           borderRadius: 8,
-          border: "0.5px solid var(--border)",
+          border: "1px solid var(--border)",
         }}
       >
         <button
@@ -356,7 +356,7 @@ export function AdminApplicationFieldsPanel({
                 padding: "6px 10px",
                 fontSize: 12,
                 borderRadius: 6,
-                border: "0.5px solid var(--border-strong)",
+                border: "1px solid var(--border-strong)",
               }}
             />
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -403,7 +403,7 @@ export function AdminApplicationFieldsPanel({
                   onClick={() => handleAddField(item)}
                   style={{
                     padding: "8px 10px",
-                    border: "0.5px solid var(--border)",
+                    border: "1px solid var(--border)",
                     borderRadius: 6,
                     background: "var(--surface-0)",
                     cursor: "pointer",
@@ -558,7 +558,7 @@ export function AdminApplicationFieldsPanel({
                           borderRadius: 12,
                           background: "var(--surface-1)",
                           color: "var(--text-secondary)",
-                          border: "0.5px solid var(--border)",
+                          border: "1px solid var(--border)",
                         }}
                       >
                         {field.category || catalogItem?.category || "General"}

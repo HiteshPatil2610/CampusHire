@@ -117,7 +117,7 @@ const checkboxTile = (active: boolean, enabled = true): React.CSSProperties => (
   gap: 8,
   padding: "8px 12px",
   background: active ? "var(--accent-light)" : "var(--surface-1)",
-  border: "0.5px solid var(--border)",
+  border: "1px solid var(--border)",
   borderRadius: 6,
   cursor: enabled ? "pointer" : "not-allowed",
   opacity: enabled || active ? 1 : 0.5,
@@ -643,7 +643,7 @@ export function DriveForm({
                     justifyContent: "space-between",
                     padding: "8px 12px",
                     background: "var(--surface-1)",
-                    border: "0.5px solid var(--border)",
+                    border: "1px solid var(--border)",
                     borderRadius: 6,
                   }}
                 >

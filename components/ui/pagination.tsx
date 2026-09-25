@@ -48,7 +48,7 @@ export default function Pagination({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '12px 16px',
-        borderTop: '0.5px solid var(--border)',
+        borderTop: '1px solid var(--border)',
         fontSize: '13px',
       }}
     >
@@ -67,7 +67,7 @@ export default function Pagination({
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
               style={{
                 padding: '4px 8px',
-                border: '0.5px solid var(--border-strong)',
+                border: '1px solid var(--border-strong)',
                 borderRadius: 'var(--radius)',
                 fontSize: '12px',
                 background: 'var(--surface-2)',
@@ -88,7 +88,7 @@ export default function Pagination({
             disabled={page === 1}
             style={{
               padding: '6px',
-              border: '0.5px solid var(--border-strong)',
+              border: '1px solid var(--border-strong)',
               borderRadius: 'var(--radius)',
               background: 'var(--surface-2)',
               cursor: page === 1 ? 'not-allowed' : 'pointer',
@@ -127,7 +127,7 @@ export default function Pagination({
                 onClick={() => onPageChange(pageNum)}
                 style={{
                   padding: '6px 12px',
-                  border: '0.5px solid var(--border-strong)',
+                  border: '1px solid var(--border-strong)',
                   borderRadius: 'var(--radius)',
                   background: isActive ? 'var(--accent)' : 'var(--surface-2)',
                   color: isActive ? '#fff' : 'var(--text-primary)',
@@ -149,7 +149,7 @@ export default function Pagination({
             disabled={page === totalPages || totalCount === 0}
             style={{
               padding: '6px',
-              border: '0.5px solid var(--border-strong)',
+              border: '1px solid var(--border-strong)',
               borderRadius: 'var(--radius)',
               background: 'var(--surface-2)',
               cursor:

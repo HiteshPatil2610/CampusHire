@@ -349,7 +349,7 @@ function Row({ label, value }: { label: string; value: string }) {
         justifyContent: "space-between",
         gap: 12,
         padding: "8px 0",
-        borderBottom: "0.5px solid var(--border)",
+        borderBottom: "1px solid var(--border)",
         fontSize: 13,
       }}
     >

@@ -48,7 +48,7 @@ export function ActionRequiredPanel({
                   gap: 10,
                   alignItems: "flex-start",
                   padding: "10px 12px",
-                  border: "0.5px solid var(--border)",
+                  border: "1px solid var(--border)",
                   borderLeft:
                     item.priority === "URGENT" ? "3px solid var(--red)" : "3px solid transparent",
                   borderRadius: 8,

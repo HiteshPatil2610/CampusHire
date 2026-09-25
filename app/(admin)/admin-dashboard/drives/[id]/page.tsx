@@ -274,7 +274,7 @@ export default async function DriveWorkspacePage({ params, searchParams }: PageP
       <div
         role="tablist"
         aria-label="Drive workspace"
-        style={{ display: "flex", gap: 4, borderBottom: "0.5px solid var(--border)", marginBottom: 16, overflowX: "auto" }}
+        style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--border)", marginBottom: 16, overflowX: "auto" }}
       >
         {TABS.map((entry) => (
           <Link

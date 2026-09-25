@@ -111,7 +111,7 @@ export function DepartmentDriveLifecyclePanel({
       style={{
         marginTop: 16,
         padding: 14,
-        border: "0.5px solid var(--border)",
+        border: "1px solid var(--border)",
         borderRadius: 8,
         background: "var(--surface-1)",
       }}
@@ -190,7 +190,7 @@ export function DepartmentDriveLifecyclePanel({
             value={reason}
             placeholder="Why is this drive cancelled? Applicants are told this reason."
             onChange={(e) => setReason(e.target.value)}
-            style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "0.5px solid var(--border-strong)" }}
+            style={{ padding: "6px 8px", fontSize: 12, borderRadius: 6, border: "1px solid var(--border-strong)" }}
           />
           <div style={{ display: "flex", gap: 6 }}>
             <button
