@@ -15,6 +15,13 @@ const SLIDE_MS = 900;
 
 const stagger = (i: 1 | 2 | 3) => ({ "--i": i }) as CSSProperties;
 
+/**
+ * Hides Clerk's striped "Development mode" footer while we use a development
+ * instance — it is a banner for developers, not users, and a production
+ * instance never shows it.
+ */
+const CLERK_APPEARANCE = { layout: { unsafe_disableDevelopmentModeWarnings: true } };
+
 /** React 18 has no `inert` prop, so set the DOM property directly. */
 function useInert(ref: RefObject<HTMLElement | null>, inert: boolean) {
   useEffect(() => {
@@ -81,7 +88,7 @@ export function AuthShell() {
                 <h1 id="sign-in-title" className="auth-form__title">Sign In</h1>
                 <p className="auth-form__lede">Continue with your university account or email.</p>
               </div>
-              {showSignIn && <SignIn routing="hash" signUpUrl={PATH.up} />}
+              {showSignIn && <SignIn routing="hash" signUpUrl={PATH.up} appearance={CLERK_APPEARANCE} />}
             </div>
           </section>
 
@@ -92,7 +99,7 @@ export function AuthShell() {
                 <h1 id="sign-up-title" className="auth-form__title">Create Account</h1>
                 <p className="auth-form__lede">Register with Google or your email address.</p>
               </div>
-              {showSignUp && <SignUp routing="hash" signInUrl={PATH.in} />}
+              {showSignUp && <SignUp routing="hash" signInUrl={PATH.in} appearance={CLERK_APPEARANCE} />}
             </div>
           </section>
 

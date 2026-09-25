@@ -146,13 +146,13 @@
 
 .auth-shell .auth-form {
   width: 100%;
-  max-width: 340px;
+  max-width: 420px;
   margin: auto 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 18px;
+  gap: 22px;
 }
 
 .auth-shell .auth-form__head {
@@ -165,16 +165,16 @@
    own heading, so the designed heading only shows on the first step. */
 .auth-shell .auth-form:has(.cl-card):not(:has(.cl-signIn-start, .cl-signUp-start)) .auth-form__head { display: none; }
 
-.auth-shell .auth-form__eyebrow { font-size: 11px; font-style: italic; color: var(--ox-gold); }
+.auth-shell .auth-form__eyebrow { font-size: 13px; font-style: italic; color: var(--ox-gold); }
 .auth-shell .auth-form__title {
   margin: 0;
-  font-size: 36px;
+  font-size: 44px;
   font-weight: 500;
   letter-spacing: -.025em;
   line-height: 1.05;
   color: var(--ox-text-strong);
 }
-.auth-shell .auth-form__lede { margin: 0; font-size: 14px; color: var(--ox-text-muted); text-wrap: pretty; }
+.auth-shell .auth-form__lede { margin: 0; font-size: 16px; color: var(--ox-text-muted); text-wrap: pretty; }
 
 /* ---------- Clerk: layout reset ---------- */
 
@@ -191,25 +191,38 @@
 }
 .auth-shell .auth-form .cl-signIn-start .cl-header,
 .auth-shell .auth-form .cl-signUp-start .cl-header { display: none; }
-.auth-shell .auth-form .cl-headerTitle { font-size: 28px; font-weight: 500; letter-spacing: -.025em; color: var(--ox-text-strong); }
-.auth-shell .auth-form .cl-headerSubtitle { font-size: 14px; color: var(--ox-text-muted); }
-.auth-shell .auth-form .cl-main { gap: 18px; }
-.auth-shell .auth-form .cl-form { gap: 18px; }
-.auth-shell .auth-form .cl-formFieldRow { gap: 12px; }
+.auth-shell .auth-form .cl-headerTitle { font-size: 32px; font-weight: 500; letter-spacing: -.025em; color: var(--ox-text-strong); }
+.auth-shell .auth-form .cl-headerSubtitle { font-size: 15px; color: var(--ox-text-muted); }
+.auth-shell .auth-form .cl-main { gap: 20px; }
+.auth-shell .auth-form .cl-form { gap: 20px; }
+.auth-shell .auth-form .cl-formFieldRow { gap: 14px; }
+/* The small "Optional" note above First / Last name. */
+.auth-shell .auth-form .cl-formFieldHintText { font-size: 12px; color: var(--ox-text-faint); }
 
 /* Footer: the tile switches between the forms, so Clerk's own
    "Don't have an account?" link is only shown on narrow screens. */
 .auth-shell .auth-form .cl-footer { background: transparent; border: 0; box-shadow: none; padding: 0; margin: 0; }
 .auth-shell .auth-form .cl-footerAction { display: none; }
-.auth-shell .auth-form .cl-footerActionText { color: var(--ox-text-muted); font-size: 13px; }
-.auth-shell .auth-form .cl-footerActionLink { color: var(--ox-blue); font-weight: 600; font-size: 13px; }
+/* "Secured by Clerk": kept (Clerk's plan requires it) but quiet — small,
+   faded, and only full strength on hover. The pink "Development mode" strip
+   is turned off in AuthShell (unsafe_disableDevelopmentModeWarnings); a
+   production Clerk instance never shows it anyway. */
+.auth-shell .auth-form .cl-footer > div:not(.cl-footerAction) {
+  margin-top: 2px;
+  opacity: .45;
+  transform: scale(.92);
+  transition: opacity 200ms ease;
+}
+.auth-shell .auth-form .cl-footer > div:not(.cl-footerAction):hover { opacity: .8; }
+.auth-shell .auth-form .cl-footerActionText { color: var(--ox-text-muted); font-size: 14px; }
+.auth-shell .auth-form .cl-footerActionLink { color: var(--ox-blue); font-weight: 600; font-size: 14px; }
 
 /* ---------- Clerk: Google button (black with gold glow) ---------- */
 
 .auth-shell .auth-form .cl-socialButtons { width: 100%; }
 .auth-shell .auth-form .cl-socialButtonsBlockButton {
   width: 100%;
-  height: 52px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -236,14 +249,14 @@
 .auth-shell .auth-form .cl-socialButtonsBlockButton:focus-visible { outline: none; box-shadow: var(--ox-focus-ring), 0 6px 18px rgba(0, 0, 0, .18); }
 .auth-shell .auth-form .cl-socialButtonsBlockButton > span { gap: 12px; justify-content: center; }
 .auth-shell .auth-form .cl-socialButtonsBlockButtonText {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--ox-white);
   flex: 0 1 auto;
 }
 .auth-shell .auth-form .cl-socialButtonsProviderIcon {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   padding: 4px;
   border-radius: 999px;
   background: var(--ox-white);
@@ -252,11 +265,11 @@
 
 /* ---------- Clerk: divider ---------- */
 
-.auth-shell .auth-form .cl-dividerRow { width: 100%; gap: 12px; }
+.auth-shell .auth-form .cl-dividerRow { width: 100%; gap: 12px; margin: 6px 0 2px; }
 .auth-shell .auth-form .cl-dividerLine { height: 1px; background: var(--ox-hairline); }
 .auth-shell .auth-form .cl-dividerText {
   margin: 0;
-  font-size: 11px;
+  font-size: 13px;
   font-style: italic;
   text-transform: none;
   color: var(--ox-text-faint);
@@ -279,20 +292,20 @@
 .auth-shell .auth-form .cl-formFieldLabelRow:not(:has(.cl-formFieldAction)) { display: contents; }
 /* "Forgotten password?" sits centred under the password field. */
 .auth-shell .auth-form .cl-formField__password .cl-formFieldLabelRow { order: 2; justify-content: center; margin-top: 18px; }
-.auth-shell .auth-form .cl-formFieldAction { font-size: 13px; font-weight: 400; color: var(--ox-text-body); }
+.auth-shell .auth-form .cl-formFieldAction { font-size: 14px; font-weight: 400; color: var(--ox-text-body); }
 .auth-shell .auth-form .cl-formFieldAction:hover { color: var(--ox-gold); }
 
 .auth-shell .auth-form .cl-formFieldInput {
   width: 100%;
   height: auto;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 400;
   color: var(--ox-text-strong);
   background: var(--ox-white);
   border: 1px solid var(--ox-field-border);
-  border-radius: 8px;
-  padding: 11px 13px;
+  border-radius: 10px;
+  padding: 14px 16px;
   box-shadow: none;
   outline: none;
   transition: all 220ms cubic-bezier(.22, .61, .36, 1);
@@ -302,13 +315,13 @@
 .auth-shell .auth-form .cl-formFieldInput:focus,
 .auth-shell .auth-form .cl-formFieldInput:focus-visible { border-color: var(--ox-blue); box-shadow: var(--ox-focus-ring); }
 .auth-shell .auth-form .cl-formFieldInput[aria-invalid="true"] { border-color: var(--ox-danger); }
-.auth-shell .auth-form .cl-formFieldErrorText { font-size: 12px; color: var(--ox-danger); }
+.auth-shell .auth-form .cl-formFieldErrorText { font-size: 13px; color: var(--ox-danger); }
 
 /* ---------- Clerk: submit (Oxford blue with light blue glow) ---------- */
 
 .auth-shell .auth-form .cl-formButtonPrimary {
   width: 100%;
-  height: 52px;
+  height: 56px;
   margin-top: 0;
   border: 1px solid rgba(var(--ox-blue-glow), .5);
   border-radius: 999px;
@@ -319,7 +332,7 @@
   background-position: 50% 42%;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 6px 18px rgba(0, 0, 0, .18);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   text-transform: none;
   letter-spacing: normal;
@@ -371,7 +384,7 @@
   left: 28px;
   right: 28px;
   color: var(--ox-white);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 500;
   letter-spacing: -.03em;
 }
@@ -409,7 +422,7 @@
 
 .auth-shell .tile-copy__title {
   margin: 0;
-  font-size: 32px;
+  font-size: 40px;
   font-weight: 500;
   letter-spacing: -.025em;
   line-height: 1.1;
@@ -419,10 +432,10 @@
 }
 .auth-shell .tile-copy__text {
   margin: 0;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.5;
   color: rgba(255, 255, 255, .9);
-  max-width: 300px;
+  max-width: 360px;
 }
 
 /* White pill on the tile */
@@ -430,8 +443,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 220px;
-  height: 52px;
+  min-width: 240px;
+  height: 56px;
   padding: 0 36px;
   border: 1px solid var(--ox-white);
   border-radius: 999px;
@@ -442,7 +455,7 @@
   background-position: 50% 42%;
   box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -.01em;
   line-height: 1;
@@ -474,8 +487,10 @@
   }
   .auth-shell .auth-panel:not(.is-active) { display: none; }
   .auth-shell .auth-panel.is-active { position: relative; min-height: inherit; }
-  .auth-shell .auth-form .cl-footerAction { display: flex; justify-content: center; }
-  .auth-shell .auth-form__title { font-size: 30px; }
+  .auth-shell .auth-form .cl-footerAction { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; }
+  .auth-shell .auth-form .cl-footerActionText,
+  .auth-shell .auth-form .cl-footerActionLink { white-space: nowrap; }
+  .auth-shell .auth-form__title { font-size: 34px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
