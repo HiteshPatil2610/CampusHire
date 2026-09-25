@@ -4614,3 +4614,33 @@ never have worked even with `CLERK_WEBHOOK_SECRET` set. `/api/webhooks(.*)`
 is now a public route; the handler still rejects anything without a valid
 svix signature (400). Checked on the dev server: an unsigned POST now reaches
 the route ("Webhook secret not configured") instead of a 307 to /sign-in.
+
+### Sign in / sign up: sliding Oxford shell (replaces the static split shell)
+
+Rebuilt `/sign-in` and `/sign-up` from the Claude Design handoff so switching
+between them animates: the navy/gold tile slides across, the forms slide
+under it and swap while covered, and the tile copy staggers out and back in.
+
+- `app/(auth)/(split)/layout.tsx` renders `components/auth/auth-shell.tsx`,
+  which stays mounted across both routes; the pages only set metadata. The
+  routes moved into the `(split)` group (URLs unchanged) so
+  `/accept-invitation` keeps its own look.
+- Replaces `components/auth/auth-split-shell.tsx`, `clerk-appearance.ts` and
+  the `.auth-oxford-*` block in `app/globals.css`; styles now live in
+  `components/auth/auth-shell.css`, scoped under `.auth-shell`.
+- Clerk `<SignIn>`/`<SignUp>` still own every auth step. They use
+  `routing="hash"`, and the outgoing one unmounts after the 900ms slide so
+  the two never share the URL hash. Restyled through `cl-*` classes: glow
+  Google/submit pills, Oxford inputs, "Forgotten password?" under the
+  password field. Wording set in `ClerkProvider localization`.
+- Switching keeps `?redirect_url`. At 900px and below the tile is hidden and
+  Clerk's footer link switches forms (before, mobile had no way to switch).
+- Font is Schibsted Grotesk (`--font-auth`), auth routes only.
+- `ui-context.md` §4.3 rewritten to match.
+
+Verified: tsc, lint, 1377 unit tests, `next build`; in a browser, the slide,
+the stagger, white tile headings, `?redirect_url` kept, the hidden form made
+inert, no horizontal scroll at 390px, and `/accept-invitation` unaffected.
+**Not yet checked against a real Clerk instance** (no keys in the build
+environment): confirm the restyled Clerk forms, that Google is enabled, and
+that Google OAuth completes with hash routing (`/sign-in#/sso-callback`).

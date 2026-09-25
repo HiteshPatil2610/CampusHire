@@ -1,0 +1,487 @@
+/*
+ * Auth shell — Sign In / Sign Up screen (Oxford design, see ui-context.md §4.3).
+ * Everything is scoped under .auth-shell so the Oxford palette never leaks
+ * into the rest of the app. Clerk's elements are targeted via their stable
+ * `cl-*` class names; two-class selectors outrank Clerk's own styles.
+ */
+
+@property --auth-sweep { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes auth-bezel-sweep { to { --auth-sweep: 360deg; } }
+
+.auth-shell {
+  /* Oxford palette */
+  --ox-blue: #002147;
+  --ox-blue-hover: #012C5E;
+  --ox-blue-deep: #001532;
+  --ox-blue-mid: #0A2E5C;
+  --ox-blue-glow: 84, 140, 214;
+  --ox-blue-bright: #548CD6;
+  --ox-blue-halo: 38, 92, 160;
+  --ox-gold: #C39A67;
+  --ox-gold-rgb: 195, 154, 103;
+  --ox-gold-light: #E2C394;
+  --ox-black: #000000;
+  --ox-ink: #0F0F0F;
+  --ox-ink-hover: #141414;
+  --ox-bezel: #0A0A0A;
+  --ox-white: #FFFFFF;
+  --ox-grid: #EDEDED;
+  --ox-hairline: #E6E6E6;
+  --ox-field-border: #E2E2E2;
+  --ox-text-strong: #000000;
+  --ox-text-body: #4A4A4A;
+  --ox-text-muted: #8C8C8C;
+  --ox-text-faint: #A6A6A6;
+  --ox-danger: #A32D2D;
+  --ox-focus-ring: 0 0 0 3px rgba(0, 33, 71, .22);
+
+  /* Motion */
+  --auth-slide: 800ms cubic-bezier(.65, 0, .35, 1);
+  --auth-copy-ease: cubic-bezier(.2, .8, .2, 1);
+  --auth-btn-ease: cubic-bezier(.2, .7, .2, 1);
+  --auth-btn-transition:
+    background-position 600ms var(--auth-btn-ease),
+    background-color 400ms ease,
+    transform 400ms var(--auth-btn-ease),
+    box-shadow 500ms ease,
+    border-color 400ms ease;
+
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8px;
+  background-color: var(--ox-black);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .035) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: center;
+  font-family: var(--font-auth), "Helvetica Neue", Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ox-text-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Bezel + card ---------- */
+
+.auth-shell .auth-bezel {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 16px);
+  min-height: 560px;
+  padding: 2px;
+  border-radius: 22px;
+  overflow: hidden;
+  background: var(--ox-bezel);
+  box-shadow: inset 0 0 0 1px rgba(var(--ox-gold-rgb), .35), 0 0 0 1px rgba(var(--ox-gold-rgb), .12);
+}
+
+.auth-shell .auth-bezel__sweep {
+  position: absolute;
+  inset: -50%;
+  z-index: 0;
+  pointer-events: none;
+  background: conic-gradient(from var(--auth-sweep),
+    transparent 0deg, transparent 290deg,
+    rgba(var(--ox-gold-rgb), .25) 320deg, var(--ox-gold-light) 345deg,
+    rgba(var(--ox-gold-rgb), .25) 355deg, transparent 360deg);
+  animation: auth-bezel-sweep 8s linear infinite;
+}
+
+.auth-shell .auth-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 536px;
+  background: var(--ox-white);
+  border-radius: 20px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .6);
+  overflow: hidden;
+}
+
+.auth-shell .auth-card__inset {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 5;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08), inset 0 2px 6px rgba(0, 0, 0, .08);
+}
+
+.auth-shell .auth-card__grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  pointer-events: none;
+}
+.auth-shell .auth-card__grid > span { border-right: 1px solid var(--ox-grid); }
+.auth-shell .auth-card__grid > span:last-child { border-right: 0; }
+
+/* ---------- Form panels ---------- */
+
+/* Both panels start on the left half. Switching slides them across under
+   the tile; the opacity swap happens while they're covered. */
+.auth-shell .auth-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 56px;
+  overflow-y: auto;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(0%);
+  transition: transform var(--auth-slide), opacity 120ms linear 340ms;
+}
+.auth-shell .auth-panel.is-active { opacity: 1; pointer-events: auto; }
+.auth-shell .auth-card[data-mode="up"] .auth-panel { transform: translateX(100%); }
+
+.auth-shell .auth-form {
+  width: 100%;
+  max-width: 340px;
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+}
+
+.auth-shell .auth-form__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+/* Clerk's later steps (verify email, factor two, reset password) bring their
+   own heading, so the designed heading only shows on the first step. */
+.auth-shell .auth-form:has(.cl-card):not(:has(.cl-signIn-start, .cl-signUp-start)) .auth-form__head { display: none; }
+
+.auth-shell .auth-form__eyebrow { font-size: 11px; font-style: italic; color: var(--ox-gold); }
+.auth-shell .auth-form__title {
+  margin: 0;
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: -.025em;
+  line-height: 1.05;
+  color: var(--ox-text-strong);
+}
+.auth-shell .auth-form__lede { margin: 0; font-size: 14px; color: var(--ox-text-muted); text-wrap: pretty; }
+
+/* ---------- Clerk: layout reset ---------- */
+
+.auth-shell .auth-form .cl-rootBox,
+.auth-shell .auth-form .cl-cardBox { width: 100%; max-width: none; box-shadow: none; border: 0; border-radius: 0; background: transparent; overflow: visible; }
+.auth-shell .auth-form .cl-card {
+  width: 100%;
+  padding: 0;
+  gap: 18px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.auth-shell .auth-form .cl-signIn-start .cl-header,
+.auth-shell .auth-form .cl-signUp-start .cl-header { display: none; }
+.auth-shell .auth-form .cl-headerTitle { font-size: 28px; font-weight: 500; letter-spacing: -.025em; color: var(--ox-text-strong); }
+.auth-shell .auth-form .cl-headerSubtitle { font-size: 14px; color: var(--ox-text-muted); }
+.auth-shell .auth-form .cl-main { gap: 18px; }
+.auth-shell .auth-form .cl-form { gap: 18px; }
+.auth-shell .auth-form .cl-formFieldRow { gap: 12px; }
+
+/* Footer: the tile switches between the forms, so Clerk's own
+   "Don't have an account?" link is only shown on narrow screens. */
+.auth-shell .auth-form .cl-footer { background: transparent; border: 0; box-shadow: none; padding: 0; margin: 0; }
+.auth-shell .auth-form .cl-footerAction { display: none; }
+.auth-shell .auth-form .cl-footerActionText { color: var(--ox-text-muted); font-size: 13px; }
+.auth-shell .auth-form .cl-footerActionLink { color: var(--ox-blue); font-weight: 600; font-size: 13px; }
+
+/* ---------- Clerk: Google button (black with gold glow) ---------- */
+
+.auth-shell .auth-form .cl-socialButtons { width: 100%; }
+.auth-shell .auth-form .cl-socialButtonsBlockButton {
+  width: 100%;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+  border: 1px solid rgba(var(--ox-gold-rgb), .5);
+  border-radius: 999px;
+  background-color: var(--ox-ink);
+  background-image: radial-gradient(45% 40% at 50% 0%, rgba(var(--ox-gold-rgb), .85) 0%, rgba(0, 0, 0, 0) 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 200%;
+  background-position: 50% 42%;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 6px 18px rgba(0, 0, 0, .18);
+  color: var(--ox-white);
+  transition: var(--auth-btn-transition);
+}
+.auth-shell .auth-form .cl-socialButtonsBlockButton:hover {
+  border-color: var(--ox-gold);
+  background-color: var(--ox-ink-hover);
+  background-position: 50% 12%;
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 10px 26px rgba(var(--ox-gold-rgb), .3);
+}
+.auth-shell .auth-form .cl-socialButtonsBlockButton:active { transform: scale(.985); }
+.auth-shell .auth-form .cl-socialButtonsBlockButton:focus-visible { outline: none; box-shadow: var(--ox-focus-ring), 0 6px 18px rgba(0, 0, 0, .18); }
+.auth-shell .auth-form .cl-socialButtonsBlockButton > span { gap: 12px; justify-content: center; }
+.auth-shell .auth-form .cl-socialButtonsBlockButtonText {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ox-white);
+  flex: 0 1 auto;
+}
+.auth-shell .auth-form .cl-socialButtonsProviderIcon {
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--ox-white);
+  box-sizing: border-box;
+}
+
+/* ---------- Clerk: divider ---------- */
+
+.auth-shell .auth-form .cl-dividerRow { width: 100%; gap: 12px; }
+.auth-shell .auth-form .cl-dividerLine { height: 1px; background: var(--ox-hairline); }
+.auth-shell .auth-form .cl-dividerText {
+  margin: 0;
+  font-size: 11px;
+  font-style: italic;
+  text-transform: none;
+  color: var(--ox-text-faint);
+}
+
+/* ---------- Clerk: fields (Oxford Input) ---------- */
+
+/* Labels stay in the DOM for screen readers; the design uses placeholders. */
+.auth-shell .auth-form .cl-formFieldLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.auth-shell .auth-form .cl-formField { text-align: left; }
+.auth-shell .auth-form .cl-formFieldLabelRow { min-height: 0; margin: 0; }
+.auth-shell .auth-form .cl-formFieldLabelRow:not(:has(.cl-formFieldAction)) { display: contents; }
+/* "Forgotten password?" sits centred under the password field. */
+.auth-shell .auth-form .cl-formField__password .cl-formFieldLabelRow { order: 2; justify-content: center; margin-top: 18px; }
+.auth-shell .auth-form .cl-formFieldAction { font-size: 13px; font-weight: 400; color: var(--ox-text-body); }
+.auth-shell .auth-form .cl-formFieldAction:hover { color: var(--ox-gold); }
+
+.auth-shell .auth-form .cl-formFieldInput {
+  width: 100%;
+  height: auto;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ox-text-strong);
+  background: var(--ox-white);
+  border: 1px solid var(--ox-field-border);
+  border-radius: 8px;
+  padding: 11px 13px;
+  box-shadow: none;
+  outline: none;
+  transition: all 220ms cubic-bezier(.22, .61, .36, 1);
+}
+.auth-shell .auth-form .cl-formFieldInput::placeholder { color: var(--ox-text-faint); }
+.auth-shell .auth-form .cl-formFieldInput:hover { border-color: var(--ox-field-border); box-shadow: none; }
+.auth-shell .auth-form .cl-formFieldInput:focus,
+.auth-shell .auth-form .cl-formFieldInput:focus-visible { border-color: var(--ox-blue); box-shadow: var(--ox-focus-ring); }
+.auth-shell .auth-form .cl-formFieldInput[aria-invalid="true"] { border-color: var(--ox-danger); }
+.auth-shell .auth-form .cl-formFieldErrorText { font-size: 12px; color: var(--ox-danger); }
+
+/* ---------- Clerk: submit (Oxford blue with light blue glow) ---------- */
+
+.auth-shell .auth-form .cl-formButtonPrimary {
+  width: 100%;
+  height: 52px;
+  margin-top: 0;
+  border: 1px solid rgba(var(--ox-blue-glow), .5);
+  border-radius: 999px;
+  background-color: var(--ox-blue);
+  background-image: radial-gradient(45% 40% at 50% 0%, rgba(var(--ox-blue-glow), .85) 0%, rgba(0, 0, 0, 0) 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 200%;
+  background-position: 50% 42%;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 6px 18px rgba(0, 0, 0, .18);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--ox-white);
+  transition: var(--auth-btn-transition);
+}
+.auth-shell .auth-form .cl-formButtonPrimary::after { display: none; }
+.auth-shell .auth-form .cl-formButtonPrimary:hover {
+  border-color: var(--ox-blue-bright);
+  background-color: var(--ox-blue-hover);
+  background-position: 50% 12%;
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 10px 26px rgba(var(--ox-blue-glow), .3);
+}
+.auth-shell .auth-form .cl-formButtonPrimary:active { transform: scale(.985); }
+.auth-shell .auth-form .cl-formButtonPrimary:focus-visible { outline: none; box-shadow: var(--ox-focus-ring), 0 6px 18px rgba(0, 0, 0, .18); }
+.auth-shell .auth-form .cl-buttonArrowIcon { display: none; }
+
+/* ---------- Sliding tile ---------- */
+
+.auth-shell .auth-tile {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 50%;
+  height: 100%;
+  padding: 10px;
+  z-index: 2;
+  transform: translateX(0%);
+  transition: transform var(--auth-slide);
+}
+.auth-shell .auth-card[data-mode="up"] .auth-tile { transform: translateX(-100%); }
+
+.auth-shell .auth-tile__surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    radial-gradient(90% 70% at 100% 100%, rgba(var(--ox-gold-rgb), .85) 0%, rgba(var(--ox-gold-rgb), 0) 60%),
+    radial-gradient(70% 60% at 0% 0%, rgba(var(--ox-blue-halo), .7) 0%, rgba(var(--ox-blue-halo), 0) 60%),
+    linear-gradient(160deg, var(--ox-blue-deep) 0%, var(--ox-blue) 55%, var(--ox-blue-mid) 100%);
+}
+
+.auth-shell .auth-tile__brand {
+  position: absolute;
+  top: 24px;
+  left: 28px;
+  right: 28px;
+  color: var(--ox-white);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -.03em;
+}
+
+.auth-shell .tile-copy {
+  position: absolute;
+  inset: 0;
+  padding: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--ox-white);
+  pointer-events: none;
+}
+.auth-shell .tile-copy.is-active { pointer-events: auto; }
+
+/* Staggered copy: items drop out quickly (last first), then rise in one
+   after another as the tile finishes its slide. --i is 1, 2 or 3. */
+.auth-shell .tile-copy__item {
+  opacity: 0;
+  transform: translateY(calc(var(--i) * 10px + 14px));
+  --d: calc((3 - var(--i)) * 40ms);
+  transition:
+    opacity 380ms ease var(--d),
+    transform 700ms var(--auth-copy-ease) var(--d);
+}
+.auth-shell .tile-copy.is-active .tile-copy__item {
+  opacity: 1;
+  transform: translateY(0);
+  --d: calc(380ms + var(--i) * 90ms);
+}
+
+.auth-shell .tile-copy__title {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -.025em;
+  line-height: 1.1;
+  text-wrap: pretty;
+  /* Set explicitly: the global h1–h6 colour rule would otherwise win over inheritance. */
+  color: var(--ox-white);
+}
+.auth-shell .tile-copy__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, .9);
+  max-width: 300px;
+}
+
+/* White pill on the tile */
+.auth-shell .tile-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 220px;
+  height: 52px;
+  padding: 0 36px;
+  border: 1px solid var(--ox-white);
+  border-radius: 999px;
+  background-color: var(--ox-white);
+  background-image: radial-gradient(45% 40% at 50% 0%, rgba(var(--ox-blue-glow), .35) 0%, rgba(var(--ox-blue-glow), 0) 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 200%;
+  background-position: 50% 42%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--ox-blue);
+  cursor: pointer;
+  transition: var(--auth-btn-transition);
+}
+.auth-shell .tile-btn:hover {
+  background-position: 50% 12%;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .35);
+}
+.auth-shell .tile-btn:active { transform: scale(.985); }
+.auth-shell .tile-btn:focus-visible { outline: 2px solid var(--ox-white); outline-offset: 3px; }
+
+/* ---------- Narrow screens: no tile, Clerk's footer link switches ---------- */
+
+@media (max-width: 900px) {
+  .auth-shell .auth-bezel { height: auto; min-height: calc(100vh - 16px); }
+  .auth-shell .auth-card { height: auto; min-height: calc(100vh - 20px); }
+  .auth-shell .auth-card__grid { grid-template-columns: repeat(3, 1fr); }
+  .auth-shell .auth-tile { display: none; }
+  .auth-shell .auth-panel {
+    width: 100%;
+    padding: 40px 20px;
+    transform: none !important;
+    transition: none;
+  }
+  .auth-shell .auth-panel:not(.is-active) { display: none; }
+  .auth-shell .auth-panel.is-active { position: relative; min-height: inherit; }
+  .auth-shell .auth-form .cl-footerAction { display: flex; justify-content: center; }
+  .auth-shell .auth-form__title { font-size: 30px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-shell { --auth-slide: 1ms linear; }
+  .auth-shell .auth-bezel__sweep { animation: none; }
+  .auth-shell .auth-panel { transition: transform 1ms, opacity 1ms; }
+  .auth-shell .tile-copy__item,
+  .auth-shell .tile-copy.is-active .tile-copy__item { transition-duration: 1ms; --d: 0ms; }
+}

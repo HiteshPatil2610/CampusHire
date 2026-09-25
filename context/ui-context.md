@@ -271,31 +271,46 @@ All typography uses **Inter** (`font-family: 'Inter', system-ui, -apple-system, 
 > **Scope:** `/sign-in` and `/sign-up` only. This is a deliberate second
 > visual language, not a replacement for §1–3's terracotta/parchment system —
 > confirmed with the user when it was introduced. It never bleeds into the
-> rest of the app because every rule is scoped under `.auth-oxford-page`.
+> rest of the app because every rule is scoped under `.auth-shell`
+> (`components/auth/auth-shell.css`). `/accept-invitation` keeps the app theme.
 
-- **Structure:** `components/auth/auth-split-shell.tsx` renders a full-viewport
-  dark chassis: a hairline-gridded, gold-bezelled outer frame (`conic-gradient`
-  sweep animation, disabled under `prefers-reduced-motion`) around a white
-  rounded card split 50/50 into a form panel and a navy info tile. `mode`
-  ("sign-in" | "sign-up") flips which side the tile sits on via CSS `order`,
-  so sign-up mirrors sign-in instead of needing separate markup.
-- **Auth logic stays Clerk's.** The form panel renders Clerk's own
-  `<SignIn>`/`<SignUp>` restyled through `getAuthOxfordAppearance()`
-  (`components/auth/clerk-appearance.ts`) — Clerk's header/footer are hidden
-  (the shell supplies its own heading; the tile's CTA supplies the
-  sign-in/sign-up cross-link) but Clerk still owns credentials, OAuth, OTP
-  and session. No custom password form was built here — see
-  `architecture.md`'s "session and identity always come from Clerk"
-  invariant.
-- **Local palette** (CSS custom properties on `.auth-oxford-page`, not the
-  app-wide tokens): `--gold` `#C39A67`, `--gold-deep` `#8A6A35`, `--navy`
-  `#002147`, `--navy-hover` `#012C5E`, dark ink `#0A0A0A`/`#0F0F0F` surfaces,
-  white `#FFFFFF` card.
-- **Tile CTA:** solid white pill button (`--radius-pill`), navy text, linking
-  to the other auth route (`/sign-up` from sign-in and vice versa).
-- **Responsive:** below `860px` the tile panel is hidden entirely and the
-  form panel goes full width — there is no mobile equivalent of the tile
-  copy/CTA; the two routes' own links serve that purpose on mobile.
+- **Structure:** `app/(auth)/(split)/layout.tsx` renders
+  `components/auth/auth-shell.tsx`, which stays mounted across `/sign-in` ↔
+  `/sign-up` (the pages only set metadata), so switching animates instead of
+  reloading. Full-viewport black page with a faint 48px grid; 2px bezel
+  (`#0A0A0A`, gold hairline) with a slow gold conic light sweep (8s loop);
+  white card (20px radius) with a 6-column hairline grid; two form panels and
+  a navy→gold gradient tile covering the other half.
+- **Motion:** the tile and both form panels slide 800ms
+  `cubic-bezier(.65,0,.35,1)`; the forms swap opacity at 340ms while covered by
+  the tile; the tile copy staggers out (0/40/80ms) and back in
+  (470/560/650ms). `prefers-reduced-motion` disables the slide and sweep.
+- **Auth logic stays Clerk's.** Each panel renders Clerk's own
+  `<SignIn>`/`<SignUp>` with `routing="hash"`; the outgoing form unmounts
+  after the 900ms slide so the two never share the URL hash mid-flow (email
+  code, reset password). Clerk still owns credentials, OAuth, OTP and session
+  — see `architecture.md`'s "session and identity always come from Clerk"
+  invariant. Switching keeps `?redirect_url`.
+- **Clerk styling:** via Clerk's stable `cl-*` classes in `auth-shell.css`
+  (not `appearance`). Google button = black pill with gold glow; submit =
+  Oxford-blue pill with light-blue glow (52px, 999px radius); hover slides the
+  glow down and lifts the button 2px. Inputs = 8px radius, `#E2E2E2` border,
+  blue focus ring. Labels are visually hidden (placeholders shown);
+  "Forgotten password?" sits centred under the password field. Clerk's header
+  is hidden on the first step only (the shell supplies the heading); later
+  steps keep Clerk's heading and hide the shell's. Wording overrides are in
+  `ClerkProvider localization` (`app/layout.tsx`).
+- **Local palette** (`--ox-*` custom properties on `.auth-shell`, not the
+  app-wide tokens): Oxford blue `#002147` / hover `#012C5E`, gold `#C39A67`,
+  ink `#0F0F0F`, bezel `#0A0A0A`, white card, neutrals `#E6E6E6`–`#8C8C8C`.
+  Headings set their colour explicitly because the global h1–h6 rule beats
+  inheritance.
+- **Font:** Schibsted Grotesk via `next/font` (`--font-auth`), auth routes only.
+- **Tile CTA:** white pill button (min 220×52px), navy 600 text, switching to
+  the other auth route.
+- **Responsive:** at `900px` and below the tile is hidden, a single form goes
+  full width, and Clerk's footer link ("Don't have an account? Sign up")
+  switches between the two routes.
 
 ### 4.4 Public Landing Feature Cards (`.icon-tile`)
 - **Style:**
