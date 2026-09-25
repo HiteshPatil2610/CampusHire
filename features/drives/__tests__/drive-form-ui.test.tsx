@@ -108,7 +108,7 @@ describe("one form, role-specific fields only", () => {
     expect(html).toContain("Department Edit Permissions");
     expect(html).toContain("Create &amp; Assign Drive");
     expect(html).not.toContain("Selection Rounds");
-    expect(html).not.toContain("Department Logistics");
+    expect(html).not.toContain("Drive Day Logistics");
   });
 
   it("locks a department admin to their own department, with no way to pick another", () => {
@@ -129,10 +129,35 @@ describe("one form, role-specific fields only", () => {
     const html = render(departmentScope);
 
     expect(html).toContain("Selection Rounds");
-    expect(html).toContain("Department Logistics");
+    expect(html).toContain("Drive Day Logistics");
     expect(html).toContain("Post Drive");
     expect(html).not.toContain("Recruitment Stages");
     expect(html).not.toContain("Department Edit Permissions");
+  });
+
+  it("the Drive Day Logistics card has all 8 fields, grouped, none marked required (Item 13)", () => {
+    const html = render(departmentScope);
+
+    for (const field of [
+      "venue",
+      "reportingTime",
+      "seatingAllocation",
+      "coordinatorName",
+      "coordinatorPhone",
+      "coordinatorEmail",
+      "pptLink",
+      "specialInstructions",
+    ]) {
+      expect(html).toContain(`id="df-logistics-${field}"`);
+    }
+    for (const group of ["Where &amp; when", "Who to contact", "Before the drive"]) {
+      expect(html).toContain(group);
+    }
+    // The instructions box is a real, editable textarea now (it used to be
+    // wired to nothing, so typing did nothing).
+    expect(html).toMatch(/<textarea[^>]*id="df-logistics-specialInstructions"/);
+    // Optional everywhere: no field in the card carries a required marker.
+    expect(html).not.toMatch(/<label for="df-logistics-[^"]+">[^<]*\*/);
   });
 });
 
@@ -164,6 +189,41 @@ describe("the request each role's form sends", () => {
     expect(input).not.toHaveProperty("recruitmentStages");
     expect(input).toMatchObject({ selectionRounds: ["Aptitude"], venue: "Hall A" });
     expect(checkDriveForm(filled, "DEPARTMENT_ADMIN", { startNotBeforeToday: true, ownDepartmentId: CS.id }).ok).toBe(true);
+  });
+
+  it("a department admin's request carries every logistics field, instructions included", () => {
+    const input = toDriveFormInput(
+      {
+        ...filled,
+        contactPerson: "Prof. Rao",
+        coordinatorEmail: "cse.placement@college.edu",
+        seatingAllocation: "Hall B-201",
+        specialInstructions: "Carry college ID",
+      },
+      "DEPARTMENT_ADMIN"
+    );
+    expect(input).toMatchObject({
+      contactPerson: "Prof. Rao",
+      coordinatorEmail: "cse.placement@college.edu",
+      seatingAllocation: "Hall B-201",
+      specialInstructions: "Carry college ID",
+    });
+  });
+
+  it("refuses a malformed coordinator email, like the central-drive card does", () => {
+    const check = checkDriveForm({ ...filled, coordinatorEmail: "not-an-email" }, "DEPARTMENT_ADMIN", {
+      startNotBeforeToday: true,
+      ownDepartmentId: CS.id,
+    });
+    expect(check.ok).toBe(false);
+    if (!check.ok) expect(check.fieldErrors.coordinatorEmail).toBe("Invalid coordinator email");
+  });
+
+  it("a Super Admin's request carries no logistics — each department sets its own", () => {
+    const input = toDriveFormInput({ ...filled, specialInstructions: "x", coordinatorEmail: "a@b.co" }, "SUPER_ADMIN");
+    expect(input).not.toHaveProperty("specialInstructions");
+    expect(input).not.toHaveProperty("coordinatorEmail");
+    expect(input).not.toHaveProperty("venue");
   });
 
   it("a Super Admin's request carries the department scope, and no department-only fields", () => {

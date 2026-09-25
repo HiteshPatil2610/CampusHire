@@ -4568,3 +4568,49 @@ Prisma filter per `PlacementState`, mirroring `resolvePlacementState`'s
 precedence); the Super Admin directory and the department roster's status
 buttons both use it, so every student matches exactly one filter — the one
 their badge shows.
+
+---
+
+## Item 13 — Drive Day Logistics card
+
+Owner's decisions: one card for both entry points, all 8 fields in both,
+everything optional (including removing the central-drive publish gate on
+venue / reporting time), three grouped sections, titled "Drive Day Logistics".
+
+Found while tracing the old cards: on a department's own drive the
+"Special Instructions" textarea was wired to nothing (not in the form values,
+the schema or the `Drive` table), so typing in it did nothing; and the two
+copies had different fields and names. The student drive page also never
+showed seating, instructions or email — even values departments had entered
+on central drives.
+
+- Migration `20261003000000_drive_logistics_fields`: `Drive.coordinatorEmail`,
+  `seatingAllocation`, `specialInstructions` (nullable, additive). Applied and
+  tested on the integration-tests branch; **not yet on production**.
+- `features/drives/components/drive-logistics-card.tsx` replaces
+  `AdminDriveLogisticsPanel` and the inline card in
+  `DepartmentDriveConfigPanel`. "Where & when / Who to contact / Before the
+  drive" plus a live "Students will see" line.
+- Drive form: schema, values, request and write-data carry the 3 new fields
+  (coordinator email validated like the instance's); new drives prefill email
+  and instructions from department settings, which already stored them.
+- `resolveDepartmentDrive`: seating / instructions / email now fall back to
+  the drive's own value when the instance has none (before, they were forced
+  to null — which would have wiped a department drive's values).
+- Readiness no longer requires venue and reporting time to publish.
+- Student drive page shows seating, email (mailto) and instructions.
+- `.badge-teal` was used in 12 places and never defined (uncoloured
+  badges); now an alias of `.badge-green`.
+
+Verified: tsc, lint, 1377 unit tests, 27 integration tests (including the new
+columns round-tripping on real Postgres), and the card rendered with the
+app's real CSS in empty / filled / error states.
+
+### Clerk webhook was unreachable (found while writing the setup guide)
+
+`middleware.ts` redirected every request without a session to /sign-in —
+including Clerk's own POSTs to `/api/webhooks/clerk`, so the webhook could
+never have worked even with `CLERK_WEBHOOK_SECRET` set. `/api/webhooks(.*)`
+is now a public route; the handler still rejects anything without a valid
+svix signature (400). Checked on the dev server: an unsigned POST now reaches
+the route ("Webhook secret not configured") instead of a 307 to /sign-in.

@@ -20,6 +20,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { prisma } from "@/lib/prisma";
 import { createWorld, type World } from "./fixtures";
 import { rejectSkill } from "@/features/skills/actions/review-skill";
+import { resolveDepartmentDrive } from "@/features/drives/domain/resolve-department-drive";
 
 let world: World;
 
@@ -69,6 +70,25 @@ describe("drive origin (Item 16)", () => {
         applicationDeadline: new Date(now - 86_400_000),
       })
     ).rejects.toThrow(/Drive_application_window_order/);
+  });
+});
+
+describe("Drive Day Logistics (Item 13, migration 20261003)", () => {
+  it("a department's own drive stores seating, instructions and email, and the resolver keeps them", async () => {
+    const drive = await world.openDrive({
+      seatingAllocation: "Hall B-201 (Roll 1–75)",
+      specialInstructions: "Carry college ID.\nFormal dress.",
+      coordinatorEmail: "cse.placement@college.edu",
+    });
+
+    const stored = await prisma.drive.findUniqueOrThrow({ where: { id: drive.id } });
+    const resolved = resolveDepartmentDrive(stored, null);
+
+    expect(resolved).toMatchObject({
+      seatingAllocation: "Hall B-201 (Roll 1–75)",
+      specialInstructions: "Carry college ID.\nFormal dress.",
+      coordinatorEmail: "cse.placement@college.edu",
+    });
   });
 });
 

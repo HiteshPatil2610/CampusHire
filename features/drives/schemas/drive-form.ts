@@ -114,11 +114,22 @@ export const driveFormObject = z
     externalApplyUrl: optionalUrl("Invalid external application URL"),
     pptLink: optionalUrl("Invalid pre-placement talk URL"),
 
-    // Logistics (department drives; each department sets its own for a central one)
+    // Logistics (department drives; each department sets its own for a central
+    // one). All optional — Item 13. Same limits as a department's instance
+    // (`driveDepartmentConfigSchema`), so both cards accept the same values.
     venue: venueField,
     reportingTime: reportingTimeField,
     contactPerson: contactPersonField,
     contactPhone: contactPhoneField,
+    coordinatorEmail: z
+      .string()
+      .trim()
+      .email("Invalid coordinator email")
+      .max(200, "Email too long")
+      .optional()
+      .or(z.literal("")),
+    seatingAllocation: optionalText(1000, "Seating breakdown too long"),
+    specialInstructions: optionalText(2000, "Instructions too long"),
 
     // ── Scope-specific; which role may send each is `checkDriveFormForRole` ──
     /** Super Admin only. Omitted means All departments. */

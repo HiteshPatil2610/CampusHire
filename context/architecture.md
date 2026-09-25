@@ -149,7 +149,14 @@ code does not require remembering that "config" means "instance".
   department is still central. Central Drive Processing (a department
   configuring its instance, `DepartmentDriveConfigPanel`) keeps its
   inherit/override model and shares the date helpers, batch picker and rules
-  engine; its "Department Logistics" card is Item 13's, awaiting a spec.
+  engine — and the **Drive Day Logistics** card (Item 13,
+  `features/drives/components/drive-logistics-card.tsx`), the one logistics
+  card both entry points render. Eight fields, all optional everywhere (no
+  publish gate): venue, reporting time, seating, coordinator name / phone /
+  email, PPT link, instructions. A department's own drive stores them on
+  `Drive` (`contactPerson`/`contactPhone` are its coordinator columns); a
+  central drive's department stores them on its instance, and
+  `resolveDepartmentDrive` prefers the instance, then the drive.
   `schemas/drive-core.ts` holds the field constraints these compose.
 - **Writes are shared too.** `domain/drive-write-data.ts` builds the column
   payload once per kind, and `domain/persist-drive.ts` owns the

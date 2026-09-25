@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import UrlField from "@/components/ui/url-field";
 import CompanyLogoField from "@/components/shared/company-logo-field";
-import { AdminDriveLogisticsPanel } from "@/components/admin/drives/admin-drive-logistics-panel";
+import { DriveLogisticsCard } from "../drive-logistics-card";
 import {
   AdminApplicationFieldsPanel,
   type ApplicationFieldConfig,
@@ -712,17 +712,37 @@ export function DriveForm({
         </div>
       ) : (
         <>
-          <AdminDriveLogisticsPanel
-            venue={values.venue}
-            reportingTime={values.reportingTime}
-            contactPerson={values.contactPerson}
-            contactPhone={values.contactPhone}
-            pptLink={values.pptLink}
-            onChange={(field, value) => {
-              if (field in values) set(field as keyof DriveFormValues, value as never);
+          <DriveLogisticsCard
+            idPrefix="df-logistics"
+            disabled={isPending}
+            values={{
+              venue: values.venue,
+              reportingTime: values.reportingTime,
+              seatingAllocation: values.seatingAllocation,
+              coordinatorName: values.contactPerson,
+              coordinatorPhone: values.contactPhone,
+              coordinatorEmail: values.coordinatorEmail,
+              pptLink: values.pptLink,
+              specialInstructions: values.specialInstructions,
+            }}
+            // The drive's own columns are contactPerson / contactPhone.
+            onChange={(field, value) =>
+              set(
+                field === "coordinatorName" ? "contactPerson" : field === "coordinatorPhone" ? "contactPhone" : field,
+                value
+              )
+            }
+            errors={{
+              venue: errorOf("venue"),
+              reportingTime: errorOf("reportingTime"),
+              coordinatorName: errorOf("contactPerson"),
+              coordinatorPhone: errorOf("contactPhone"),
+              coordinatorEmail: errorOf("coordinatorEmail"),
+              seatingAllocation: errorOf("seatingAllocation"),
+              pptLink: errorOf("pptLink"),
+              specialInstructions: errorOf("specialInstructions"),
             }}
           />
-          <FieldError message={errorOf("pptLink") ?? errorOf("venue") ?? errorOf("reportingTime")} />
 
           <AdminApplicationFieldsPanel fields={applicationFields} onChange={setApplicationFields} />
           <FieldError message={errorOf("applicationFields")} />

@@ -556,8 +556,15 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
         </div>
       )}
 
-      {/* Logistics */}
-      {(drive.venue || drive.reportingTime || drive.contactPerson || drive.pptLink) && (
+      {/* Drive Day Logistics — every field optional, so each line shows only when set. */}
+      {(drive.venue ||
+        drive.reportingTime ||
+        drive.seatingAllocation ||
+        drive.contactPerson ||
+        drive.contactPhone ||
+        drive.coordinatorEmail ||
+        drive.pptLink ||
+        drive.specialInstructions) && (
         <div
           style={{
             padding: 20,
@@ -589,10 +596,28 @@ export default async function DriveDetailPage({ params }: DriveDetailPageProps) 
                 <strong>Reporting Time:</strong> {drive.reportingTime}
               </div>
             )}
-            {drive.contactPerson && (
+            {drive.seatingAllocation && (
               <div>
-                <strong>Contact Person:</strong> {drive.contactPerson}
-                {drive.contactPhone && ` (${drive.contactPhone})`}
+                <strong>Seating:</strong> {drive.seatingAllocation}
+              </div>
+            )}
+            {(drive.contactPerson || drive.contactPhone || drive.coordinatorEmail) && (
+              <div>
+                <strong>Contact:</strong>{' '}
+                {[drive.contactPerson, drive.contactPhone].filter(Boolean).join(', ')}
+                {drive.coordinatorEmail && (
+                  <>
+                    {(drive.contactPerson || drive.contactPhone) && ' · '}
+                    <a href={`mailto:${drive.coordinatorEmail}`} style={{ color: 'var(--accent)' }}>
+                      {drive.coordinatorEmail}
+                    </a>
+                  </>
+                )}
+              </div>
+            )}
+            {drive.specialInstructions && (
+              <div style={{ whiteSpace: 'pre-wrap' }}>
+                <strong>Instructions:</strong> {drive.specialInstructions}
               </div>
             )}
             {drive.pptLink && (

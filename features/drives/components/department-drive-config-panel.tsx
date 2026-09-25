@@ -21,6 +21,7 @@ import type { DepartmentEditableField } from "../domain/drive-lifecycle";
 import { ApplicationFormEditor } from "./application-form-editor";
 import { BatchTargetingPicker } from "./batch-targeting-picker";
 import { EligibleStudentsCard } from "./eligible-students-card";
+import { DriveLogisticsCard, type DriveLogisticsField } from "./drive-logistics-card";
 import {
   targetedBatchYears,
   withTargetedBatchYears,
@@ -265,6 +266,16 @@ export function DepartmentDriveConfigPanel({
   const [specialInstructions, setSpecialInstructions] = useState(
     config?.specialInstructions ?? ""
   );
+  const LOGISTICS_SETTERS: Record<DriveLogisticsField, (value: string) => void> = {
+    venue: setVenue,
+    reportingTime: setReportingTime,
+    seatingAllocation: setSeatingAllocation,
+    coordinatorName: setCoordinatorName,
+    coordinatorPhone: setCoordinatorPhone,
+    coordinatorEmail: setCoordinatorEmail,
+    pptLink: setPptLink,
+    specialInstructions: setSpecialInstructions,
+  };
   // An instance with no form of its own inherits the master's — show what its
   // students actually see today (resolved on the server), not a blank.
   const [fields, setFields] = useState<ApplicationFieldConfig[]>(
@@ -380,7 +391,6 @@ export function DepartmentDriveConfigPanel({
     [drive, departmentCodesById]
   );
 
-  const logisticsReady = Boolean(venue.trim() && reportingTime.trim());
   const packageText = formatPackage(drive);
 
   // Previews read the live form state, so the admin sees unsaved edits too.
@@ -763,154 +773,21 @@ export function DepartmentDriveConfigPanel({
             </div>
           </div>
 
-          {/* Logistics form */}
-          <div className="card">
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
-              }}
-            >
-              <div>
-                <h3 className="section-title" style={{ margin: 0 }}>
-                  🏢 Department Logistics &amp; Additional Drive Information
-                </h3>
-                <p
-                  className="text-secondary"
-                  style={{ fontSize: 12, margin: "6px 0 0", maxWidth: 720 }}
-                >
-                  Provide offline venue, reporting schedule, faculty coordinator
-                  helpline, and department-specific student guidelines. Students see
-                  this information prior to attending the drive.
-                </p>
-              </div>
-              <span
-                className={`badge ${logisticsReady ? "badge-teal" : "badge-amber"}`}
-                style={{ fontSize: 10 }}
-              >
-                {logisticsReady ? "✓ Logistics Configured" : "⚠ Logistics Pending"}
-              </span>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                gap: 16,
-                marginTop: 18,
-              }}
-            >
-              <Field
-                label="Drive Venue / Lab / Auditorium Location"
-                hint="Specific building, hall, or lab where students should gather."
-                required
-              >
-                <input
-                  type="text"
-                  value={venue}
-                  onChange={(e) => touch(setVenue)(e.target.value)}
-                  placeholder="e.g. Main Auditorium, Block A"
-                  style={inputStyle}
-                />
-              </Field>
-
-              <Field
-                label="Reporting Time & Schedule"
-                hint="Required arrival time for biometric/physical verification."
-                required
-              >
-                <input
-                  type="text"
-                  value={reportingTime}
-                  onChange={(e) => touch(setReportingTime)(e.target.value)}
-                  placeholder="e.g. 09:00 AM"
-                  style={inputStyle}
-                />
-              </Field>
-
-              <Field label="Department Placement Coordinator">
-                <input
-                  type="text"
-                  value={coordinatorName}
-                  onChange={(e) => touch(setCoordinatorName)(e.target.value)}
-                  placeholder="e.g. Prof. S. R. Deshmukh"
-                  style={inputStyle}
-                />
-              </Field>
-
-              <Field label="Coordinator Contact Helpline (Phone)">
-                <input
-                  type="tel"
-                  value={coordinatorPhone}
-                  onChange={(e) => touch(setCoordinatorPhone)(e.target.value)}
-                  placeholder="e.g. 98000 12345"
-                  style={inputStyle}
-                />
-              </Field>
-
-              <Field label="Coordinator Official Email">
-                <input
-                  type="email"
-                  value={coordinatorEmail}
-                  onChange={(e) => touch(setCoordinatorEmail)(e.target.value)}
-                  placeholder="e.g. cse.placement@college.edu"
-                  style={inputStyle}
-                />
-              </Field>
-
-              <Field label="Seating & Lab Allocation Breakdown">
-                <input
-                  type="text"
-                  value={seatingAllocation}
-                  onChange={(e) => touch(setSeatingAllocation)(e.target.value)}
-                  placeholder="e.g. Hall B-201 (Roll CS001–CS075), Lab 3 (CS076+)"
-                  style={inputStyle}
-                />
-              </Field>
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <Field label="Pre-Placement Talk (PPT) / Online Meeting Link (if applicable)">
-                <div style={{ display: "flex" }}>
-                  <span
-                    className="text-muted"
-                    style={{
-                      fontSize: 12,
-                      padding: "9px 12px",
-                      border: "0.5px solid var(--border-strong)",
-                      borderRight: "none",
-                      borderRadius: "8px 0 0 8px",
-                      background: "var(--surface-1)",
-                    }}
-                  >
-                    https://
-                  </span>
-                  <input
-                    type="text"
-                    value={pptLink}
-                    onChange={(e) => touch(setPptLink)(e.target.value)}
-                    placeholder="meet.google.com/xyz-abc-def or teams.microsoft.com/..."
-                    style={{ ...inputStyle, borderRadius: "0 8px 8px 0" }}
-                  />
-                </div>
-              </Field>
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <Field label="Special Instructions & Student Guidelines">
-                <textarea
-                  value={specialInstructions}
-                  onChange={(e) => touch(setSpecialInstructions)(e.target.value)}
-                  rows={3}
-                  placeholder="e.g. Carry 2 copies of resume and college ID. Formal dress code mandatory."
-                  style={{ ...inputStyle, resize: "vertical" }}
-                />
-              </Field>
-            </div>
-          </div>
+          {/* Drive Day Logistics — the same card a department uses on its own drives. */}
+          <DriveLogisticsCard
+            idPrefix="ddc-logistics"
+            values={{
+              venue,
+              reportingTime,
+              seatingAllocation,
+              coordinatorName,
+              coordinatorPhone,
+              coordinatorEmail,
+              pptLink,
+              specialInstructions,
+            }}
+            onChange={(field, value) => touch(LOGISTICS_SETTERS[field])(value)}
+          />
 
         </>
       )}

@@ -43,6 +43,9 @@ export interface DriveFormValues {
   reportingTime: string;
   contactPerson: string;
   contactPhone: string;
+  coordinatorEmail: string;
+  seatingAllocation: string;
+  specialInstructions: string;
   /** Department drives. */
   selectionRounds: string[];
   /** Super Admin: All departments, or the ones picked. */
@@ -75,6 +78,9 @@ export const EMPTY_DRIVE_FORM_VALUES: DriveFormValues = {
   reportingTime: "",
   contactPerson: "",
   contactPhone: "",
+  coordinatorEmail: "",
+  seatingAllocation: "",
+  specialInstructions: "",
   selectionRounds: [],
   departmentMode: "ALL",
   departmentIds: [],
@@ -152,6 +158,9 @@ export function toDriveFormInput(
     reportingTime: text(values.reportingTime),
     contactPerson: text(values.contactPerson),
     contactPhone: text(values.contactPhone),
+    coordinatorEmail: text(values.coordinatorEmail),
+    seatingAllocation: text(values.seatingAllocation),
+    specialInstructions: text(values.specialInstructions),
     selectionRounds: values.selectionRounds,
     ...(extras.applicationFields !== undefined ? { applicationFields: extras.applicationFields } : {}),
   };

@@ -78,7 +78,11 @@ export const CONTENT_OVERRIDE_FIELDS = [
   "maxActiveBacklogs",
 ] as const satisfies readonly OverridableMasterField[];
 
-/** The three fields that exist only on an instance, with no master fallback. */
+/**
+ * Three logistics fields that a central drive only ever has on a department's
+ * instance, but a department's own drive keeps on the `Drive` row (Item 13).
+ * The instance value wins when set; otherwise the drive's own value, if any.
+ */
 export interface DepartmentOnlyFields {
   seatingAllocation: string | null;
   specialInstructions: string | null;
@@ -90,7 +94,7 @@ export interface DepartmentOnlyFields {
  * the full Prisma `Drive`, so a client component can resolve a serialized drive
  * (whose `packageOffered` is already a string) with the same function.
  */
-type MasterContent = Pick<Drive, OverridableMasterField>;
+type MasterContent = Pick<Drive, OverridableMasterField> & Partial<DepartmentOnlyFields>;
 
 /** Instance values that may be present; the columns the resolver reads. */
 export type InstanceOverrides = Partial<
@@ -130,9 +134,9 @@ export function resolveDepartmentDrive<TDrive extends MasterContent>(
   if (!instance) {
     return {
       ...master,
-      seatingAllocation: null,
-      specialInstructions: null,
-      coordinatorEmail: null,
+      seatingAllocation: master.seatingAllocation ?? null,
+      specialInstructions: master.specialInstructions ?? null,
+      coordinatorEmail: master.coordinatorEmail ?? null,
     };
   }
 
@@ -147,9 +151,9 @@ export function resolveDepartmentDrive<TDrive extends MasterContent>(
     );
   }
 
-  resolved.seatingAllocation = instance.seatingAllocation ?? null;
-  resolved.specialInstructions = instance.specialInstructions ?? null;
-  resolved.coordinatorEmail = instance.coordinatorEmail ?? null;
+  resolved.seatingAllocation = instance.seatingAllocation ?? master.seatingAllocation ?? null;
+  resolved.specialInstructions = instance.specialInstructions ?? master.specialInstructions ?? null;
+  resolved.coordinatorEmail = instance.coordinatorEmail ?? master.coordinatorEmail ?? null;
 
   return resolved;
 }

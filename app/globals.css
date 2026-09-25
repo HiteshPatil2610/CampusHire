@@ -642,7 +642,10 @@
     font-weight: 500;
   }
 
-  .badge-green {
+  /* badge-teal is used in a dozen places but was never defined, so those
+     badges ("Placed", "Ready to publish", …) rendered uncoloured. */
+  .badge-green,
+  .badge-teal {
     background: var(--teal-light);
     color: var(--teal);
   }

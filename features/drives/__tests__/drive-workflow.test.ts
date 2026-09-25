@@ -458,7 +458,7 @@ describe("step completion and publish validation", () => {
     now: new Date(),
     master: { lifecycleStatus: "PUBLISHED", jobDescriptionUrl: null },
     assigned: true,
-    instance: { status: "CONFIGURED", lockedAt: null, venue: "Hall", reportingTime: "09:00" },
+    instance: { status: "CONFIGURED", lockedAt: null },
     resolved: {
       roleName: "SE",
       jobDescriptionText: "JD",
@@ -480,16 +480,20 @@ describe("step completion and publish validation", () => {
     expect(readiness.resumeAt).toBe("publish");
   });
 
+  it("a drive with no logistics at all can still be published (Item 13: logistics are optional)", () => {
+    // `ready()` sets no venue, reporting time or coordinator.
+    expect(departmentDriveReadiness(ready()).ready).toBe(true);
+  });
+
   it("reports each gap at its step and resumes at the first incomplete one", () => {
     const input = ready();
-    input.instance = { ...input.instance!, venue: null };
-    input.resolved = { ...input.resolved, eligibilityRules: [] };
+    input.resolved = { ...input.resolved, roleName: "", eligibilityRules: [] };
     const readiness = departmentDriveReadiness(input);
 
     expect(readiness.ready).toBe(false);
     expect(readiness.resumeAt).toBe("details");
     const byStep = Object.fromEntries(readiness.steps.map((step) => [step.id, step]));
-    expect(byStep.details.issues).toEqual(["Set the venue."]);
+    expect(byStep.details.issues).toEqual(["Set the role."]);
     expect(byStep.batches.complete).toBe(false);
     expect(byStep.fields.complete).toBe(true);
     expect(byStep.preview.complete).toBe(false);

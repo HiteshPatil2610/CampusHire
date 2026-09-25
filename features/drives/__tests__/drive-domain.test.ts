@@ -150,6 +150,32 @@ describe("resolveDepartmentDrive", () => {
     expect(resolved.coordinatorEmail).toBeNull();
   });
 
+  it("keeps a department's own drive's seating, instructions and email (Item 13)", () => {
+    // A department's own drive stores these on the Drive row. They must not be
+    // wiped to null just because no instance overrides them.
+    const ownDrive = {
+      ...masterDrive,
+      seatingAllocation: "Hall B-201",
+      specialInstructions: "Carry college ID",
+      coordinatorEmail: "cse.placement@college.edu",
+    };
+
+    for (const instance of [null, { ...departmentInstance, seatingAllocation: null, specialInstructions: null, coordinatorEmail: null }]) {
+      const resolved = resolveDepartmentDrive(ownDrive, instance);
+      expect(resolved.seatingAllocation).toBe("Hall B-201");
+      expect(resolved.specialInstructions).toBe("Carry college ID");
+      expect(resolved.coordinatorEmail).toBe("cse.placement@college.edu");
+    }
+  });
+
+  it("an instance's own seating, instructions and email still win over the drive's", () => {
+    const ownDrive = { ...masterDrive, seatingAllocation: "Drive hall", specialInstructions: "Drive note", coordinatorEmail: "drive@x.edu" };
+    const resolved = resolveDepartmentDrive(ownDrive, departmentInstance);
+    expect(resolved.seatingAllocation).toBe("Rows 1-10");
+    expect(resolved.specialInstructions).toBe("Bring your ID card.");
+    expect(resolved.coordinatorEmail).toBe("coordinator@cs.example.edu");
+  });
+
   it("treats undefined the same as a missing instance", () => {
     expect(resolveDepartmentDrive(masterDrive, undefined)).toEqual(
       resolveDepartmentDrive(masterDrive, null)

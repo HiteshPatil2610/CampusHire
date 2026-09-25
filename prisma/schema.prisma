@@ -712,6 +712,12 @@ model Drive {
   reportingTime            String?
   contactPerson            String?
   contactPhone             String?
+  // The rest of the Drive Day Logistics card (Item 13), for a department's own
+  // drive. Same names as on DriveDepartmentConfig; `resolveDepartmentDrive`
+  // prefers the instance's value and falls back to these.
+  coordinatorEmail         String?
+  seatingAllocation        String?           @db.Text
+  specialInstructions      String?           @db.Text
   pptLink                  String?
   applicationFields        String?           @db.Text
   // Master-drive lifecycle. Defaults to PUBLISHED so every pre-existing drive

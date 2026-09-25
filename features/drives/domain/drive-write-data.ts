@@ -44,6 +44,9 @@ function driveContentColumns(input: DriveFormData, dates: DriveDates) {
     reportingTime: orNull(input.reportingTime),
     contactPerson: orNull(input.contactPerson),
     contactPhone: orNull(input.contactPhone),
+    coordinatorEmail: orNull(input.coordinatorEmail),
+    seatingAllocation: orNull(input.seatingAllocation),
+    specialInstructions: orNull(input.specialInstructions),
     // `applicationFields` is deliberately absent: the form is written to
     // `DriveApplicationField` rows by `writeMasterForm`, which dual-writes
     // this column. Writing it here too could leave the two disagreeing.

@@ -86,6 +86,9 @@ export default async function EditDrivePage(props: PageProps) {
           reportingTime: drive.reportingTime ?? "",
           contactPerson: drive.contactPerson ?? "",
           contactPhone: drive.contactPhone ?? "",
+          coordinatorEmail: drive.coordinatorEmail ?? "",
+          seatingAllocation: drive.seatingAllocation ?? "",
+          specialInstructions: drive.specialInstructions ?? "",
           selectionRounds: parseJsonArray(drive.selectionRounds),
         }}
         initialApplicationFields={applicationFields}

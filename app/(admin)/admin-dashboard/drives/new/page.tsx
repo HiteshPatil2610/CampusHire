@@ -43,6 +43,8 @@ export default async function PostDrivePage() {
           reportingTime: settings.defaultReportingTime ?? "",
           contactPerson: settings.coordinatorName ?? "",
           contactPhone: settings.coordinatorPhone ?? "",
+          coordinatorEmail: settings.coordinatorEmail ?? "",
+          specialInstructions: settings.defaultInstructions ?? "",
         }}
         doneHref="/admin-dashboard/drives"
       />

@@ -45,8 +45,6 @@ export interface ReadinessInput {
   instance: {
     status: DepartmentDriveStatus;
     lockedAt: Date | null;
-    venue: string | null;
-    reportingTime: string | null;
   } | null;
   resolved: {
     roleName: string;
@@ -93,7 +91,9 @@ export function departmentDriveReadiness(input: ReadinessInput): DepartmentDrive
     publish: [],
   };
 
-  // 1. Drive details — the content students read, and the logistics.
+  // 1. Drive details — the content students read. Logistics (venue,
+  // reporting time, …) are optional on every drive (Item 13, owner's
+  // decision): a drive can go live before the room is booked.
   if (blank(resolved.roleName)) issues.details.push("Set the role.");
   if (blank(resolved.jobDescriptionText) && blank(input.master.jobDescriptionUrl)) {
     issues.details.push("Add a job description.");
@@ -110,8 +110,6 @@ export function departmentDriveReadiness(input: ReadinessInput): DepartmentDrive
       for (const issue of checkStoredWindow(resolved)) issues.details.push(`${issue.message}.`);
     }
   }
-  if (blank(instance?.venue)) issues.details.push("Set the venue.");
-  if (blank(instance?.reportingTime)) issues.details.push("Set the reporting time.");
 
   // 2. Application form — at least one field, and a form the write boundary
   // would accept as it stands.

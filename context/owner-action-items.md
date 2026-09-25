@@ -8,11 +8,15 @@ make it work for real people.
 Tick an item by changing `[ ]` to `[x]`. When a new phase adds one, it is
 added here.
 
-_Last updated: 2026-09-24 (after Phase 9)._
+_Last updated: 2026-09-25 (after Item 13 and the webhook fix)._
 
 ---
 
 ## 1. Must do before real users use it
+
+- [x] **Apply the Item 13 migration to production** — done; confirmed live
+  (`Drive.coordinatorEmail`, `seatingAllocation`, `specialInstructions`;
+  `prisma migrate status` up to date, 21 migrations).
 
 - [x] **Apply the Phase 7 migration** — done; confirmed live on production
   (`Skill` table, `StudentSkill.skillId`, `SKILL_PENDING_REVIEW` all present).
@@ -53,7 +57,7 @@ _Last updated: 2026-09-24 (after Phase 9)._
   |---|---|---|
   | `NEXT_PUBLIC_APP_URL` | the site's address, e.g. `https://campushire.vercel.app` | Admin invitation links open your site's "set your password" page (Phase 6, Item 23). Without it the link uses the address the Super Admin was on. |
   | `SUPPORT_CONTACT_EMAIL` | e.g. `placement@your-college.edu` | The appeal contact on the **Access Revoked** page a removed admin sees (Phase 6, Item 22). Without it the page says "contact the placement office". |
-  | `CLERK_WEBHOOK_SECRET` | from Clerk → Webhooks → your endpoint → Signing Secret | Clerk tells the app about new sign-ups straight away. Optional (the app also catches up on the person's first visit) but recommended. It is commented out in your local `.env`. |
+  | `CLERK_WEBHOOK_SECRET` | Clerk → Webhooks → Add Endpoint `https://<your-domain>/api/webhooks/clerk`, events `user.created`, `user.updated`, `user.deleted` → copy the Signing Secret (`whsec_…`). Then use the endpoint's Testing tab: expect 200. | Clerk tells the app about new sign-ups straight away. Optional (the app also catches up on the person's first visit) but recommended. Only works from 2026-09-25: before that the middleware redirected Clerk's calls to /sign-in. |
 
 ## 2. Clerk (dashboard.clerk.com)
 
@@ -134,6 +138,11 @@ These cannot be tested in code — they need a real inbox and browser.
 - [ ] **Placement Rate matches everywhere** (Phase 10): for one department,
   the rate on the admin Overview card, the admin Reports tab, the Super
   Admin home table and Global Reports should be the same number.
+- [ ] **Drive Day Logistics** (Item 13): post a department drive with the
+  instructions box and seating filled in, then open it as an eligible
+  student — they should see venue, time, seating, contact (with email) and
+  instructions. Do the same on a central drive via Central Drive Processing,
+  and confirm it now publishes even with no venue.
 - [ ] **Global Reports comparison** (Phase 10, Item 20): as Super Admin, open
   Global Reports and check the per-department Eligible / Applied / Placed
   bars and the Active Drives by Department chart.
@@ -173,9 +182,9 @@ These cannot be tested in code — they need a real inbox and browser.
 
 ## 6. Decisions or information I need from you
 
-- [ ] **Item 13 — drive-posting card redesign:** the new layout and logic.
-  Needed before the "Department Logistics & Additional Drive Information"
-  card can be changed.
+- [x] **Item 13 — drive-posting card redesign:** done — one "Drive Day
+  Logistics" card (all 8 fields, all optional, three grouped sections) used
+  by both a department's own drives and Central Drive Processing.
 - [ ] **Item 4 — calendar bug:** which field the calendar belongs to, and a
   screenshot of the problem.
 - [x] **Item 17 — batch filter:** done in Phase 8 — Graduated added, and any
