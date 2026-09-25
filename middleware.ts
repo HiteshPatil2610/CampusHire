@@ -3,8 +3,16 @@ import { NextResponse } from "next/server";
 
 // Define route matchers for each role group
 // The invitation page is public: an invited admin has no account until they
-// finish Clerk's sign-up there.
-const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)", "/accept-invitation(.*)"]);
+// finish Clerk's sign-up there. Webhooks are public too: Clerk's servers call
+// them with no session, and the route verifies Clerk's signature itself —
+// without this every webhook call was redirected to /sign-in.
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/accept-invitation(.*)",
+  "/api/webhooks(.*)",
+]);
 const isStudentRoute = createRouteMatcher(["/student-dashboard(.*)"]);
 const isAdminRoute = createRouteMatcher(["/admin-dashboard(.*)"]);
 const isSuperAdminRoute = createRouteMatcher(["/super-admin-dashboard(.*)"]);
